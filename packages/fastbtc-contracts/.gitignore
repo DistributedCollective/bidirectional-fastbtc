@@ -1,0 +1,14 @@
+# Project files
+.env
+
+# NodeJS
+node_modules
+
+# Hardhat files
+cache
+artifacts
+
+# Python stuff, just in case
+venv/
+__pycache__/
+.pytest-cache/
