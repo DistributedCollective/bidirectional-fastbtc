@@ -6,33 +6,38 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract FastBTCBridge is AccessControlEnumerable {
+    using SafeERC20 for IERC20;
 
-    event Transfered(
+    event Transferred(
         string _btcAddress,
-        uint8 _nonce,
-        uint64 _amountSatoshi,
-        uint64 _feeSatoshi
+        uint _nonce,
+        uint _amountSatoshi,
+        uint _feeSatoshi
     );
 
     struct Transfer {
-        uint64 amountSatoshi;
-        uint8 status;
+        address from;
+        uint amountSatoshi;
+        int status;
     }
 
     bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
     bytes32 public constant ROLE_FEDERATOR = keccak256("FEDERATOR");
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
-    uint64 public constant DYNAMIC_FEE_DIVISOR = 10_000;
+    uint public constant DYNAMIC_FEE_DIVISOR = 10_000;
+    int public constant TRANSFER_STATUS_REGISTERED = 0;
+    int public constant TRANSFER_STATUS_PROCESSED = 1;
+    int public constant TRANSFER_STATUS_REFUNDED = -1;
+    uint256 public constant MAX_DEPOSITS_PER_BTC_ADDRESS = 255;
 
-    uint64 public minTransferSatoshi = 1000;
-    uint64 public maxTransferSatoshi = 100_000_000;
-    uint64 public baseFeeSatoshi = 500;
-    uint64 public dynamicFee = 1;  // 0.0001 = 0.01 %
+    uint public minTransferSatoshi = 1000;
+    uint public maxTransferSatoshi = 200_000_000; // 2 BTC
+    uint public baseFeeSatoshi = 500;
+    uint public dynamicFee = 1;  // 0.0001 = 0.01 %
 
     // TODO: would it be more efficient to use one of the following?
-    // mapping(string => mapping(uint8 => Transfer));
+    // mapping(string => mapping(uint => Transfer));
     // mapping(bytes32 => Transfer); // Where bytes32 is keccak256(btcAddress, nonce);
-
     mapping(string => Transfer[]) public transfers;
 
     constructor() {
@@ -41,33 +46,44 @@ contract FastBTCBridge is AccessControlEnumerable {
 
     function transferRBTCToBTC(
         string calldata _btcAddress,
-        uint8 _nonce
+        uint _nonce
     )
     external
+    payable
     {
         require(_nonce == getNextNonce(_btcAddress), "Invalid nonce");
-        require(_nonce != 255, "Maximum number of transfers for address exceeded");
-        require(btcAddressValidator.isValidBTCAddress(_btcAddress), "Invalid BTC address");
+        require(_nonce < MAX_DEPOSITS_PER_BTC_ADDRESS, "Maximum number of transfers for address exceeded");
 
-        require(msg.value >= minTransferWei, "Min RBTC transfer amount not met");
-        require(msg.value <= maxTransferWei, "Max RBTC transfer amount not met");
+        require(msg.value >= minTransferSatoshi * SATOSHI_DIVISOR, "RBTC transfer smaller than minimum");
+        require(msg.value <= maxTransferSatoshi * SATOSHI_DIVISOR, "RBTC transfer greater than maximum");
         require(msg.value % SATOSHI_DIVISOR == 0, "RBTC amount must be evenly divisible to Satoshis");
 
-        uint64 amountSatoshi = uint64(msg.value / SATOSHI_DIVISOR);
-        uint64 feeSatoshi = baseFeeSatoshi + (amountSatoshi * dynamicFee / DYNAMIC_FEE_DIVISOR);
+        require(isValidBTCAddress(_btcAddress), "Invalid BTC address");
+
+        uint amountSatoshi = msg.value / SATOSHI_DIVISOR;
+        uint feeSatoshi = baseFeeSatoshi + (amountSatoshi * dynamicFee / DYNAMIC_FEE_DIVISOR);
         require(feeSatoshi < amountSatoshi, "Fee is greater than amount");
         amountSatoshi -= feeSatoshi;
 
-        emit Transfered(
+        transfers[_btcAddress].push(
+            Transfer(
+                msg.sender,
+                amountSatoshi,
+                TRANSFER_STATUS_REGISTERED
+            )
+        );
+
+        emit Transferred(
             _btcAddress,
             _nonce,
-            amountSatoshi
+            amountSatoshi,
+            feeSatoshi
         );
     }
 
     function voteForTransfer(
         string calldata _btcAddress,
-        uint8 _nonce
+        uint _nonce
     )
     public
     {
@@ -79,11 +95,9 @@ contract FastBTCBridge is AccessControlEnumerable {
     )
     public
     view
-    returns(uint8)
+    returns(uint)
     {
-        uint256 length = transfers[_btcAddress].length;
-        require(length <= 255);
-        return uint8(length);
+        return transfers[_btcAddress].length;
     }
 
     function isValidBTCAddress(
@@ -99,7 +113,7 @@ contract FastBTCBridge is AccessControlEnumerable {
 
     // Utility functions
     function setMinTransferSatoshi(
-        uint64 _minTransferSatoshi
+        uint _minTransferSatoshi
     )
     external
     onlyRole(ROLE_ADMIN)
@@ -108,17 +122,17 @@ contract FastBTCBridge is AccessControlEnumerable {
     }
 
     function setMaxTransferSatoshi(
-        uint64 _maxTransferSatoshi
+        uint _maxTransferSatoshi
     )
     external
     onlyRole(ROLE_ADMIN)
     {
-        require(_maxTransferSatoshi <= 21_000_000 * 100_000_000, "Would allow transfering more than all Bitcoin ever");
+        require(_maxTransferSatoshi <= 21_000_000 * 100_000_000, "Would allow transferring more than all Bitcoin ever");
         maxTransferSatoshi = _maxTransferSatoshi;
     }
 
     function setBaseFeeSatoshi(
-        uint64 _baseFeeSatoshi
+        uint _baseFeeSatoshi
     )
     external
     onlyRole(ROLE_ADMIN)
@@ -128,13 +142,25 @@ contract FastBTCBridge is AccessControlEnumerable {
     }
 
     function setDynamicFee(
-        uint64 _dynamicFee
+        uint _dynamicFee
     )
     external
     onlyRole(ROLE_ADMIN)
     {
         require(_dynamicFee <= DYNAMIC_FEE_DIVISOR, "Dynamic fee too large");
         dynamicFee = _dynamicFee;
+    }
+
+    // TODO: figure out if we want to lock this so that only fees can be retrieved
+    /// @dev utility for withdrawing RBTC from the contract
+    function withdrawRBTC(
+        uint256 _amount,
+        address payable _receiver
+    )
+    external
+    onlyRole(ROLE_ADMIN)
+    {
+        _receiver.transfer(_amount);
     }
 
     /// @dev utility for withdrawing tokens accidentally sent to the contract
@@ -148,5 +174,4 @@ contract FastBTCBridge is AccessControlEnumerable {
     {
         _token.safeTransfer(_receiver, _amount);
     }
-
 }
