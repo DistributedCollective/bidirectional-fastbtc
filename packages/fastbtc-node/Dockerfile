@@ -8,16 +8,13 @@ FROM base AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-COPY tsconfig.json ./
+COPY package.json yarn.lock tsconfig.json ./
 
-RUN npm install
+RUN yarn install
 
 COPY src /app/src
 
-RUN ls -a
-
-RUN npm run build
+RUN ls -a; yarn build
 
 EXPOSE 7777
 
