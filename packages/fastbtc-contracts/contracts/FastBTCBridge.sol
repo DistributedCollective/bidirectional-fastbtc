@@ -61,7 +61,7 @@ contract FastBTCBridge is AccessControlEnumerable {
         require(isValidBTCAddress(_btcAddress), "Invalid BTC address");
 
         uint amountSatoshi = msg.value / SATOSHI_DIVISOR;
-        uint feeSatoshi = baseFeeSatoshi + (amountSatoshi * dynamicFee / DYNAMIC_FEE_DIVISOR);
+        uint feeSatoshi = calculateFeeSatoshi(amountSatoshi);
         require(feeSatoshi < amountSatoshi, "Fee is greater than amount");
         amountSatoshi -= feeSatoshi;
 
@@ -113,6 +113,26 @@ contract FastBTCBridge is AccessControlEnumerable {
     {
         // TODO: implement this
         return true;
+    }
+
+    function calculateFeeSatoshi(
+        uint amountSatoshi
+    )
+    public
+    view
+    returns (uint) {
+        return baseFeeSatoshi + (amountSatoshi * dynamicFee / DYNAMIC_FEE_DIVISOR);
+    }
+
+    /// @dev pure utility function to be used in DApps
+    function calculateFeeWei(
+        uint256 amountWei
+    )
+    public
+    view
+    returns (uint) {
+        uint amountSatoshi = amountWei / SATOSHI_DIVISOR;
+        return calculateFeeSatoshi(amountSatoshi) * SATOSHI_DIVISOR;
     }
 
     // Utility functions
