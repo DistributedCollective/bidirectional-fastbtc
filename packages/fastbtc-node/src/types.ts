@@ -14,7 +14,7 @@ interface ThrowableWeapon {
 let TYPES = {
     Warrior: Symbol("Warrior"),
     Weapon: Symbol("Weapon"),
-    ThrowableWeapon: Symbol("ThrowableWeapon")
+    ThrowableWeapon: Symbol("ThrowableWeapon"),
 };
 
 export { TYPES, Warrior, Weapon, ThrowableWeapon };
