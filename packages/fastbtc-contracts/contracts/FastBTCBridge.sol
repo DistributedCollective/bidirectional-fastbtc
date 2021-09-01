@@ -65,6 +65,7 @@ contract FastBTCBridge is AccessControlEnumerable {
         require(feeSatoshi < amountSatoshi, "Fee is greater than amount");
         amountSatoshi -= feeSatoshi;
 
+        // TODO: timestamp for reclaiming
         transfers[_btcAddress].push(
             Transfer(
                 msg.sender,
@@ -81,6 +82,9 @@ contract FastBTCBridge is AccessControlEnumerable {
         );
     }
 
+    // TODO:
+    // - marking as processed
+    // - reclaiming
     function voteForTransfer(
         string calldata _btcAddress,
         uint _nonce
