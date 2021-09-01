@@ -15,6 +15,26 @@ task("accounts", "Prints the list of accounts", async (args, hre) => {
     }
 });
 
+task("free-money", "Sends free money to address")
+    .addPositionalParam("address", "Address to send free money to")
+    .addPositionalParam("rbtcAmount", "RBTC amount to send", "1.0")
+    .setAction(async ({ address, rbtcAmount }, hre) => {
+        if(!address) {
+            throw new Error("Provide address as first argument");
+        }
+        const rbtcAmountWei = hre.ethers.utils.parseEther(rbtcAmount);
+        console.log(`Sending ${rbtcAmount} rBTC (${rbtcAmountWei} wei) to ${address}`)
+
+        const accounts = await hre.ethers.getSigners();
+
+        const receipt = await accounts[0].sendTransaction({
+            to: address,
+            value: rbtcAmountWei,
+        })
+
+        console.log(receipt);
+    });
+
 if (!DEPLOYER_PRIVATE_KEY) {
     console.warn('DEPLOYER_PRIVATE_KEY missing, non-local deployments not working');
 }
