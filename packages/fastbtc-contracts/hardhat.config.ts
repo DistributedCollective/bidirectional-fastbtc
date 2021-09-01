@@ -7,12 +7,6 @@ dotenv.config();
 
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || '';
 
-if (!DEPLOYER_PRIVATE_KEY) {
-    console.warn('DEPLOYER_PRIVATE_KEY missing, deployment not working');
-}
-
-// This is a sample Hardhat task. To learn how to create your own go to
-// https://hardhat.org/guides/create-task.html
 task("accounts", "Prints the list of accounts", async (args, hre) => {
     const accounts = await hre.ethers.getSigners();
 
@@ -20,6 +14,10 @@ task("accounts", "Prints the list of accounts", async (args, hre) => {
         console.log(account.address);
     }
 });
+
+if (!DEPLOYER_PRIVATE_KEY) {
+    console.warn('DEPLOYER_PRIVATE_KEY missing, non-local deployments not working');
+}
 
 const privateKeys = DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : [];
 
