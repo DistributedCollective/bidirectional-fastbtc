@@ -10,7 +10,8 @@
     "forceConsistentCasingInFileNames": true, /* Disallow inconsistently-cased references to the same file. */
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "resolveJsonModule": true,
     "lib": ["es6"],
-    "types": ["reflect-metadata", "node"],
+    "types": ["reflect-metadata", "node"]
   }
 }

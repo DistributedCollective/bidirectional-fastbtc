@@ -1,13 +1,26 @@
 export interface Config {
     dbUrl: string;
+    rskRpcUrl: string;
+    rskContractAddress: string;
+    rskStartBlock: number;
 }
 export const Config = Symbol.for('Config');
 
 export const createEnvConfig = (env = process.env): Config => {
-    if(!env.FASTBTC_DB_URL) {
-        throw new Error('Required env variable FASTBTC_DB_URL missing')
+    for(let key of [
+        'FASTBTC_DB_URL',
+        'FASTBTC_RSK_RPC_URL',
+        'FASTBTC_RSK_CONTRACT_ADDRESS',
+        'FASTBTC_RSK_START_BLOCK',
+    ]) {
+        if(!env[key]) {
+            throw new Error(`Required env variable ${key} missing`)
+        }
     }
     return {
-        dbUrl: env.FASTBTC_DB_URL,
+        dbUrl: env.FASTBTC_DB_URL!,
+        rskRpcUrl: env.FASTBTC_RSK_RPC_URL!,
+        rskContractAddress: env.FASTBTC_RSK_CONTRACT_ADDRESS!,
+        rskStartBlock: parseInt(env.FASTBTC_RSK_START_BLOCK!),
     }
 };

@@ -3,6 +3,7 @@ import {TYPES, Warrior} from "./types";
 import {Config} from './config';
 import {ConnectionProvider} from './db/connection';
 import {Transfer} from './db/models';
+import {EventScanner, Scanner} from './rsk/scanner';
 
 function main() {
     console.log(`Hello, fastbtc-node here.`);
@@ -24,6 +25,11 @@ function main() {
     }).catch((e) => {
         console.error(e);
     })
+
+    const scanner = container.get<EventScanner>(Scanner);
+    scanner.scanNewEvents().catch(e => {
+        console.error(e);
+    });
 }
 
 export default main;

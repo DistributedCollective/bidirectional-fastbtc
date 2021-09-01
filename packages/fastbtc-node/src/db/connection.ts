@@ -3,22 +3,20 @@ import {
     createConnection,
     Connection
 } from 'typeorm';
-import { Transfer } from './models';
+import { ALL_MODELS } from './models';
 import {Config} from '../config';
 
-const DB_ENTITIES = [
-    Transfer,
-];
-
 export const createDbConnection = async (config: Config): Promise<Connection> => {
+    console.log('Creating db connection');
     return await createConnection({
         type: "postgres",
         url: config.dbUrl,
-        entities: DB_ENTITIES,
+        entities: ALL_MODELS,
 
-        // TODO: these should probs be false in prod!
+        logging: false,
+
+        // TODO: should be false in prod! and have real migrations
         synchronize: true,
-        logging: true,
     });
 }
 export type ConnectionProvider = () => Promise<Connection>;
