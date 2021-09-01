@@ -1,3 +1,4 @@
+//import {Contract} from '@usedapp/core/node_modules/@ethersproject/contracts';
 import {Contract} from 'ethers';
 import {Interface} from 'ethers/lib/utils';
 import LocalFastBTCBridge from './deployments/localhost/FastBTCBridge.json';
@@ -10,7 +11,7 @@ if (networkName !== 'local' && networkName !== 'testnet' && networkName !== 'mai
 }
 
 const multicallAbi = new Interface(LocalMulticall.abi);
-const fastbtcAbi = new Interface(LocalMulticall.abi);
+const fastbtcAbi = new Interface(LocalFastBTCBridge.abi);
 
 export let configuredChainId: number;
 export let multicall: Contract;

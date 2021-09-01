@@ -1,5 +1,5 @@
 import React from 'react';
-import {useEtherBalance, useEthers} from '@usedapp/core';
+import {useContractCall, useContractFunction, useEtherBalance, useEthers} from '@usedapp/core';
 import {BigNumber} from 'ethers';
 import {parseEther, formatEther} from 'ethers/lib/utils';
 
@@ -24,6 +24,42 @@ const TransferForm: React.FC = () => {
 
     const [transferAmountWei, setTransferAmountWei] = React.useState<BigNumber|null>(null);
     const [btcAddress, setBtcAddress] = React.useState<string|null>(null);
+    const [transferInProgress, setTransferInProgress] = React.useState(false);
+
+    const [nextNonce] = useContractCall(
+    btcAddress && {
+            abi: fastbtcBridge.interface,
+            address: fastbtcBridge.address,
+            method: 'getNextNonce',
+            args: [btcAddress],
+        }
+    ) ?? [];
+    const [isValidBtcAddress] = useContractCall(
+    btcAddress && {
+            abi: fastbtcBridge.interface,
+            address: fastbtcBridge.address,
+            method: 'isValidBTCAddress',
+            args: [btcAddress],
+        }
+    ) ?? [];
+    const [feeWei] = useContractCall(
+    transferAmountWei && {
+            abi: fastbtcBridge.interface,
+            address: fastbtcBridge.address,
+            method: 'calculateFeeWei',
+            args: [transferAmountWei],
+        }
+    ) ?? [];
+    const {
+        state: transferState,
+        send: sendTransfer
+    } = useContractFunction(
+        fastbtcBridge as any, // TODO: https://github.com/EthWorks/useDApp/issues/263
+        'transferRBTCToBTC'
+    );
+
+    console.log('transferState', transferState);
+    console.log('sendTransfer', sendTransfer);
 
     const convertAndValidateTransferAmount = (s: string) => {
         let wei;
@@ -44,14 +80,34 @@ const TransferForm: React.FC = () => {
         return wei;
     }
 
+    const isValid = transferAmountWei && btcAddress;
+    const isLoading = !feeWei || !nextNonce || !isValidBtcAddress;
+
+    const submitTransfer = async () => {
+        if(!isValid || isLoading || transferInProgress) {
+            return;
+        }
+        setTransferInProgress(true);
+        try {
+            await sendTransfer(btcAddress, nextNonce, { value: transferAmountWei });
+        } finally {
+            setTransferInProgress(false);
+        }
+    }
+
     return (
         <div className="TransferForm">
             <h2>Transfer rBTC to BTC</h2>
+            {rbtcBalance && (
+                <div className="transfer-details">
+                    rBTC balance: <code>{formatEther(rbtcBalance)}</code>
+                </div>
+            )}
             <Input
                 onValueChange={setTransferAmountWei}
                 convertValue={convertAndValidateTransferAmount}
                 description={
-                    "rBTC transfer amount" + (rbtcBalance ? ` (balance: ${formatEther(rbtcBalance)} RBTC)` : '')
+                    "rBTC transfer amount"
                 }
             />
             <Input
@@ -59,11 +115,40 @@ const TransferForm: React.FC = () => {
                 convertValue={validateBitcoinAddress}
                 description="BTC address"
             />
+            {isValid && (
+                isLoading ? (
+                    <div className="transfer-details">
+                        <code>Loading...</code>
+                    </div>
+                ) : (
+                    <div className="transfer-details">
+                        Transfer <code>{formatEther(transferAmountWei)} rBTC</code> from <code>{account}</code><br/>
+                        Receive <code>{formatEther(transferAmountWei.sub(feeWei))} BTC</code> to <code>{btcAddress}</code><br/>
+                        Fee: <code>{formatEther(feeWei)} BTC</code>
+                    </div>
+                )
+            )}
             <Button
-                disabled={!transferAmountWei || !btcAddress}
+                disabled={!isValid || isLoading || transferInProgress}
+                onClick={submitTransfer}
             >
                 Transfer
             </Button>
+            {transferState.status !== 'None' && (
+                <div className="transfer-details">
+                    Transfer status: <strong>{transferState.status}</strong>
+                    {transferState.transaction && (
+                        <div>
+                            Transaction: <code>{transferState.transaction.hash}</code>
+                        </div>
+                    )}
+                    {transferState.errorMessage && (
+                        <div>
+                            Message: {transferState.errorMessage}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
