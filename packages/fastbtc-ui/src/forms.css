@@ -1,0 +1,38 @@
+.Input {
+    margin-bottom: 10px;
+}
+.Input input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    appearance: none;
+
+    box-shadow: none;
+    border-style: solid;
+    border-width: 1px;
+}
+
+.Input .error {
+    color: red;
+    font-size: small;
+    margin: 5px 0;
+}
+
+.Button {
+    padding: 10px;
+    border-radius: 5px;
+    appearance: none;
+
+    box-shadow: none;
+    border-style: solid;
+    border-width: 1px;
+
+    transition: opacity 0.1s;
+    cursor: pointer;
+}
+.Button:disabled {
+    cursor: not-allowed;
+}
+.Button:not(:disabled):hover {
+    opacity: 0.8;
+}

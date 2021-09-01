@@ -1,12 +1,31 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import {Config, DAppProvider} from '@usedapp/core';
+
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import {configuredChainId, multicall} from './contracts';
+
+// NOTE: RSK multicall: https://github.com/makerdao/multicall/pull/10
+const config: Config = {
+    readOnlyChainId: configuredChainId,
+    readOnlyUrls: {
+        [configuredChainId]: 'http://localhost:8545',  // local hardhat rpc. TODO: make it configurable
+    },
+    multicallAddresses: {
+        [configuredChainId]: multicall.address,
+    },
+    supportedChains: [configuredChainId],
+    pollingInterval: 1,
+};
+console.log('Config', config);
 
 ReactDOM.render(
   <React.StrictMode>
-    <App />
+      <DAppProvider config={config}>
+          <App />
+      </DAppProvider>
   </React.StrictMode>,
   document.getElementById('root')
 );
