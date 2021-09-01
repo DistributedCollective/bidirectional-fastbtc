@@ -2,6 +2,7 @@ import {Container, interfaces} from "inversify";
 import {ThrowableWeapon, TYPES, Warrior, Weapon} from "./types";
 import {Katana, Ninja, Shuriken} from "./entities";
 import { Config, createEnvConfig } from './config';
+import { Connection, createDbConnection, ConnectionProvider} from './db/connection';
 
 function bootstrap(): Container {
     const container = new Container();
@@ -11,8 +12,13 @@ function bootstrap(): Container {
     container.bind<Config>(Config).toConstantValue(
         createEnvConfig()
     );
+    container.bind<ConnectionProvider>(ConnectionProvider).toProvider((context) => {
+        const config = context.container.get<Config>(Config);
+        return async () => {
+            return await createDbConnection(config);
+        }
+    })
     return container;
 }
-
 
 export default bootstrap;
