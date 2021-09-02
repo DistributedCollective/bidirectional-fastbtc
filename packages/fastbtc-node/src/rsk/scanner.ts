@@ -1,9 +1,10 @@
 import {inject, injectable} from 'inversify';
 import {ethers} from 'ethers';
-import {ConnectionProvider} from '../db/connection';
+import {ConnectionProvider, DBConnection} from '../db/connection';
 import {KeyValuePairRepository} from '../db/models';
 import {EthersProvider, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
+import {Connection} from 'typeorm';
 
 export const Scanner = Symbol.for('Scanner');
 
@@ -12,15 +13,15 @@ export class EventScanner {
     constructor(
         @inject(EthersProvider) private ethersProvider: ethers.providers.Provider,
         @inject(FastBtcBridgeContract) private fastBtcBridge: ethers.Contract,
-        @inject(ConnectionProvider) private dbConnectionProvider: ConnectionProvider,
+        @inject(DBConnection) private dbConnection: Connection,
         @inject(Config) private config: Config,
     ) {
     }
 
     async scanNewEvents() {
         const currentBlock = await this.ethersProvider.getBlockNumber();
-        (await this.dbConnectionProvider()).transaction(async dbConnection => {
-            const keyValuePairRepository = dbConnection.getCustomRepository(KeyValuePairRepository);
+        await this.dbConnection.transaction(async db => {
+            const keyValuePairRepository = db.getCustomRepository(KeyValuePairRepository);
             const lastProcessedBlock = await keyValuePairRepository.getOrCreateValue(
                 'last-processed-block',
                 this.config.rskStartBlock - 1

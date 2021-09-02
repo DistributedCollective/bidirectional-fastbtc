@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import {
     createConnection,
-    Connection
+    Connection, getConnection,
 } from 'typeorm';
 import { ALL_MODELS } from './models';
 import {Config} from '../config';
@@ -21,4 +21,8 @@ export const createDbConnection = async (config: Config): Promise<Connection> =>
 }
 export type ConnectionProvider = () => Promise<Connection>;
 export const ConnectionProvider = Symbol.for('ConnectionProvider');
+
+export const DBConnection = Symbol.for('DBConnection');
+export const getDbConnection = getConnection;
+
 export { Connection };

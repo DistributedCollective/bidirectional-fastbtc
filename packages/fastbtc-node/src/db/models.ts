@@ -1,7 +1,7 @@
 import {Entity, PrimaryColumn, PrimaryGeneratedColumn, Column, BaseEntity, EntityRepository, Repository} from 'typeorm';
 
 @Entity()
-export class KeyValuePair extends BaseEntity {
+export class KeyValuePair {
     @PrimaryColumn()
     key!: string;
 
@@ -43,7 +43,7 @@ export class KeyValuePairRepository extends Repository<KeyValuePair> {
 }
 
 @Entity()
-export class Transfer extends BaseEntity {
+export class Transfer {
     @PrimaryGeneratedColumn()
     id!: number;
 
@@ -65,4 +65,3 @@ export const ALL_MODELS = [
     KeyValuePair,
     Transfer,
 ];
-

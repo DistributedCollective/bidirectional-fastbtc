@@ -1,7 +1,8 @@
 import {interfaces} from 'inversify';
 import Container = interfaces.Container;
-import {ConnectionProvider, createDbConnection} from './connection';
+import {ConnectionProvider, Connection, createDbConnection, getDbConnection, DBConnection} from './connection';
 import {Config} from '../config';
+import {getConnection} from 'typeorm';
 
 export function setupInversify(container: Container) {
     container.bind<ConnectionProvider>(ConnectionProvider).toProvider((context) => {
@@ -11,4 +12,9 @@ export function setupInversify(container: Container) {
             return await createDbConnection(config);
         }
     });
+
+    // TODO: not sure if allowing collection like this is a good idea
+    container.bind<Connection>(DBConnection).toDynamicValue(() => (
+        getDbConnection()
+    ));
 }
