@@ -3,6 +3,7 @@ export interface Config {
     rskRpcUrl: string;
     rskContractAddress: string;
     rskStartBlock: number;
+    rskRequiredConfirmations: number;
 }
 export const Config = Symbol.for('Config');
 
@@ -22,5 +23,6 @@ export const createEnvConfig = (env = process.env): Config => {
         rskRpcUrl: env.FASTBTC_RSK_RPC_URL!,
         rskContractAddress: env.FASTBTC_RSK_CONTRACT_ADDRESS!,
         rskStartBlock: parseInt(env.FASTBTC_RSK_START_BLOCK!),
+        rskRequiredConfirmations: parseInt(env.FASTBTC_RSK_REQUIRED_CONFIRMATIONS ?? '5'),
     }
 };

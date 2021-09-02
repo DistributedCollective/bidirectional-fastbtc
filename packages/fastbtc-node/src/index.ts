@@ -2,6 +2,7 @@ import bootstrap from "./inversify.config";
 import {Config} from './config';
 import {ConnectionProvider} from './db/connection';
 import {EventScanner, Scanner} from './rsk/scanner';
+import {Transfer} from './db/models';
 
 async function main() {
     console.log(`Hello, fastbtc-node here.`);
@@ -11,10 +12,16 @@ async function main() {
     console.log('My DB url is', config.dbUrl);
 
     const connectionProvider = container.get<ConnectionProvider>(ConnectionProvider);
-    await connectionProvider();
+    const connection = await connectionProvider();
+
+    const existingTransfers = await connection.getRepository(Transfer).find();
+    console.log('Existing transfers')
+    console.log(existingTransfers);
 
     const scanner = container.get<EventScanner>(Scanner);
-    await scanner.scanNewEvents();
+    const newTransfers = await scanner.scanNewEvents();
+    console.log('New transfers')
+    console.log(newTransfers);
 }
 
 export default main;

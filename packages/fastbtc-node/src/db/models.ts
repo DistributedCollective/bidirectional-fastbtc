@@ -1,4 +1,6 @@
-import {Entity, PrimaryColumn, PrimaryGeneratedColumn, Column, BaseEntity, EntityRepository, Repository} from 'typeorm';
+import {Column, Entity, EntityRepository, PrimaryColumn, PrimaryGeneratedColumn, Repository} from 'typeorm';
+import {BigNumber} from 'ethers';
+import {BigNumberColumn} from './utils';
 
 @Entity()
 export class KeyValuePair {
@@ -51,13 +53,25 @@ export class Transfer {
     btcAddress!: string;
 
     @Column()
+    nonce!: number;
+
+    @BigNumberColumn()
+    amountSatoshi!: BigNumber;
+
+    @BigNumberColumn()
+    feeSatoshi!: BigNumber;
+
+    @Column()
     rskAddress!: string;
 
     @Column()
-    amountSatoshi!: string;
+    rskTransactionHash!: string;
 
     @Column()
-    feeSatoshi!: string;
+    rskLogIndex!: number;
+
+    @Column()
+    rskBlockNumber!: number;
 }
 
 // remember to keep this up-to-date
