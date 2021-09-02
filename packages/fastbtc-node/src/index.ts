@@ -1,5 +1,4 @@
 import bootstrap from "./inversify.config";
-import {TYPES, Warrior} from "./types";
 import {Config} from './config';
 import {ConnectionProvider} from './db/connection';
 import {EventScanner, Scanner} from './rsk/scanner';
@@ -7,10 +6,6 @@ import {EventScanner, Scanner} from './rsk/scanner';
 async function main() {
     console.log(`Hello, fastbtc-node here.`);
     let container = bootstrap();
-
-    console.log('Let\'s do some ninja fighting')
-    const ninja = container.get<Warrior>(TYPES.Warrior);
-    console.log(ninja.fight());
 
     const config = container.get<Config>(Config);
     console.log('My DB url is', config.dbUrl);
