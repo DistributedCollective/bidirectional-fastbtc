@@ -14,9 +14,7 @@ async function main() {
     await connectionProvider();
 
     const scanner = container.get<EventScanner>(Scanner);
-    scanner.scanNewEvents().catch(e => {
-        console.error(e);
-    });
+    await scanner.scanNewEvents();
 }
 
 export default main;
