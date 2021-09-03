@@ -1,4 +1,4 @@
-import {Column, Entity, EntityRepository, PrimaryColumn, PrimaryGeneratedColumn, Repository} from 'typeorm';
+import {Column, Entity, EntityRepository, PrimaryColumn, PrimaryGeneratedColumn, Repository, Unique} from 'typeorm';
 import {BigNumber} from 'ethers';
 import {BigNumberColumn} from './utils';
 
@@ -44,10 +44,21 @@ export class KeyValuePairRepository extends Repository<KeyValuePair> {
     }
 }
 
+export enum TransferStatus {
+    New,
+    Sending,
+    Sent,
+    Rejected,
+}
+
 @Entity()
+@Unique('btcaddress_nonce_uq', ['btcAddress', 'nonce'])
 export class Transfer {
     @PrimaryGeneratedColumn()
     id!: number;
+
+    @Column('int')
+    status!: TransferStatus;
 
     @Column()
     btcAddress!: string;
@@ -68,10 +79,16 @@ export class Transfer {
     rskTransactionHash!: string;
 
     @Column()
+    rskTransactionIndex!: number;
+
+    @Column()
     rskLogIndex!: number;
 
     @Column()
     rskBlockNumber!: number;
+
+    @Column()
+    btcTransactionHash!: string;
 }
 
 // remember to keep this up-to-date

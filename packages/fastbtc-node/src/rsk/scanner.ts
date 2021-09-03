@@ -1,7 +1,7 @@
 import {inject, injectable} from 'inversify';
 import {ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
-import {KeyValuePairRepository, Transfer} from '../db/models';
+import {KeyValuePairRepository, Transfer, TransferStatus} from '../db/models';
 import {EthersProvider, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
 import {Connection} from 'typeorm';
@@ -15,6 +15,7 @@ const LAST_PROCESSED_BLOCK_KEY = 'eventscanner-last-processed-block';
 export class EventScanner {
     private defaultStartBlock: number;
     private requiredConfirmations: number;
+    private logger = console;
 
     constructor(
         @inject(EthersProvider) private ethersProvider: ethers.providers.Provider,
@@ -29,7 +30,7 @@ export class EventScanner {
     async scanNewEvents(): Promise<Transfer[]> {
         // TODO: we should obtain a lock maybe
         const currentBlock = await this.ethersProvider.getBlockNumber();
-        console.log("Current rsk block is", currentBlock);
+        this.logger.debug("Current rsk block is", currentBlock);
 
         let lastProcessedBlock = await this.dbConnection.transaction(async db => {
             const keyValuePairRepository = db.getCustomRepository(KeyValuePairRepository);
@@ -39,11 +40,11 @@ export class EventScanner {
             );
         });
 
-        console.log("Last processed block is", lastProcessedBlock);
+        this.logger.debug("Last processed block is", lastProcessedBlock);
         let fromBlock = lastProcessedBlock + 1;
         const toBlock = currentBlock - this.requiredConfirmations;
         if(toBlock < fromBlock) {
-            console.log(`toBlock ${toBlock} is smaller than fromBlock ${fromBlock}, aborting`)
+            this.logger.debug(`toBlock ${toBlock} is smaller than fromBlock ${fromBlock}, aborting`)
             return [];
         }
 
@@ -63,20 +64,23 @@ export class EventScanner {
                 // TODO: validate that transfer is not already in DB
                 const args = event.args;
                 if(!args) {
-                    console.warn('Event has no args', event);
+                    this.logger.warn('Event has no args', event);
                     continue;
                 }
                 // TODO: store rsk address in event so we don't have to get the tx for each event
                 const tx = await event.getTransaction();
                 const transfer = transferRepository.create({
+                    status: TransferStatus.New,
                     btcAddress: args._btcAddress, // TODO: normalize bitcoin address
                     nonce: args._nonce.toNumber(),
                     amountSatoshi: args._amountSatoshi,
                     feeSatoshi: args._feeSatoshi,
                     rskAddress: tx.from, // TODO: should get from args
                     rskTransactionHash: event.transactionHash,
+                    rskTransactionIndex: event.transactionIndex,
                     rskLogIndex: event.logIndex,
                     rskBlockNumber: event.blockNumber,
+                    btcTransactionHash: '',
                 });
                 transfers.push(transfer);
             }
@@ -87,5 +91,20 @@ export class EventScanner {
             await keyValuePairRepository.setValue(LAST_PROCESSED_BLOCK_KEY, toBlock + 1);
             return transfers;
         });
+    }
+
+    async getNextBatchTransfers(): Promise<Transfer[]> {
+        const maxBatchSize = 10;
+        const transferRepository = this.dbConnection.getRepository(Transfer);
+        return transferRepository.find({
+            where: {
+                status: TransferStatus.New,
+            },
+            order: {
+                // TODO: order by (blockNumber, transactionIndex, logIndex) would be better
+                id: 'ASC',
+            },
+            take: maxBatchSize,
+        })
     }
 }

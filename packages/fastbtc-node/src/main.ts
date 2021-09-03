@@ -3,47 +3,71 @@ import {EventScanner, Scanner} from './rsk/scanner';
 import {P2PNetwork} from './p2p/network';
 import {Network} from 'ataraxia';
 import {sleep} from './utils';
-import * as net from 'net';
+import {Transfer} from './db/models';
 
 @injectable()
 export class FastBTCNode {
     private running = false;
+    private numRequiredSigners = 2;
+    private logger = console;
 
     constructor(
         @inject(Scanner) private eventScanner: EventScanner,
         @inject(P2PNetwork) private network: Network,
     ) {
         network.onNodeAvailable(node => {
-            console.log('A new node is available', node);
+            this.logger.info('A new node is available', node);
         });
         network.onNodeUnavailable(node => {
-            console.log('Node no longer available', node);
+            this.logger.info('Node no longer available', node);
         });
         network.onMessage(msg => {
-            console.log('A new message was received:', msg);
+            this.logger.info('A new message was received:', msg);
         });
     }
 
     async run() {
         this.running = true;
-        const network = this.network;
-        await network.join();
+        await this.network.join();
 
-        console.log('Network', network);
-        console.log('Entering main loop')
+        this.logger.info('Joined network, entering main loop')
         try {
             while(this.running) {
-                const initiatorId = this.getInitiatorId();
-                const isInitiator = network.networkId === initiatorId;
-                console.log('node id:      ', network.networkId);
-                console.log('initiator id: ', initiatorId);
-                console.log('is initiator?:', isInitiator);
-                console.log('nodes online: ', network.nodes.length);
-                await sleep(10000);
+                await this.runIteration();
+                await sleep(30_000);
             }
         } finally {
-            await network.leave();
+            await this.network.leave();
         }
+    }
+
+    private async runIteration() {
+        const network = this.network;
+        const newEvents = await this.eventScanner.scanNewEvents();
+        if(newEvents.length) {
+            this.logger.info(`scanned ${newEvents.length} new events`);
+        }
+
+        const initiatorId = this.getInitiatorId();
+        const isInitiator = network.networkId === initiatorId;
+        const nextBatchTransfers = await this.eventScanner.getNextBatchTransfers();
+        const isBtcTransferDue = network.nodes.length >= this.numRequiredSigners && nextBatchTransfers.length >= 1;
+
+        this.logger.info('\n');
+        this.logger.info('node id:         ', network.networkId);
+        this.logger.info('initiator id:    ', initiatorId);
+        this.logger.info('is initiator?    ', isInitiator);
+        this.logger.info('nodes online:    ', network.nodes.length);
+        this.logger.info('transfers queued:', nextBatchTransfers.length);
+        this.logger.info('distribution due?', isBtcTransferDue);
+
+        if (isInitiator && isBtcTransferDue) {
+            await this.handleBtcBatchTransfer(nextBatchTransfers);
+        }
+    }
+
+    private async handleBtcBatchTransfer(transfers: Transfer[]) {
+
     }
 
     getInitiatorId(): string|null {
