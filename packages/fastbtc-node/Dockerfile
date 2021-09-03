@@ -4,6 +4,8 @@
 FROM node:14-alpine AS base
 
 RUN apk update
+# Requirements for libsodium/gyp/etc
+RUN apk add -t build-dependencies libtool autoconf automake gcc g++ make python
 
 
 ###########
