@@ -27,6 +27,10 @@ export class EventScanner {
         this.requiredConfirmations = config.rskRequiredConfirmations;
     }
 
+    async getCurrentBlockNumber(): Promise<number> {
+        return await this.ethersProvider.getBlockNumber();
+    }
+
     async scanNewEvents(): Promise<Transfer[]> {
         // TODO: we should obtain a lock maybe
         const currentBlock = await this.ethersProvider.getBlockNumber();
@@ -93,8 +97,7 @@ export class EventScanner {
         });
     }
 
-    async getNextBatchTransfers(): Promise<Transfer[]> {
-        const maxBatchSize = 10;
+    async getNextBatchTransfers(maxBatchSize: number): Promise<Transfer[]> {
         const transferRepository = this.dbConnection.getRepository(Transfer);
         return transferRepository.find({
             where: {
@@ -102,7 +105,7 @@ export class EventScanner {
             },
             order: {
                 // TODO: order by (blockNumber, transactionIndex, logIndex) would be better
-                id: 'ASC',
+                dbId: 'ASC',
             },
             take: maxBatchSize,
         })

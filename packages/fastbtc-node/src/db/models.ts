@@ -54,8 +54,12 @@ export enum TransferStatus {
 @Entity()
 @Unique('btcaddress_nonce_uq', ['btcAddress', 'nonce'])
 export class Transfer {
-    @PrimaryGeneratedColumn()
-    id!: number;
+    @PrimaryGeneratedColumn({ name: 'id'})
+    dbId!: number;
+
+    get transferId(): string {
+        return `${this.btcAddress.toLowerCase()}:${this.nonce}`;
+    }
 
     @Column('int')
     status!: TransferStatus;
