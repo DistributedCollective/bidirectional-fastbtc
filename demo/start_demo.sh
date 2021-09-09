@@ -9,5 +9,9 @@ echo "Starting demo"
 ./start_demo_frontend.sh
 ./start_demo_backend.sh
 
-echo "Demo started, tailing logs"
+echo "Demo started"
+
+./fund_accounts.sh
+
+echo "tailing logs"
 ./tail_logs.sh
