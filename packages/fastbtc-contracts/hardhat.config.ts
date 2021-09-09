@@ -35,6 +35,37 @@ task("free-money", "Sends free money to address")
         console.log('tx hash:', receipt.hash);
     });
 
+task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
+    .addPositionalParam("privateKey", "Private key of address to send free money from")
+    .addPositionalParam("btcAddress", "BTC address to send")
+    .addPositionalParam("rbtcAmount", "RBTC amount to send", "1.0")
+    .setAction(async ({ privateKey, btcAddress, rbtcAmount }, hre) => {
+        if(!privateKey || !btcAddress) {
+            throw new Error("Provide address as first argument");
+        }
+
+        const provider = hre.ethers.provider;
+        const wallet = new hre.ethers.Wallet(privateKey, provider);
+        const rbtcAmountWei = hre.ethers.utils.parseEther(rbtcAmount);
+        console.log(`Sending ${rbtcAmount} rBTC from ${wallet.address} to BTC address ${btcAddress}`)
+
+        const deployment = await hre.deployments.get('FastBTCBridge');
+        console.log('Bridge address', deployment.address);
+        const fastBtcBridge = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            deployment.address,
+            wallet,
+        );
+        const nonce = await fastBtcBridge.getNextNonce(btcAddress);
+        console.log('Next BTC nonce', nonce, nonce.toString());
+        const receipt = await fastBtcBridge.transferRBTCToBTC(
+            btcAddress,
+            nonce,
+            {value: rbtcAmountWei}
+        );
+        console.log('tx hash:', receipt.hash);
+    });
+
 if (!DEPLOYER_PRIVATE_KEY) {
     console.warn('DEPLOYER_PRIVATE_KEY missing, non-local deployments not working');
 }

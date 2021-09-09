@@ -26,4 +26,11 @@ cd demo
 ./start_demo.sh
 ```
 
+Then send RBTC to BTC from the UI at http://localhost:8080 (add the private key from output to metamask)
+or by running:
+```
+./transfer_rbtc_from_user.sh
+```
+
+
 (TODO: use docker and docker-compose for the demo)
