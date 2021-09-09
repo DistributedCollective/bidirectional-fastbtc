@@ -133,16 +133,13 @@ export class EventScanner {
             for (let transfer of transfersToUpdate) {
                 transfer.status = newStatus;
             }
+            await transferRepository.save(transfersToUpdate);
             return transfersToUpdate;
         })
     }
 
     async getNumTransfers(): Promise<number> {
         const transferRepository = this.dbConnection.getRepository(Transfer);
-        const { count } = await transferRepository
-            .createQueryBuilder('transfer')
-            .select('COUNT(*)', 'count')
-            .getRawOne();
-        return count;
+        return transferRepository.count();
     }
 }
