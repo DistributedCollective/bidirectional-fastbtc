@@ -92,7 +92,7 @@ export class EventScanner {
                 await transferRepository.save(transfers);
             }
 
-            await keyValuePairRepository.setValue(LAST_PROCESSED_BLOCK_KEY, toBlock + 1);
+            await keyValuePairRepository.setValue(LAST_PROCESSED_BLOCK_KEY, toBlock);
             return transfers;
         });
     }
