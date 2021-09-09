@@ -11,10 +11,14 @@ async function main() {
     console.log('My config is', config);
 
     // TODO: this is silly, but we have to init the connection. Architect this thing better
-    await container.get<ConnectionProvider>(ConnectionProvider)();
+    const dbConnection = await container.get<ConnectionProvider>(ConnectionProvider)();
 
-    const node = container.get<FastBTCNode>(FastBTCNode);
-    await node.run();
+    try {
+        const node = container.get<FastBTCNode>(FastBTCNode);
+        await node.run();
+    } finally {
+        await dbConnection.close();
+    }
 }
 
 export default main;

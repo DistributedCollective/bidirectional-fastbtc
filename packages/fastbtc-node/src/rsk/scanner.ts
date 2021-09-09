@@ -54,7 +54,7 @@ export class EventScanner {
 
         const events = await getEvents(
             this.fastBtcBridge,
-            this.fastBtcBridge.filters.Transferred(),
+            this.fastBtcBridge.filters.NewTransfer(),
             fromBlock,
             toBlock,
         );
@@ -74,6 +74,7 @@ export class EventScanner {
                 // TODO: store rsk address in event so we don't have to get the tx for each event
                 const tx = await event.getTransaction();
                 const transfer = transferRepository.create({
+                    transferId: `${args._btcAddress.toLowerCase()}:${args._nonce.toNumber()}`,
                     status: TransferStatus.New,
                     btcAddress: args._btcAddress, // TODO: normalize bitcoin address
                     nonce: args._nonce.toNumber(),
@@ -109,5 +110,39 @@ export class EventScanner {
             },
             take: maxBatchSize,
         })
+    }
+
+    async updateTransferStatus(
+        transfers: Transfer[] | string[],
+        newStatus: TransferStatus
+    ): Promise<Transfer[]> {
+        const transferIds: string[] = transfers.map(t => (
+            (typeof t === 'string') ? t : t.transferId
+        ));
+
+        return await this.dbConnection.transaction(async db => {
+            const transferRepository = db.getRepository(Transfer);
+            const transfersToUpdate = await transferRepository.find({
+                where: transferIds.map(transferId => ({
+                    transferId
+                }))
+            });
+            if (transfersToUpdate.length !== transferIds.length) {
+                throw new Error('not all transfers with ids found: ' + transferIds.join(', '));
+            }
+            for (let transfer of transfersToUpdate) {
+                transfer.status = newStatus;
+            }
+            return transfersToUpdate;
+        })
+    }
+
+    async getNumTransfers(): Promise<number> {
+        const transferRepository = this.dbConnection.getRepository(Transfer);
+        const { count } = await transferRepository
+            .createQueryBuilder('transfer')
+            .select('COUNT(*)', 'count')
+            .getRawOne();
+        return count;
     }
 }

@@ -1,9 +1,9 @@
 import {inject, injectable} from 'inversify';
 import {EventScanner, Scanner} from './rsk/scanner';
 import {P2PNetwork} from './p2p/network';
-import {Network, Node, Message, RequestReplyHelper} from 'ataraxia';
+import {Message, Network, Node} from 'ataraxia';
 import {sleep} from './utils';
-import {Transfer} from './db/models';
+import {Transfer, TransferStatus} from './db/models';
 
 interface TransferBatch {
     transferIds: string[];
@@ -90,6 +90,7 @@ export class FastBTCNode {
 
         const initiatorId = this.getInitiatorId();
         const isInitiator = this.id === initiatorId;
+        const numTransfers = await this.eventScanner.getNumTransfers();
         const nextBatchTransfers = await this.eventScanner.getNextBatchTransfers(this.maxTransfersInBatch);
         const currentBlockNumber = await this.eventScanner.getCurrentBlockNumber();
         const isBtcTransferDue = this.isBtcTransferTrue(nextBatchTransfers, currentBlockNumber);
@@ -101,6 +102,7 @@ export class FastBTCNode {
         this.logger.info('is initiator?    ', isInitiator);
         this.logger.info('successor id:    ', successor?.id);
         this.logger.info('nodes online:    ', network.nodes.length);
+        this.logger.info('transfers total: ', numTransfers);
         this.logger.info('transfers queued:', nextBatchTransfers.length);
         this.logger.info('btc transfer due?', isBtcTransferDue);
 
@@ -122,7 +124,13 @@ export class FastBTCNode {
         }
 
         const successor = this.getSuccessor();
-        successor?.send('propagate-transfer-batch', transferBatch);
+        if (!successor) {
+            throw new Error('no successor, cannot handle the situation!')
+        }
+
+        await this.eventScanner.updateTransferStatus(transfers, TransferStatus.Sending);
+
+        await successor.send('propagate-transfer-batch', transferBatch);
     }
 
     private async onPropagateTransferBatch({ data }: Message) {

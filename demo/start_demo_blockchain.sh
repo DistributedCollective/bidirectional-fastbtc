@@ -18,6 +18,7 @@ echo "Your user account is $USER_ADDRESS"
 echo "Private key (add to Metamask): $USER_PRIVATE_KEY"
 
 cd ../packages/fastbtc-contracts
+npx hardhat compile
 npx hardhat node >$THIS_DIR/logs/hardhat.log 2>$THIS_DIR/logs/hardhat-error.log &
 HARDHAT_PID=$!
 echo $HARDHAT_PID > $THIS_DIR/run/hardhat.pid

@@ -45,10 +45,10 @@ export class KeyValuePairRepository extends Repository<KeyValuePair> {
 }
 
 export enum TransferStatus {
-    New,
-    Sending,
-    Sent,
-    Rejected,
+    New, // New transfer in blockchain
+    Sending, // Selected as the next batch for sending
+    Sent, // Sent to RSK/BTC
+    Rejected = -1,
 }
 
 @Entity()
@@ -57,9 +57,8 @@ export class Transfer {
     @PrimaryGeneratedColumn({ name: 'id'})
     dbId!: number;
 
-    get transferId(): string {
-        return `${this.btcAddress.toLowerCase()}:${this.nonce}`;
-    }
+    @Column({ unique: true })
+    transferId!: string;
 
     @Column('int')
     status!: TransferStatus;

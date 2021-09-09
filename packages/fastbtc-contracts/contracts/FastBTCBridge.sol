@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 contract FastBTCBridge is AccessControlEnumerable {
     using SafeERC20 for IERC20;
 
-    event Transferred(
+    event NewTransfer(
         string _btcAddress,
         uint _nonce,
         uint _amountSatoshi,
@@ -74,7 +74,7 @@ contract FastBTCBridge is AccessControlEnumerable {
             )
         );
 
-        emit Transferred(
+        emit NewTransfer(
             _btcAddress,
             _nonce,
             amountSatoshi,
