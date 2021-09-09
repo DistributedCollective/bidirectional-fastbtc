@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 cd "$(dirname "$0")"
+THIS_DIR=$(pwd)
+for i in 1 2
+do
+    if test -f "$THIS_DIR/run/node$i.pid" ; then
+        echo "Killing existing node$i"
+        kill $(cat $THIS_DIR/run/node$i.pid) 2>/dev/null || true
+    fi
+done
 
 echo "Building docker"
 docker build -t fastbtc:latest ../packages/fastbtc-node
@@ -13,21 +21,18 @@ createuser fastbtc 2>/dev/null || true
 (dropdb fastbtc2_node3 || true) && createdb -O fastbtc fastbtc2_node3
 
 echo ""
-echo "Starting node 1"
-docker run --env-file docker-env1 -p 11125:11125 fastbtc:latest &
-PID1=$!
-echo PID1: $PID1
-sleep 5
-
-echo ""
-echo "Starting node 2"
-docker run --env-file docker-env2 -p 11126:11126 fastbtc:latest &
-PID2=$!
-echo PID2: $PID2
-trap "echo stopping $PID1 and $PID2 && kill $PID1 $PID2 && sleep 5" SIGINT SIGTERM EXIT
-
-echo ""
-
-while true ; do
-    sleep 1
+echo "Starting nodes"
+for i in 1 2
+do
+    let "NODE_PORT=11124 + i"
+    echo "Starting node $i"
+    docker run --env-file docker-env$i -p $NODE_PORT:$NODE_PORT fastbtc:latest \
+        2>$THIS_DIR/logs/node$i-error.log >$THIS_DIR/logs/node$i.log &
+    NODE_PID=$!
+    echo $NODE_PID > $THIS_DIR/run/node$i.pid
+    sleep 3
+    echo "Node $i started, logs at $THIS_DIR/logs/node$i.log"
+    tail $THIS_DIR/logs/node$i-error.log $THIS_DIR/logs/node$i.log
+    sleep 2
+    echo ""
 done

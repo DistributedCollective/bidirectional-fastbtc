@@ -7,8 +7,7 @@ import {Transfer} from './db/models';
 
 interface TransferBatch {
     transferIds: string[];
-    btcTransaction: any;
-    btcSignatures: string[];
+    signedBtcTransaction: string;
     rskUpdateSignatures: string[];
     nodeIds: string[];
 }
@@ -114,12 +113,10 @@ export class FastBTCNode {
         // TODO: obviously replace with actual signature stuff
         this.logger.log(`node #${this.getNodeIndex()}: initiate btc batch transfer`);
 
-        const btcSignature = `fakesignature:${this.id}:btc`;
         const rskSignature = `fakesignature:${this.id}:rsk`;
         const transferBatch: TransferBatch = {
             transferIds: transfers.map(t => t.transferId),
-            btcTransaction: {foo: 'bar'},
-            btcSignatures: [btcSignature],
+            signedBtcTransaction: `fakebtctx:${this.id}`,
             rskUpdateSignatures: [rskSignature],
             nodeIds: [this.id],
         }
@@ -133,12 +130,10 @@ export class FastBTCNode {
         // TODO: validate that node has not already signed
         let transferBatch: TransferBatch = data;
         this.logger.log(`node #${this.getNodeIndex()}: received transfer batch`, transferBatch);
-        const btcSignature = `fakesignature:${this.id}:btc`;
         const rskSignature = `fakesignature:${this.id}:rsk`;
         transferBatch = {
             transferIds: transferBatch.transferIds,
-            btcTransaction: transferBatch.btcTransaction,
-            btcSignatures: [...transferBatch.btcSignatures, btcSignature],
+            signedBtcTransaction: `${transferBatch.signedBtcTransaction}:${this.id}`,
             rskUpdateSignatures: [...transferBatch.rskUpdateSignatures, rskSignature],
             nodeIds: [...transferBatch.nodeIds, this.id],
         }

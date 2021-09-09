@@ -32,7 +32,7 @@ task("free-money", "Sends free money to address")
             value: rbtcAmountWei,
         })
 
-        console.log(receipt);
+        console.log('tx hash:', receipt.hash);
     });
 
 if (!DEPLOYER_PRIVATE_KEY) {
