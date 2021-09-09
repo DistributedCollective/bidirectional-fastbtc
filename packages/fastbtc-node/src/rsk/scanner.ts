@@ -54,7 +54,9 @@ export class EventScanner {
 
         const events = await getEvents(
             this.fastBtcBridge,
-            this.fastBtcBridge.filters.NewTransfer(),
+            [
+                this.fastBtcBridge.filters.NewTransfer(),
+            ],
             fromBlock,
             toBlock,
         );
@@ -65,30 +67,37 @@ export class EventScanner {
 
             const transfers: Transfer[] = [];
             for(let event of events) {
-                // TODO: validate that transfer is not already in DB
                 const args = event.args;
                 if(!args) {
                     this.logger.warn('Event has no args', event);
                     continue;
                 }
+
                 // TODO: store rsk address in event so we don't have to get the tx for each event
                 const tx = await event.getTransaction();
-                const transfer = transferRepository.create({
-                    transferId: `${args._btcAddress.toLowerCase()}:${args._nonce.toNumber()}`,
-                    status: TransferStatus.New,
-                    btcAddress: args._btcAddress, // TODO: normalize bitcoin address
-                    nonce: args._nonce.toNumber(),
-                    amountSatoshi: args._amountSatoshi,
-                    feeSatoshi: args._feeSatoshi,
-                    rskAddress: tx.from, // TODO: should get from args
-                    rskTransactionHash: event.transactionHash,
-                    rskTransactionIndex: event.transactionIndex,
-                    rskLogIndex: event.logIndex,
-                    rskBlockNumber: event.blockNumber,
-                    btcTransactionHash: '',
-                });
-                transfers.push(transfer);
+
+                if (event.event === 'NewTransfer') {
+                    // TODO: validate that transfer is not already in DB
+                    const transfer = transferRepository.create({
+                        transferId: `${args._btcAddress.toLowerCase()}:${args._nonce.toNumber()}`,
+                        status: TransferStatus.New,
+                        btcAddress: args._btcAddress, // TODO: normalize bitcoin address
+                        nonce: args._nonce.toNumber(),
+                        amountSatoshi: args._amountSatoshi,
+                        feeSatoshi: args._feeSatoshi,
+                        rskAddress: tx.from, // TODO: should get from args
+                        rskTransactionHash: event.transactionHash,
+                        rskTransactionIndex: event.transactionIndex,
+                        rskLogIndex: event.logIndex,
+                        rskBlockNumber: event.blockNumber,
+                        btcTransactionHash: '',
+                    });
+                    transfers.push(transfer);
+                } else {
+                    console.error('Unknown event:', event);
+                }
             }
+
             if(transfers.length) {
                 await transferRepository.save(transfers);
             }
