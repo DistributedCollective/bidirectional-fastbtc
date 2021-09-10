@@ -8,6 +8,49 @@
         "anonymous": false,
         "inputs": [
             {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "_transferId",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "string",
+                "name": "_btcAddress",
+                "type": "string"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "_nonce",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "_amountSatoshi",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "_feeSatoshi",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "_rskAddress",
+                "type": "address"
+            }
+        ],
+        "name": "NewTransfer",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
                 "indexed": true,
                 "internalType": "bytes32",
                 "name": "role",
@@ -84,30 +127,18 @@
         "inputs": [
             {
                 "indexed": false,
-                "internalType": "string",
-                "name": "_btcAddress",
-                "type": "string"
+                "internalType": "bytes32",
+                "name": "_transferId",
+                "type": "bytes32"
             },
             {
                 "indexed": false,
-                "internalType": "uint256",
-                "name": "_nonce",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "_amountSatoshi",
-                "type": "uint256"
-            },
-            {
-                "indexed": false,
-                "internalType": "uint256",
-                "name": "_feeSatoshi",
-                "type": "uint256"
+                "internalType": "int256",
+                "name": "_newStatus",
+                "type": "int256"
             }
         ],
-        "name": "NewTransfer",
+        "name": "TransferStatusUpdated",
         "type": "event"
     },
     {
@@ -190,7 +221,7 @@
     },
     {
         "inputs": [],
-        "name": "TRANSFER_STATUS_PROCESSED",
+        "name": "TRANSFER_STATUS_NEW",
         "outputs": [
             {
                 "internalType": "int256",
@@ -216,7 +247,7 @@
     },
     {
         "inputs": [],
-        "name": "TRANSFER_STATUS_REGISTERED",
+        "name": "TRANSFER_STATUS_SENT",
         "outputs": [
             {
                 "internalType": "int256",
@@ -375,6 +406,30 @@
     {
         "inputs": [
             {
+                "internalType": "string",
+                "name": "_btcAddress",
+                "type": "string"
+            },
+            {
+                "internalType": "uint256",
+                "name": "nonce",
+                "type": "uint256"
+            }
+        ],
+        "name": "getTransferId",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "bytes32",
                 "name": "role",
                 "type": "bytes32"
@@ -422,7 +477,7 @@
                 "type": "string"
             }
         ],
-        "name": "isValidBTCAddress",
+        "name": "isValidBtcAddress",
         "outputs": [
             {
                 "internalType": "bool",
@@ -430,7 +485,20 @@
                 "type": "bool"
             }
         ],
-        "stateMutability": "view",
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32[]",
+                "name": "_transferIds",
+                "type": "bytes32[]"
+            }
+        ],
+        "name": "markTransfersAsSent",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
@@ -449,6 +517,25 @@
     {
         "inputs": [],
         "name": "minTransferSatoshi",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "string",
+                "name": "",
+                "type": "string"
+            }
+        ],
+        "name": "nextNonces",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -579,7 +666,7 @@
                 "type": "uint256"
             }
         ],
-        "name": "transferRBTCToBTC",
+        "name": "transferToBtc",
         "outputs": [],
         "stateMutability": "payable",
         "type": "function"
@@ -587,22 +674,27 @@
     {
         "inputs": [
             {
-                "internalType": "string",
+                "internalType": "bytes32",
                 "name": "",
-                "type": "string"
-            },
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
+                "type": "bytes32"
             }
         ],
         "name": "transfers",
         "outputs": [
             {
-                "internalType": "address",
-                "name": "from",
-                "type": "address"
+                "internalType": "int256",
+                "name": "status",
+                "type": "int256"
+            },
+            {
+                "internalType": "string",
+                "name": "btcAddress",
+                "type": "string"
+            },
+            {
+                "internalType": "uint256",
+                "name": "nonce",
+                "type": "uint256"
             },
             {
                 "internalType": "uint256",
@@ -610,30 +702,17 @@
                 "type": "uint256"
             },
             {
-                "internalType": "int256",
-                "name": "status",
-                "type": "int256"
+                "internalType": "uint256",
+                "name": "feeSatoshi",
+                "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "rskAddress",
+                "type": "address"
             }
         ],
         "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "string",
-                "name": "_btcAddress",
-                "type": "string"
-            },
-            {
-                "internalType": "uint256",
-                "name": "_nonce",
-                "type": "uint256"
-            }
-        ],
-        "name": "voteForTransfer",
-        "outputs": [],
-        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
@@ -649,7 +728,7 @@
                 "type": "address"
             }
         ],
-        "name": "withdrawRBTC",
+        "name": "withdrawRbtc",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"

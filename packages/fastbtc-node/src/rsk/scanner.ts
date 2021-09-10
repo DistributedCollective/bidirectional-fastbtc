@@ -66,6 +66,8 @@ export class EventScanner {
             const transferRepository = db.getRepository(Transfer);
 
             const transfers: Transfer[] = [];
+            const transfersByTransferId: Record<string, Transfer> = {};
+
             for(let event of events) {
                 const args = event.args;
                 if(!args) {
@@ -73,19 +75,16 @@ export class EventScanner {
                     continue;
                 }
 
-                // TODO: store rsk address in event so we don't have to get the tx for each event
-                const tx = await event.getTransaction();
-
                 if (event.event === 'NewTransfer') {
                     // TODO: validate that transfer is not already in DB
                     const transfer = transferRepository.create({
-                        transferId: `${args._btcAddress.toLowerCase()}:${args._nonce.toNumber()}`,
+                        transferId: args._transferId,
                         status: TransferStatus.New,
-                        btcAddress: args._btcAddress, // TODO: normalize bitcoin address
+                        btcAddress: args._btcAddress,
                         nonce: args._nonce.toNumber(),
                         amountSatoshi: args._amountSatoshi,
                         feeSatoshi: args._feeSatoshi,
-                        rskAddress: tx.from, // TODO: should get from args
+                        rskAddress: args._rskAddress,
                         rskTransactionHash: event.transactionHash,
                         rskTransactionIndex: event.transactionIndex,
                         rskLogIndex: event.logIndex,
@@ -93,6 +92,25 @@ export class EventScanner {
                         btcTransactionHash: '',
                     });
                     transfers.push(transfer);
+                    transfersByTransferId[transfer.transferId] = transfer;
+                } else if (event.event === 'TransferStatusUpdated') {
+                    const transferId = args._transferId;
+                    // Transfer created just now
+                    let transfer: Transfer = transfersByTransferId[transferId];
+                    if (!transfer) {
+                        // Transfer created earlier
+                        transfer = await transferRepository.findOneOrFail({
+                            where: {
+                                transferId,
+                            }
+                        });
+
+                        transfer.status = args.status;
+
+                        transfers.push(transfer);
+                        transfersByTransferId[transfer.transferId] = transfer;
+                    }
+
                 } else {
                     console.error('Unknown event:', event);
                 }

@@ -58,7 +58,7 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
         );
         const nonce = await fastBtcBridge.getNextNonce(btcAddress);
         console.log('Next BTC nonce', nonce, nonce.toString());
-        const receipt = await fastBtcBridge.transferRBTCToBTC(
+        const receipt = await fastBtcBridge.transferToBtc(
             btcAddress,
             nonce,
             {value: rbtcAmountWei}

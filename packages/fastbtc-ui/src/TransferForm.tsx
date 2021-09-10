@@ -55,7 +55,7 @@ const TransferForm: React.FC = () => {
         send: sendTransfer
     } = useContractFunction(
         fastbtcBridge as any, // TODO: https://github.com/EthWorks/useDApp/issues/263
-        'transferRBTCToBTC'
+        'transferToBtc'
     );
 
     console.log('transferState', transferState);
