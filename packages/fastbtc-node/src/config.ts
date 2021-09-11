@@ -4,6 +4,7 @@ export interface Config {
     rskContractAddress: string;
     rskStartBlock: number;
     rskRequiredConfirmations: number;
+    rskPrivateKey: string; // TODO: should consider
     knownPeers: string[];
     port: number;
 }
@@ -21,6 +22,7 @@ export const createEnvConfig = (env = process.env): Config => {
         'FASTBTC_RSK_RPC_URL',
         'FASTBTC_RSK_CONTRACT_ADDRESS',
         'FASTBTC_RSK_START_BLOCK',
+        'FASTBTC_RSK_PRIVATE_KEY',
         'FASTBTC_KNOWN_PEERS',
     ]) {
         if(!env[key]) {
@@ -43,6 +45,7 @@ export const createEnvConfig = (env = process.env): Config => {
         rskContractAddress: env.FASTBTC_RSK_CONTRACT_ADDRESS!,
         rskStartBlock: parseInt(env.FASTBTC_RSK_START_BLOCK!),
         rskRequiredConfirmations: parseInt(env.FASTBTC_RSK_REQUIRED_CONFIRMATIONS ?? '5'),
+        rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
         knownPeers: parseKnownPeers(env.FASTBTC_KNOWN_PEERS!),
         port,
     }

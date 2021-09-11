@@ -1,5 +1,5 @@
 import {inject, injectable} from 'inversify';
-import {ethers} from 'ethers';
+import {BigNumber, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
 import {KeyValuePairRepository, Transfer, TransferStatus} from '../db/models';
 import {EthersProvider, FastBtcBridgeContract} from './base';
@@ -11,6 +11,7 @@ export const Scanner = Symbol.for('Scanner');
 
 const LAST_PROCESSED_BLOCK_KEY = 'eventscanner-last-processed-block';
 
+// TODO: the name might be a misnomer since this does quite a few things beside scanning for new events
 @injectable()
 export class EventScanner {
     private defaultStartBlock: number;
@@ -56,6 +57,7 @@ export class EventScanner {
             this.fastBtcBridge,
             [
                 this.fastBtcBridge.filters.NewTransfer(),
+                this.fastBtcBridge.filters.TransferStatusUpdated(),
             ],
             fromBlock,
             toBlock,
@@ -76,6 +78,8 @@ export class EventScanner {
                 }
 
                 if (event.event === 'NewTransfer') {
+                    this.logger.debug('NewTransfer', args._transferId);
+
                     // TODO: validate that transfer is not already in DB
                     const transfer = transferRepository.create({
                         transferId: args._transferId,
@@ -94,7 +98,10 @@ export class EventScanner {
                     transfers.push(transfer);
                     transfersByTransferId[transfer.transferId] = transfer;
                 } else if (event.event === 'TransferStatusUpdated') {
-                    const transferId = args._transferId;
+                    const transferId = args._transferId as string;
+                    const newStatus = (args._newStatus as BigNumber).toNumber();
+                    this.logger.debug('TransferStatusUpdated', transferId, newStatus, TransferStatus[newStatus]);
+
                     // Transfer created just now
                     let transfer: Transfer = transfersByTransferId[transferId];
                     if (!transfer) {
@@ -105,14 +112,14 @@ export class EventScanner {
                             }
                         });
 
-                        transfer.status = args.status;
+                        transfer.status = newStatus;
 
                         transfers.push(transfer);
                         transfersByTransferId[transfer.transferId] = transfer;
                     }
 
                 } else {
-                    console.error('Unknown event:', event);
+                    this.logger.error('Unknown event:', event);
                 }
             }
 
@@ -139,13 +146,11 @@ export class EventScanner {
         })
     }
 
-    async updateTransferStatus(
+    async updateLocalTransferStatus(
         transfers: Transfer[] | string[],
         newStatus: TransferStatus
     ): Promise<Transfer[]> {
-        const transferIds: string[] = transfers.map(t => (
-            (typeof t === 'string') ? t : t.transferId
-        ));
+        const transferIds = this.getTransferIds(transfers);
 
         return await this.dbConnection.transaction(async db => {
             const transferRepository = db.getRepository(Transfer);
@@ -162,11 +167,33 @@ export class EventScanner {
             }
             await transferRepository.save(transfersToUpdate);
             return transfersToUpdate;
-        })
+        });
     }
 
     async getNumTransfers(): Promise<number> {
         const transferRepository = this.dbConnection.getRepository(Transfer);
         return transferRepository.count();
+    }
+
+    async markTransfersAsSent(
+        transfers: Transfer[] | string[],
+        // TODO: signatures
+    ): Promise<void> {
+        const transferIds = this.getTransferIds(transfers);
+        const tx = await this.fastBtcBridge.markTransfersAsSent(transferIds);
+        this.logger.debug('markTransfersAsSent tx hash', tx.hash);
+        const receipt = await tx.wait();
+        if (receipt.status !== 1) {
+            this.logger.error('Invalid status for markTransfersAsSent receipt', receipt);
+            throw new Error('invalid status for markTransfersAsSent receipt');
+        }
+    }
+
+    private getTransferIds(
+        transfers: Transfer[] | string[]
+    ): string[] {
+        return transfers.map(t => (
+            (typeof t === 'string') ? t : t.transferId
+        ));
     }
 }

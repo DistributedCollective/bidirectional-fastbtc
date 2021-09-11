@@ -10,6 +10,11 @@ do
     fi
 done
 
+echo "Build backend (may result in filesystem changes)"
+pushd ../packages/fastbtc-node
+make
+popd
+
 echo "Building docker"
 docker build -t fastbtc:latest ../packages/fastbtc-node
 

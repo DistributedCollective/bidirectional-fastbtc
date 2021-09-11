@@ -5,7 +5,8 @@ import Container = interfaces.Container;
 import {Config} from '../config';
 type Provider = ethers.providers.Provider;
 
-export const EthersProvider = Symbol.for('Provider');
+export const EthersProvider = Symbol.for('EthersProvider');
+export const EthersSigner = Symbol.for('EthersSigner');
 export const FastBtcBridgeContract = Symbol.for('FastBtcBridgeContract');
 
 export const bindAllToContainer = (container: Container) => {
@@ -14,9 +15,15 @@ export const bindAllToContainer = (container: Container) => {
         return new ethers.providers.JsonRpcProvider(config.rskRpcUrl);
     })
 
-    container.bind<Contract>(FastBtcBridgeContract).toDynamicValue((context) => {
+    container.bind<ethers.Signer>(EthersSigner).toDynamicValue((context) => {
         const config = context.container.get<Config>(Config);
         const provider = context.container.get<Provider>(EthersProvider);
-        return new ethers.Contract(config.rskContractAddress, fastBtcBridgeAbi, provider);
+        return new ethers.Wallet(config.rskPrivateKey, provider);
+    })
+
+    container.bind<Contract>(FastBtcBridgeContract).toDynamicValue((context) => {
+        const config = context.container.get<Config>(Config);
+        const signer = context.container.get<Provider>(EthersSigner);
+        return new ethers.Contract(config.rskContractAddress, fastBtcBridgeAbi, signer);
     })
 }

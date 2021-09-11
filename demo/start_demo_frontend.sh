@@ -15,8 +15,10 @@ if test -f "$THIS_DIR/run/frontend.pid" ; then
     kill $(cat $THIS_DIR/run/frontend.pid) 2>/dev/null || true
 fi
 
+echo "Build frontend (may result in filesystem changes)"
 cd ../packages/fastbtc-ui
 make
+
 cd build
 echo "Starting server"
 $SERVE_CMD 2>$THIS_DIR/logs/frontend-error.log >$THIS_DIR/logs/frontend.log &

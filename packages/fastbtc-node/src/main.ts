@@ -66,7 +66,11 @@ export class FastBTCNode {
         process.on('SIGINT', exitHandler);
         try {
             while(this.running) {
-                await this.runIteration();
+                try {
+                    await this.runIteration();
+                } catch (e) {
+                    this.logger.error('Error when running iteration', e);
+                }
 
                 // sleeping in loop is more graceful for ctrl-c
                 for(let i = 0; i < 30 && this.running; i++) {
@@ -128,7 +132,7 @@ export class FastBTCNode {
             throw new Error('no successor, cannot handle the situation!')
         }
 
-        await this.eventScanner.updateTransferStatus(transfers, TransferStatus.Sending);
+        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending);
 
         await successor.send('propagate-transfer-batch', transferBatch);
     }
@@ -148,6 +152,8 @@ export class FastBTCNode {
         if (transferBatch.nodeIds.length >= this.numRequiredSigners) {
             // submit to blockchain
             this.logger.log(`node #${this.getNodeIndex()}: submitting transfer batch to blockchain:`, transferBatch);
+            await this.eventScanner.markTransfersAsSent(transferBatch.transferIds);
+            this.logger.log(`node #${this.getNodeIndex()}: events marked as sent in rsk`);
         } else {
             const successor = this.getSuccessor();
             successor?.send('propagate-transfer-batch', transferBatch);

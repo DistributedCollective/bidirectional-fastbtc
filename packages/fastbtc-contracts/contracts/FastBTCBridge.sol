@@ -5,8 +5,6 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "hardhat/console.sol";
-
 contract FastBTCBridge is AccessControlEnumerable {
     using SafeERC20 for IERC20;
 
@@ -37,9 +35,9 @@ contract FastBTCBridge is AccessControlEnumerable {
     bytes32 public constant ROLE_FEDERATOR = keccak256("FEDERATOR");
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
     uint public constant DYNAMIC_FEE_DIVISOR = 10_000;
-    int public constant TRANSFER_STATUS_NEW = 0;
-    int public constant TRANSFER_STATUS_SENT = 2;
-    int public constant TRANSFER_STATUS_REFUNDED = -1;
+    int public constant TRANSFER_STATUS_NEW = 1; // not 0 to make checks easier
+    int public constant TRANSFER_STATUS_SENT = 3;
+    int public constant TRANSFER_STATUS_REFUNDED = -2;
     uint256 public constant MAX_DEPOSITS_PER_BTC_ADDRESS = 255;
 
     uint public minTransferSatoshi = 1000;
@@ -47,10 +45,6 @@ contract FastBTCBridge is AccessControlEnumerable {
     uint public baseFeeSatoshi = 500;
     uint public dynamicFee = 1;  // 0.0001 = 0.01 %
 
-    // TODO: would it be more efficient to use one of the following?
-    // mapping(string => mapping(uint => Transfer));
-    // mapping(bytes32 => Transfer); // Where bytes32 is keccak256(btcAddress, nonce);
-    //mapping(string => Transfer[]) public transfers;
     mapping(bytes32 => Transfer) public transfers;
     mapping(string => uint) public nextNonces;
 
@@ -80,6 +74,7 @@ contract FastBTCBridge is AccessControlEnumerable {
         amountSatoshi -= feeSatoshi;
 
         bytes32 transferId = getTransferId(_btcAddress, _nonce);
+        require(transfers[transferId].status == 0, "Transfer already exists"); // shouldn't happen ever
         transfers[transferId] = Transfer(
             TRANSFER_STATUS_NEW,
             _btcAddress,
@@ -88,6 +83,7 @@ contract FastBTCBridge is AccessControlEnumerable {
             feeSatoshi,
             msg.sender
         );
+        nextNonces[_btcAddress]++;
 
         emit NewTransfer(
             transferId,
@@ -107,9 +103,17 @@ contract FastBTCBridge is AccessControlEnumerable {
     function markTransfersAsSent(
         bytes32[] calldata _transferIds
     )
-    public // TODO: should be federator only
+    public // TODO: should be federator only!
     {
-
+        for (uint i = 0; i < _transferIds.length; i++) {
+            Transfer storage transfer = transfers[_transferIds[i]];
+            require(transfer.status == TRANSFER_STATUS_NEW, "invalid existing transfer status or transfer not found");
+            transfer.status = TRANSFER_STATUS_SENT;
+            emit TransferStatusUpdated(
+                _transferIds[i],
+                TRANSFER_STATUS_SENT
+            );
+        }
     }
 
     function getTransferId(

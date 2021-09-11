@@ -9,8 +9,11 @@ if test -f "$THIS_DIR/run/hardhat.pid" ; then
     kill $(cat $THIS_DIR/run/hardhat.pid) 2>/dev/null || true
 fi
 
+echo "Build contracts (may result in filesystem changes)"
 cd ../packages/fastbtc-contracts
-npx hardhat compile
+make
+
+echo "Starting Hardhat chain"
 npx hardhat node >$THIS_DIR/logs/hardhat.log 2>$THIS_DIR/logs/hardhat-error.log &
 HARDHAT_PID=$!
 echo $HARDHAT_PID > $THIS_DIR/run/hardhat.pid

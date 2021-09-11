@@ -8,7 +8,10 @@ async function main() {
     let container = bootstrap();
 
     const config = container.get<Config>(Config);
-    console.log('My config is', config);
+    console.log('My config is', {
+        ...config,
+        rskPrivateKey: '<censored>',
+    });
 
     // TODO: this is silly, but we have to init the connection. Architect this thing better
     const dbConnection = await container.get<ConnectionProvider>(ConnectionProvider)();

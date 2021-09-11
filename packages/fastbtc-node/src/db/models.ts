@@ -45,10 +45,12 @@ export class KeyValuePairRepository extends Repository<KeyValuePair> {
 }
 
 export enum TransferStatus {
-    New, // New transfer in blockchain
-    Sending, // Selected as the next batch for sending
-    Sent, // Sent to RSK/BTC
+    Null = 0,
+    New = 1, // New transfer in blockchain
+    Sending = 2, // Selected as the next batch for sending
+    Sent = 3, // Sent to RSK/BTC
     Rejected = -1,
+    Refunded = -2,
 }
 
 @Entity()
