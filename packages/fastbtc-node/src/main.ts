@@ -4,10 +4,11 @@ import {P2PNetwork} from './p2p/network';
 import {Message, Network, Node} from 'ataraxia';
 import {sleep} from './utils';
 import {Transfer, TransferStatus} from './db/models';
+import {BitcoinMultisig, PartiallySignedBitcoinTransaction} from './btc/multisig';
 
 interface TransferBatch {
     transferIds: string[];
-    signedBtcTransaction: string;
+    signedBtcTransaction: PartiallySignedBitcoinTransaction;
     rskUpdateSignatures: string[];
     nodeIds: string[];
 }
@@ -25,6 +26,7 @@ export class FastBTCNode {
 
     constructor(
         @inject(Scanner) private eventScanner: EventScanner,
+        @inject(BitcoinMultisig) private btcMultisig: BitcoinMultisig,
         @inject(P2PNetwork) private network: Network,
     ) {
         network.onNodeAvailable(node => {
@@ -119,10 +121,12 @@ export class FastBTCNode {
         // TODO: obviously replace with actual signature stuff
         this.logger.log(`node #${this.getNodeIndex()}: initiate btc batch transfer`);
 
-        const rskSignature = `fakesignature:${this.id}:rsk`;
+        const rskSignature = `fakesignature:${this.id}:rsk`; // TODO: real signature
+
+        const bitcoinTx = await this.btcMultisig.createPartiallySignedTransaction(transfers);
         const transferBatch: TransferBatch = {
             transferIds: transfers.map(t => t.transferId),
-            signedBtcTransaction: `fakebtctx:${this.id}`,
+            signedBtcTransaction: bitcoinTx,
             rskUpdateSignatures: [rskSignature],
             nodeIds: [this.id],
         }
@@ -145,13 +149,14 @@ export class FastBTCNode {
         const rskSignature = `fakesignature:${this.id}:rsk`;
         transferBatch = {
             transferIds: transferBatch.transferIds,
-            signedBtcTransaction: `${transferBatch.signedBtcTransaction}:${this.id}`,
+            signedBtcTransaction: this.btcMultisig.signTransaction(transferBatch.signedBtcTransaction),
             rskUpdateSignatures: [...transferBatch.rskUpdateSignatures, rskSignature],
             nodeIds: [...transferBatch.nodeIds, this.id],
         }
         if (transferBatch.nodeIds.length >= this.numRequiredSigners) {
             // submit to blockchain
             this.logger.log(`node #${this.getNodeIndex()}: submitting transfer batch to blockchain:`, transferBatch);
+            await this.btcMultisig.submitTransaction(transferBatch.signedBtcTransaction);
             await this.eventScanner.markTransfersAsSent(transferBatch.transferIds);
             this.logger.log(`node #${this.getNodeIndex()}: events marked as sent in rsk`);
         } else {

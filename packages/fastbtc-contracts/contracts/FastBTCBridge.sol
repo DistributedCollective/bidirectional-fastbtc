@@ -155,7 +155,10 @@ contract FastBTCBridge is AccessControlEnumerable {
         if (_btcAddressBytes.length < 26 || _btcAddressBytes.length > 35) {
             return false;
         }
-        if (uint8(_btcAddressBytes[0]) != 0x31 && uint8(_btcAddressBytes[0]) != 0x33) {
+        if (
+            uint8(_btcAddressBytes[0]) != 0x31 && uint8(_btcAddressBytes[0]) != 0x33
+            && uint8(_btcAddressBytes[0]) != 0x6d // "m" for testnet, TODO: remove maybe
+        ) {
             // doesn't start with 1 or 3
             // bech32 addresses and testnet addresses won't fit this check
             return false;
