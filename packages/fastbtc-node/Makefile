@@ -1,7 +1,12 @@
 # This Makefile is a bit different since we mostly rely on
 # docker to run the node
 .PHONY: build
-build: src/rsk/abi
+
+build: .flag-yarn-installed src/rsk/abi
+
+.flag-yarn-installed: package.json
+	yarn
+	touch $@
 
 src/rsk/abi: ../fastbtc-contracts/contracts
 	cd ../fastbtc-contracts && make

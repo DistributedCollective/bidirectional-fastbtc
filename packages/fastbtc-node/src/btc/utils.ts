@@ -71,7 +71,6 @@ export function normalizeKey(key: string): string {
 //    return b58.encode(data);
 //}
 
-export function xprvToPublic(xprv: string, network: Network): string {
+export function  xprvToPublic(xprv: string, network: Network): string {
     return bip32.fromBase58(xprv, network).neutered().toBase58()
 }
-

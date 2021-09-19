@@ -1,0 +1,43 @@
+version: "3.7"
+
+services:
+  node1:
+    image: fastbtc:latest
+    build:
+      context: ./packages/fastbtc-node/
+    env_file:
+      - demo/docker-env1
+      - demo/docker-env1-secret
+    ports:
+      - 11125:11125
+    depends_on:
+      - pg  
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  node2:
+    image: fastbtc:latest
+    env_file:
+      - demo/docker-env2
+      - demo/docker-env2-secret
+    ports:
+      - 11126:11126
+    depends_on:
+      - node1
+      - pg
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  pg:
+    image: postgres:13-alpine
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data 
+      - ./demo/initsql:/docker-entrypoint-initdb.d
+    ports:
+      - 55432:5432
+    environment:
+      - POSTGRES_PASSWORD=8b23e5c09eb06b9bd11e2369d6587206
+
+

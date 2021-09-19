@@ -55,6 +55,7 @@ export class BitcoinMultisig {
         const childPublic = this.masterPublicKeys.map((pubKey) =>
             bip32.fromBase58(pubKey, network).derive(0).derive(6).publicKey
         );
+
         childPublic.sort((a, b) => {
             return a.toString('hex') < b.toString('hex') ? -1 : 1;
         });
@@ -140,6 +141,7 @@ export class BitcoinMultisig {
             });
         }
 
+        // change money!
         psbt.addOutput({
             address: payment.address!,
             value: totalSum.sub(fee).sub(amountSatoshi).toNumber()

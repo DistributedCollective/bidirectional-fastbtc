@@ -1,7 +1,11 @@
 .PHONY: build
 build: artifacts
 
-artifacts: package.json tsconfig.json yarn.lock contracts hardhat.config.ts
+.flag-yarn-installed: package.json
+	yarn
+	touch .flag-yarn-installed
+
+artifacts: .flag-yarn-installed package.json tsconfig.json yarn.lock contracts hardhat.config.ts
 	yarn build
 	touch artifacts
 
