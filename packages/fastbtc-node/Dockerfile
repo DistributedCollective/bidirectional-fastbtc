@@ -26,6 +26,8 @@ RUN ls -a; yarn build
 
 RUN yarn install --production=true --frozen-lockfile
 
+COPY ormconfig.js startup.js ./
+
 RUN ls node_modules
 
 ###################
@@ -43,4 +45,4 @@ WORKDIR /app
 
 EXPOSE 7777
 
-CMD [ "node", "./dist/index.js" ]
+CMD [ "node", "./startup.js" ]

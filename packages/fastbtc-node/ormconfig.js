@@ -1,7 +1,7 @@
-import {SnakeNamingStrategy} from "typeorm-naming-strategies";
-import {ALL_MODELS} from "./src/db/models";
+const {SnakeNamingStrategy} = require("typeorm-naming-strategies");
+const {ALL_MODELS} = require("./dist/db/models");
 
-export default {
+module.exports = {
     type: "postgres",
     url: process.env['FASTBTC_DB_URL'],
     entities: ALL_MODELS,
@@ -11,4 +11,8 @@ export default {
 
     // TODO: should be false in prod! and have real migrations
     synchronize: false,
+    migrations: ["dist/migration/*.js"],
+    cli: {
+        "migrationsDir": "src/migration"
+    }
 };
