@@ -64,7 +64,7 @@ export const createEnvConfig = (env = process.env): Config => {
         rskRpcUrl: env.FASTBTC_RSK_RPC_URL!,
         rskContractAddress: env.FASTBTC_RSK_CONTRACT_ADDRESS!,
         rskStartBlock: parseInt(env.FASTBTC_RSK_START_BLOCK!),
-        rskRequiredConfirmations: parseInt(env.FASTBTC_RSK_REQUIRED_CONFIRMATIONS ?? '5'),
+        rskRequiredConfirmations: parseInt(env.FASTBTC_RSK_REQUIRED_CONFIRMATIONS ?? '10'),
         rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
         btcNetwork: env.FASTBTC_BTC_NETWORK! as 'mainnet'|'testnet'|'regtest',
         btcRpcUrl: env.FASTBTC_BTC_RPC_URL!,
