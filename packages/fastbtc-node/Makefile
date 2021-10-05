@@ -2,7 +2,7 @@
 # docker to run the node
 .PHONY: build
 
-build: .flag-yarn-installed src/rsk/abi
+build: .flag-yarn-installed src/rsk/abi startup.js
 
 .flag-yarn-installed: package.json
 	yarn
