@@ -60,13 +60,12 @@ export class RSKKeyedAuth implements AuthProvider {
     public createClientFlow(context: AuthContext): AuthClientFlow {
         const challenge = randomBytes(32);
         const prefix = Buffer.from(this.prefixString, 'utf-8');
-        const prefixedChallenge = Buffer.concat([ prefix, challenge]);
         const that = this;
         return {
             async initialMessage() {
                 return encode({
                     version: 1,
-                    challenge: hexlify(prefixedChallenge)
+                    challenge: hexlify(challenge)
                 });
             },
 
@@ -81,7 +80,7 @@ export class RSKKeyedAuth implements AuthProvider {
                 const serverChallenge: Buffer = Buffer.from(arrayify(payload.challenge as any));
                 const serverResponse: string = payload.response as any;
 
-                const serverMessage = createMessage(prefixedChallenge, context.remotePublicSecurity);
+                const serverMessage = createMessage(Buffer.concat([prefix, challenge]), context.remotePublicSecurity);
                 const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(serverMessage), serverResponse);
 
                 if (that.peerAddresses.indexOf(recoveredAddress as any) === -1) {
@@ -109,7 +108,6 @@ export class RSKKeyedAuth implements AuthProvider {
     public createServerFlow(context: AuthContext): AuthServerFlow {
         const challenge = randomBytes(32);
         const prefix = Buffer.from(this.prefixString, 'utf-8');
-        const prefixedChallenge = Buffer.concat([ prefix, challenge]);
         const that = this;
 
         return {
@@ -130,7 +128,7 @@ export class RSKKeyedAuth implements AuthProvider {
                     type: AuthServerReplyType.Data,
                     data: encode({
                         response: await that.signer.signMessage(serverMessage),
-                        challenge: hexlify(prefixedChallenge),
+                        challenge: hexlify(challenge),
                         version: 1,
                     })
                 };

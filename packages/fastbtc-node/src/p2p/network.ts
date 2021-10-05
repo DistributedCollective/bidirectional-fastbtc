@@ -1,4 +1,4 @@
-import {Network} from 'ataraxia';
+import {Network, SharedSecretAuth} from 'ataraxia';
 import {TCPTransport} from 'ataraxia-tcp';
 import {Config} from '../config';
 import {RSKKeyedAuth} from "./auth";
