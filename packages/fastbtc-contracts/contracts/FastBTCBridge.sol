@@ -52,6 +52,11 @@ contract FastBTCBridge is AccessControlEnumerable {
         _setupRole(ROLE_ADMIN, msg.sender);
     }
 
+    modifier onlyFederator() {
+        _checkRole(ROLE_FEDERATOR, _msgSender());
+        _;
+    }
+
     function transferToBtc(
         string calldata _btcAddress,
         uint _nonce
@@ -103,8 +108,10 @@ contract FastBTCBridge is AccessControlEnumerable {
     function markTransfersAsSent(
         bytes32[] calldata _transferIds
     )
-    public // TODO: should be federator only!
+    public
+    onlyFederator()
     {
+        // TODO: check signatures
         for (uint i = 0; i < _transferIds.length; i++) {
             Transfer storage transfer = transfers[_transferIds[i]];
             require(transfer.status == TRANSFER_STATUS_NEW, "invalid existing transfer status or transfer not found");
@@ -132,9 +139,45 @@ contract FastBTCBridge is AccessControlEnumerable {
     )
     public
     view
-    returns(uint)
+    returns (uint)
     {
         return nextNonces[_btcAddress];
+    }
+
+    function numFederators()
+    public
+    view
+    returns (uint)
+    {
+        return getRoleMemberCount(ROLE_FEDERATOR);
+    }
+
+    function federators()
+    public
+    view
+    returns (address[] memory addresses)
+    {
+        uint256 count = numFederators();
+        addresses = new address[](count);
+        for(uint256 i = 0; i < count; i++) {
+            addresses[i] = getRoleMember(ROLE_FEDERATOR, i);
+        }
+    }
+
+    function addFederator(
+        address account
+    )
+    public
+    {
+        grantRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
+    }
+
+    function removeFederator(
+        address account
+    )
+    public
+    {
+        revokeRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
     }
 
     function isValidBtcAddress(
@@ -261,27 +304,5 @@ contract FastBTCBridge is AccessControlEnumerable {
     onlyRole(ROLE_ADMIN)
     {
         _token.safeTransfer(_receiver, _amount);
-    }
-
-    function toLower(
-        string memory str
-    )
-    internal
-    pure
-    returns(string memory)
-    {
-        // https://gist.github.com/ottodevs/c43d0a8b4b891ac2da675f825b1d1dbf#gistcomment-3310614
-        bytes memory bStr = bytes(str);
-        bytes memory bLower = new bytes(bStr.length);
-        for (uint i = 0; i < bStr.length; i++) {
-            // Uppercase character...
-            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
-                // So we add 32 to make it lowercase
-                bLower[i] = bytes1(uint8(bStr[i]) + 32);
-            } else {
-                bLower[i] = bStr[i];
-            }
-        }
-        return string(bLower);
     }
 }

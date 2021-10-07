@@ -15,8 +15,8 @@ import {arrayify, hexlify} from "ethers/lib/utils";
  * Options for `SharedSecretAuth`. Used to provide the shared secret.
  */
 export interface RSKKeyedAuthOptions {
-    peerAddresses: string[],
-    signer: ethers.Signer
+    getPeerAddresses: () => Promise<string[]>;
+    signer: ethers.Signer;
 }
 
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
@@ -50,11 +50,12 @@ export class RSKKeyedAuth implements AuthProvider {
     public readonly prefixString = 'fastbtc-p2p-auth:';
 
     private readonly signer: ethers.Signer;
-    private readonly peerAddresses: string[];
+    private readonly getPeerAddresses: () => Promise<string[]>;
 
     public constructor(options: RSKKeyedAuthOptions) {
         this.signer = options.signer;
-        this.peerAddresses = options.peerAddresses;
+        // TODO: we could enable some caching for this
+        this.getPeerAddresses = options.getPeerAddresses;
     }
 
     public createClientFlow(context: AuthContext): AuthClientFlow {
@@ -83,7 +84,8 @@ export class RSKKeyedAuth implements AuthProvider {
                 const serverMessage = createMessage(Buffer.concat([prefix, challenge]), context.remotePublicSecurity);
                 const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(serverMessage), serverResponse);
 
-                if (that.peerAddresses.indexOf(recoveredAddress as any) === -1) {
+                const peerAddresses = await that.getPeerAddresses();
+                if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
                     return {
                         type: AuthClientReplyType.Reject
                     };
@@ -144,7 +146,8 @@ export class RSKKeyedAuth implements AuthProvider {
                     payload.response as any
                 );
 
-                if (that.peerAddresses.indexOf(recoveredAddress as any) === -1) {
+                const peerAddresses = await that.getPeerAddresses();
+                if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
                     return {
                         type: AuthServerReplyType.Reject
                     };

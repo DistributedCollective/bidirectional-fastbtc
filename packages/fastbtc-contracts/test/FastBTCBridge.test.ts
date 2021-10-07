@@ -10,6 +10,7 @@ import {expect} from 'chai';
 import {describe, it, beforeEach} from 'mocha';
 import {ethers} from 'hardhat';
 import {Contract, Signer, utils} from 'ethers';
+import exp from 'constants';
 
 const {parseEther} = utils;
 
@@ -55,5 +56,52 @@ describe("FastBTCBridge", function() {
       expect(await fastBtcBridge.isValidBtcAddress("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2AA")).to.be.false;
 
       // TODO: test configurable prefixes, bech32 and whatnot
+  });
+
+  describe("federator methods", () => {
+      it("#federators is empty at first", async () => {
+          expect(await fastBtcBridge.federators()).to.deep.equal([]);
+      })
+
+      it("#addFederator adds federators when used by admin", async () => {
+          await fastBtcBridge.addFederator('0x0000000000000000000000000000000000000001');
+          expect(await fastBtcBridge.federators()).to.deep.equal(['0x0000000000000000000000000000000000000001']);
+          await fastBtcBridge.addFederator('0x0000000000000000000000000000000000000001');
+          expect(await fastBtcBridge.federators()).to.deep.equal(['0x0000000000000000000000000000000000000001']);
+          await fastBtcBridge.addFederator('0x0000000000000000000000000000000000000002');
+          expect(await fastBtcBridge.federators()).to.deep.equal([
+              '0x0000000000000000000000000000000000000001',
+              '0x0000000000000000000000000000000000000002',
+          ]);
+      });
+
+      it("#addFederator cannot be used by non-admins", async () => {
+          await expect(
+              fastBtcBridge.connect(anotherAccount).addFederator('0x0000000000000000000000000000000000000001')
+          ).to.be.reverted;
+          expect(await fastBtcBridge.federators()).to.deep.equal([]);
+      });
+
+      it("#removeFederator removes federators when used by admin", async () => {
+          await fastBtcBridge.addFederator('0x0000000000000000000000000000000000000001');
+          await fastBtcBridge.addFederator('0x0000000000000000000000000000000000000002');
+          expect(await fastBtcBridge.federators()).to.deep.equal([
+              '0x0000000000000000000000000000000000000001',
+              '0x0000000000000000000000000000000000000002',
+          ]);
+          await fastBtcBridge.removeFederator('0x0000000000000000000000000000000000000002');
+          expect(await fastBtcBridge.federators()).to.deep.equal(['0x0000000000000000000000000000000000000001']);
+          await fastBtcBridge.removeFederator('0x0000000000000000000000000000000000000001');
+          expect(await fastBtcBridge.federators()).to.deep.equal([]);
+          await fastBtcBridge.removeFederator('0x0000000000000000000000000000000000000001');  // no-op tx
+          expect(await fastBtcBridge.federators()).to.deep.equal([]);
+      });
+
+      it("#removeFederator cannot be used by non-admins", async () => {
+          await fastBtcBridge.addFederator('0x0000000000000000000000000000000000000001');
+          await expect(
+              fastBtcBridge.connect(anotherAccount).removeFederator('0x0000000000000000000000000000000000000001')
+          ).to.be.reverted;
+      });
   });
 });
