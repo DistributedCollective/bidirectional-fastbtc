@@ -5,9 +5,9 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import "./interfaces/IBTCAddressValidator.sol";
 import "./FastBTCAccessControl.sol";
 import "./FastBTCAccessControllable.sol";
-import "./BTCAddressValidator.sol";
 
 contract FastBTCBridge is FastBTCAccessControllable {
     using SafeERC20 for IERC20;
@@ -42,7 +42,7 @@ contract FastBTCBridge is FastBTCAccessControllable {
     int public constant TRANSFER_STATUS_REFUNDED = -2;
     uint256 public constant MAX_DEPOSITS_PER_BTC_ADDRESS = 255;
 
-    BTCAddressValidator public btcAddressValidator;
+    IBTCAddressValidator public btcAddressValidator;
 
     uint public minTransferSatoshi = 1000;
     uint public maxTransferSatoshi = 200_000_000; // 2 BTC
@@ -54,7 +54,7 @@ contract FastBTCBridge is FastBTCAccessControllable {
 
     constructor(
         FastBTCAccessControl _accessControl,
-        BTCAddressValidator _btcAddressValidator
+        IBTCAddressValidator _btcAddressValidator
     )
     FastBTCAccessControllable(_accessControl)
     {
@@ -190,6 +190,15 @@ contract FastBTCBridge is FastBTCAccessControllable {
 
 
     // Utility functions
+    function setBtcAddressValidator(
+        IBTCAddressValidator _btcAddressValidator
+    )
+    external
+    onlyAdmin
+    {
+        btcAddressValidator = _btcAddressValidator;
+    }
+
     function setMinTransferSatoshi(
         uint _minTransferSatoshi
     )
