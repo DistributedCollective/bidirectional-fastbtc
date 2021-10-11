@@ -5,9 +5,10 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     const {deploy} = hre.deployments;
     const {deployer} = await hre.getNamedAccounts();
     const accessControl = await hre.deployments.get('FastBTCAccessControl');
+    const btcAddressValidator = await hre.deployments.get('BTCAddressValidaotr');
     await deploy('FastBTCBridge', {
         from: deployer,
-        args: [accessControl.address],
+        args: [accessControl.address, btcAddressValidator.address],
         log: true,
     });
 };

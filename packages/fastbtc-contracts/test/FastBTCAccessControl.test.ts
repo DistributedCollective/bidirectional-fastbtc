@@ -1,11 +1,3 @@
-/**
- * Example token tests
- *
- * The token is just a simple extension of OpenZeppelin ERC20.sol,
- * as outlined in https://docs.openzeppelin.com/contracts/4.x/erc20
- *
- * So these tests need not test very much.
- */
 import {expect} from 'chai';
 import {beforeEach, describe, it} from 'mocha';
 import {ethers} from 'hardhat';
