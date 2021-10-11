@@ -12,6 +12,7 @@
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
     "lib": ["es6"],
-    "types": ["reflect-metadata", "node"]
+    "types": ["reflect-metadata", "node", "mocha"],
+    "downlevelIteration": true,
   }
 }

@@ -1,18 +1,30 @@
 import {URL} from 'url';
+import {injectable} from 'inversify';
+import {Network, networks} from 'bitcoinjs-lib';
 
 const RPCClient = require('rpc-client');
 type RPCClient = typeof RPCClient;
 
 export interface BitcoinNodeWrapperOpts {
     url: string;
-    user: string;
-    password: string;
+    btcNetwork: 'regtest'|'mainnet'|'testnet';
+    user?: string;
+    password?: string;
 }
 
-export default class BitcoinNodeWrapper {
-    private client: RPCClient;
+export interface IBitcoinNodeWrapper {
+    readonly network: Network;
+    call(method: string, params: any): Promise<any>;
+    getLastBlock(): Promise<number|undefined>;
+}
 
-    constructor({url, user, password}: BitcoinNodeWrapperOpts) {
+@injectable()
+export default class BitcoinNodeWrapper implements IBitcoinNodeWrapper {
+    private client: RPCClient;
+    public readonly network: Network;
+    constructor({url, user, password, btcNetwork}: BitcoinNodeWrapperOpts) {
+        this.network = networks[btcNetwork === 'mainnet' ? 'bitcoin' : btcNetwork];
+
         const uri = new URL(url);
         this.client = new RPCClient({
             host: uri.hostname,

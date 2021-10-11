@@ -13,32 +13,35 @@ export interface Config {
     btcRpcPassword: string; // secret
     btcMasterPrivateKey: string; // secret
     btcMasterPublicKeys: string[]; // secret
+    btcKeyDerivationPath: string;
 }
 const defaults = {
     port: 11125,
 }
-export const Config = Symbol.for('Config');
-
 const VALID_BTC_NETWORKS = ['mainnet', 'testnet', 'regtest'];
+
+export const Config = Symbol.for('Config');
 
 class InvalidConfig extends Error {
 }
 
-export const createEnvConfig = (env = process.env): Config => {
-    for(let key of [
-        'FASTBTC_DB_URL',
-        'FASTBTC_KNOWN_PEERS',
-        'FASTBTC_RSK_RPC_URL',
-        'FASTBTC_RSK_CONTRACT_ADDRESS',
-        'FASTBTC_RSK_START_BLOCK',
-        'FASTBTC_RSK_PRIVATE_KEY',
-        'FASTBTC_BTC_NETWORK',
-        'FASTBTC_BTC_RPC_URL',
-        'FASTBTC_BTC_MASTER_PRIVATE_KEY',
-        'FASTBTC_BTC_MASTER_PUBLIC_KEYS',
-    ]) {
-        if(!env[key]) {
-            throw new InvalidConfig(`Required env variable ${key} missing`)
+export const createEnvConfig = (env = process.env, allowPartial: boolean = false): Config => {
+    if (!allowPartial) {
+        for (let key of [
+            'FASTBTC_DB_URL',
+            'FASTBTC_KNOWN_PEERS',
+            'FASTBTC_RSK_RPC_URL',
+            'FASTBTC_RSK_CONTRACT_ADDRESS',
+            'FASTBTC_RSK_START_BLOCK',
+            'FASTBTC_RSK_PRIVATE_KEY',
+            'FASTBTC_BTC_NETWORK',
+            'FASTBTC_BTC_RPC_URL',
+            'FASTBTC_BTC_MASTER_PRIVATE_KEY',
+            'FASTBTC_BTC_MASTER_PUBLIC_KEYS',
+        ]) {
+            if (!env[key]) {
+                throw new InvalidConfig(`Required env variable ${key} missing`)
+            }
         }
     }
 
@@ -72,6 +75,7 @@ export const createEnvConfig = (env = process.env): Config => {
         btcRpcPassword: env.FASTBTC_BTC_RPC_PASSWORD ?? '',
         btcMasterPrivateKey: env.FASTBTC_BTC_MASTER_PRIVATE_KEY!,
         btcMasterPublicKeys: env.FASTBTC_BTC_MASTER_PUBLIC_KEYS!.split(',').map(x => x.trim()),
+        btcKeyDerivationPath: env.FASTBTC_BTC_KEY_DERIVATION_PATH ?? 'm/0/0/0',
     }
 };
 
