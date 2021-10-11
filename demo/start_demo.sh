@@ -6,6 +6,7 @@ trap "./stop_all.sh" EXIT
 
 echo "Starting demo"
 ./start_demo_blockchain.sh
+./start_demo_bitcoind.sh
 ./start_demo_frontend.sh
 ./start_demo_backend.sh
 

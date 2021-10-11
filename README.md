@@ -17,20 +17,22 @@ Running the demo requires installing the following packages:
 - node.js
 - jq
 - yarn
-- python 3 or 2
+- python 3 or 2 (pre-installed system python is probably enough)
+- bitcoin-core (bitcoind and bitcoin-cli)
 
-Run the demo with:
+Run the demo with these steps (TODO: make it single-command with better docker-compose config):
 
 ```
-cd demo
-./start_demo.sh
+# tab 1:
+./demo/start_services_for_docker_compose.sh
+# tab 2 (after the first thing says all done)
+docker-compose up --build
+# tab 3
+./demo/show_user_wallet_details.sh
+./demo/transfer_rbtc_from_user.sh
+# wait a while (max couple of minutes)
+./demo/show_user_wallet_details.sh  # should show updated balance
 ```
 
-Then send RBTC to BTC from the UI at http://localhost:8080 (add the private key from output to metamask)
-or by running:
-```
-./transfer_rbtc_from_user.sh
-```
-
-
-(TODO: use docker and docker-compose for the demo)
+You can also access the UI at http://localhost:8080 (add the private key from output to metamask)
+to transfer rBTC

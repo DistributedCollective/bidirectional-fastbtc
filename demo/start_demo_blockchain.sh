@@ -17,11 +17,12 @@ echo "Starting Hardhat chain"
 npx hardhat node >$THIS_DIR/logs/hardhat.log 2>$THIS_DIR/logs/hardhat-error.log &
 HARDHAT_PID=$!
 echo $HARDHAT_PID > $THIS_DIR/run/hardhat.pid
-echo "Hardhat started pid $HARDHAT_PID, logs at $THIS_DIR/logs/hardhat.log, sleeping 2s"
-sleep 2
+echo "Hardhat started pid $HARDHAT_PID, logs at $THIS_DIR/logs/hardhat.log, sleeping 5s"
+sleep 5
 echo "Setting up federators"
 echo "Node 1"
-echo npx hardhat --network localhost add-federator $(jq -r '.node1.address' "$THIS_DIR/test_accounts.json")
-npx hardhat --network localhost add-federator $(jq -r '.node1.address' "$THIS_DIR/test_accounts.json")
+npx hardhat --network localhost add-federator $(jq -r '.rsk.node1.address' "$THIS_DIR/test_accounts.json")
 echo "Node 2"
-npx hardhat --network localhost add-federator $(jq -r '.node2.address' "$THIS_DIR/test_accounts.json")
+npx hardhat --network localhost add-federator $(jq -r '.rsk.node2.address' "$THIS_DIR/test_accounts.json")
+echo "Node 3"
+npx hardhat --network localhost add-federator $(jq -r '.rsk.node3.address' "$THIS_DIR/test_accounts.json")
