@@ -60,5 +60,9 @@ describe("BTCAddressValidator", function() {
         })
     })
 
-    // TODO: test configurable prefixes, bech32 and whatnot
+    // TODO:
+    // - configurable prefixes
+    // - lengths
+    // - admin methods
+    // - more bech32 tests
 });
