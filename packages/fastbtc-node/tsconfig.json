@@ -14,5 +14,6 @@
     "lib": ["es6"],
     "types": ["reflect-metadata", "node", "mocha"],
     "downlevelIteration": true,
-  }
+  },
+  "exclude": ["./tests/**/*.spec.ts"]
 }

@@ -1,11 +1,8 @@
 import {interfaces} from 'inversify';
-import Container = interfaces.Container;
 import {BitcoinMultisig} from './multisig';
 import BitcoinNodeWrapper from './nodewrapper';
-import {createNetwork} from '../p2p/network';
 import {Config} from '../config';
-import {ethers} from 'ethers';
-import {EthersSigner, FastBtcBridgeContract} from '../rsk/base';
+import Container = interfaces.Container;
 
 export function setupInversify(container: Container) {
     container.bind<BitcoinMultisig>(BitcoinMultisig).toSelf();
@@ -14,6 +11,7 @@ export function setupInversify(container: Container) {
             const config = context.container.get<Config>(Config);
             return new BitcoinNodeWrapper({
                 url: config.btcRpcUrl,
+                btcNetwork: config.btcNetwork,
                 user: config.btcRpcUsername,
                 password: config.btcRpcPassword,
             });
