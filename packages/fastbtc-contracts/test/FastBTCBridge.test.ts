@@ -23,7 +23,11 @@ describe("FastBTCBridge", function() {
         accessControl = await FastBTCAccessControl.deploy();
 
         const BTCAddressValidator = await ethers.getContractFactory("BTCAddressValidator");
-        btcAddressValidator = await BTCAddressValidator.deploy(accessControl.address);
+        btcAddressValidator = await BTCAddressValidator.deploy(
+            accessControl.address,
+            'bc1',
+            ['1', '3']
+        );
 
         const FastBTCBridge = await ethers.getContractFactory("FastBTCBridge");
         fastBtcBridge = await FastBTCBridge.deploy(
