@@ -13,7 +13,8 @@
     "migrate:up": "ts-node ./node_modules/typeorm/cli.js migration:run",
     "migrate:down": "ts-node ./node_modules/typeorm/cli.js migration:revert",
     "migrate:generate": "ts-node ./node_modules/typeorm/cli.js migration:generate",
-    "mocha": "mocha tests/ --extension spec.ts --require ts-node/register --require reflect-metadata --recursive"
+    "test": "mocha tests/ --extension spec.ts --require ts-node/register --require reflect-metadata --recursive",
+    "mocha": "yarn test"
   },
   "dependencies": {
     "@types/bs58check": "^2.1.0",
