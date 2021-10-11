@@ -154,6 +154,14 @@ export class BitcoinMultisig {
         });
     }
 
+    async verifyTransactionContents(tx: PartiallySignedBitcoinTransaction): Promise<true> {
+        const psbtUnserialized = Psbt.fromBase64(tx.serializedTransaction);
+        const data = psbtUnserialized.txOutputs[0];
+
+        console.log(data.script);
+        return true;
+    }
+
     signTransaction(tx: PartiallySignedBitcoinTransaction): PartiallySignedBitcoinTransaction {
         if (tx.signedPublicKeys.indexOf(this.masterPublicKey) !== -1) {
             throw new Error('already signed by this node');

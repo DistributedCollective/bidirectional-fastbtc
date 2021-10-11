@@ -145,7 +145,7 @@ contract FastBTCBridge is AccessControlEnumerable {
     returns (bool)
     {
         // TODO: support bech32
-        // - validate prefix, bc (or bc1?) or tb, depending on deployment
+        // - validate prefixString, bc (or bc1?) or tb, depending on deployment
         // - make sure they are lowercase
         // - do the checksum validation if feasible with gas costs in mind
         // TODO: support configurable prefixes

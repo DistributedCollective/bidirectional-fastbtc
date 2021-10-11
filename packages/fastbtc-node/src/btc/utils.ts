@@ -48,26 +48,26 @@ export function normalizeKey(key: string): string {
 }
 
 //export function zpubToXpub(zpub: string): string {
-//    let prefix = '0488b21e';
+//    let prefixString = '0488b21e';
 //    if (zpub.startsWith('Vpub')) {
 //        // vpub to tpub...
-//        prefix = '043587cf';
+//        prefixString = '043587cf';
 //    }
 //    let data = b58.decode(zpub)
 //    data = data.slice(4)
-//    data = Buffer.concat([Buffer.from(prefix, 'hex'), data])
+//    data = Buffer.concat([Buffer.from(prefixString, 'hex'), data])
 //    return b58.encode(data);
 //}
 //
 //export function zprvToXprv(zprv: string): string {
-//    let prefix = '0488ade4';
+//    let prefixString = '0488ade4';
 //    if (zprv.startsWith('Vprv')) {
 //        // vprv to tprv...
-//        prefix = '04358394';
+//        prefixString = '04358394';
 //    }
 //    let data = b58.decode(zprv)
 //    data = data.slice(4)
-//    data = Buffer.concat([Buffer.from(prefix, 'hex'), data])
+//    data = Buffer.concat([Buffer.from(prefixString, 'hex'), data])
 //    return b58.encode(data);
 //}
 

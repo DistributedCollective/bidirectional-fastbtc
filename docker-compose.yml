@@ -39,5 +39,3 @@ services:
       - 55432:5432
     environment:
       - POSTGRES_PASSWORD=8b23e5c09eb06b9bd11e2369d6587206
-
-

@@ -20,6 +20,7 @@
     "ataraxia-tcp": "^0.11.0",
     "bitcoinjs-lib": "^5.2.0",
     "bs58check": "^2.1.2",
+    "esm": "^3.2.25",
     "ethers": "^5.4.6",
     "inversify": "^5.1.1",
     "pg": "^8.7.1",
