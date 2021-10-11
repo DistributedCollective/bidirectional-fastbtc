@@ -73,6 +73,7 @@ export class RSKKeyedAuth implements AuthProvider {
             async receiveData(data) {
                 const payload = decode(Buffer.from(data));
                 if (payload.version !== 1) {
+                    console.error(`Invalid payload version ${payload.version} received from server`)
                     return {
                         type: AuthClientReplyType.Reject
                     };
@@ -86,6 +87,9 @@ export class RSKKeyedAuth implements AuthProvider {
 
                 const peerAddresses = await that.getPeerAddresses();
                 if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
+                    console.error(`Invalid signature from server, recovered address ` +
+                        `${recoveredAddress} does not match any configured peer address`);
+
                     return {
                         type: AuthClientReplyType.Reject
                     };
@@ -93,6 +97,7 @@ export class RSKKeyedAuth implements AuthProvider {
 
                 const clientMessage = createMessage(Buffer.concat([prefix, serverChallenge]), context.localPublicSecurity);
 
+                console.log(`successful server challenge from ${recoveredAddress}`);
                 return {
                     type: AuthClientReplyType.Data,
                     data: encode({
@@ -116,6 +121,8 @@ export class RSKKeyedAuth implements AuthProvider {
             async receiveInitial(data: ArrayBuffer) {
                 const payload = decode(Buffer.from(data));
                 if (payload.version !== 1) {
+                    console.error(`Invalid payload version ${payload.version} received from client`);
+
                     return {
                         type: AuthServerReplyType.Reject
                     };
@@ -148,11 +155,15 @@ export class RSKKeyedAuth implements AuthProvider {
 
                 const peerAddresses = await that.getPeerAddresses();
                 if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
+                    console.error(`Invalid signature from client, recovered address ` +
+                        `${recoveredAddress} does not match any configured peer address`);
+
                     return {
                         type: AuthServerReplyType.Reject
                     };
                 }
 
+                console.log(`authentication successfully completed with ${recoveredAddress}`);
                 return {
                     type: AuthServerReplyType.Ok
                 };
