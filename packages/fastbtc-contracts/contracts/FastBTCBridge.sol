@@ -5,7 +5,11 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract FastBTCBridge is AccessControlEnumerable {
+import "./interfaces/IBTCAddressValidator.sol";
+import "./FastBTCAccessControl.sol";
+import "./FastBTCAccessControllable.sol";
+
+contract FastBTCBridge is FastBTCAccessControllable {
     using SafeERC20 for IERC20;
 
     event NewTransfer(
@@ -31,14 +35,14 @@ contract FastBTCBridge is AccessControlEnumerable {
         address rskAddress;
     }
 
-    bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
-    bytes32 public constant ROLE_FEDERATOR = keccak256("FEDERATOR");
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
     uint public constant DYNAMIC_FEE_DIVISOR = 10_000;
     int public constant TRANSFER_STATUS_NEW = 1; // not 0 to make checks easier
     int public constant TRANSFER_STATUS_SENT = 3;
     int public constant TRANSFER_STATUS_REFUNDED = -2;
     uint256 public constant MAX_DEPOSITS_PER_BTC_ADDRESS = 255;
+
+    IBTCAddressValidator public btcAddressValidator;
 
     uint public minTransferSatoshi = 1000;
     uint public maxTransferSatoshi = 200_000_000; // 2 BTC
@@ -48,8 +52,13 @@ contract FastBTCBridge is AccessControlEnumerable {
     mapping(bytes32 => Transfer) public transfers;
     mapping(string => uint) public nextNonces;
 
-    constructor() {
-        _setupRole(ROLE_ADMIN, msg.sender);
+    constructor(
+        FastBTCAccessControl _accessControl,
+        IBTCAddressValidator _btcAddressValidator
+    )
+    FastBTCAccessControllable(_accessControl)
+    {
+        btcAddressValidator = _btcAddressValidator;
     }
 
     function transferToBtc(
@@ -103,8 +112,10 @@ contract FastBTCBridge is AccessControlEnumerable {
     function markTransfersAsSent(
         bytes32[] calldata _transferIds
     )
-    public // TODO: should be federator only!
+    public
+    onlyFederator
     {
+        // TODO: check signatures
         for (uint i = 0; i < _transferIds.length; i++) {
             Transfer storage transfer = transfers[_transferIds[i]];
             require(transfer.status == TRANSFER_STATUS_NEW, "invalid existing transfer status or transfer not found");
@@ -132,7 +143,7 @@ contract FastBTCBridge is AccessControlEnumerable {
     )
     public
     view
-    returns(uint)
+    returns (uint)
     {
         return nextNonces[_btcAddress];
     }
@@ -199,12 +210,42 @@ contract FastBTCBridge is AccessControlEnumerable {
         return calculateFeeSatoshi(amountSatoshi) * SATOSHI_DIVISOR;
     }
 
+    // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
+    function isValidBtcAddress(
+        string calldata _btcAddress
+    )
+    public
+    view
+    returns (bool)
+    {
+        return btcAddressValidator.isValidBtcAddress(_btcAddress);
+    }
+
+    // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
+    function federators()
+    public
+    view
+    returns (address[] memory addresses)
+    {
+        return accessControl.federators();
+    }
+
+
     // Utility functions
+    function setBtcAddressValidator(
+        IBTCAddressValidator _btcAddressValidator
+    )
+    external
+    onlyAdmin
+    {
+        btcAddressValidator = _btcAddressValidator;
+    }
+
     function setMinTransferSatoshi(
         uint _minTransferSatoshi
     )
     external
-    onlyRole(ROLE_ADMIN)
+    onlyAdmin
     {
         minTransferSatoshi = _minTransferSatoshi;
     }
@@ -213,7 +254,7 @@ contract FastBTCBridge is AccessControlEnumerable {
         uint _maxTransferSatoshi
     )
     external
-    onlyRole(ROLE_ADMIN)
+    onlyAdmin
     {
         require(_maxTransferSatoshi <= 21_000_000 * 100_000_000, "Would allow transferring more than all Bitcoin ever");
         maxTransferSatoshi = _maxTransferSatoshi;
@@ -223,7 +264,7 @@ contract FastBTCBridge is AccessControlEnumerable {
         uint _baseFeeSatoshi
     )
     external
-    onlyRole(ROLE_ADMIN)
+    onlyAdmin
     {
         require(_baseFeeSatoshi <= 100_000_000, "Base fee too large");
         baseFeeSatoshi = _baseFeeSatoshi;
@@ -233,7 +274,7 @@ contract FastBTCBridge is AccessControlEnumerable {
         uint _dynamicFee
     )
     external
-    onlyRole(ROLE_ADMIN)
+    onlyAdmin
     {
         require(_dynamicFee <= DYNAMIC_FEE_DIVISOR, "Dynamic fee too large");
         dynamicFee = _dynamicFee;
@@ -246,7 +287,7 @@ contract FastBTCBridge is AccessControlEnumerable {
         address payable _receiver
     )
     external
-    onlyRole(ROLE_ADMIN)
+    onlyAdmin
     {
         _receiver.transfer(_amount);
     }
@@ -258,30 +299,8 @@ contract FastBTCBridge is AccessControlEnumerable {
         address _receiver
     )
     external
-    onlyRole(ROLE_ADMIN)
+    onlyAdmin
     {
         _token.safeTransfer(_receiver, _amount);
-    }
-
-    function toLower(
-        string memory str
-    )
-    internal
-    pure
-    returns(string memory)
-    {
-        // https://gist.github.com/ottodevs/c43d0a8b4b891ac2da675f825b1d1dbf#gistcomment-3310614
-        bytes memory bStr = bytes(str);
-        bytes memory bLower = new bytes(bStr.length);
-        for (uint i = 0; i < bStr.length; i++) {
-            // Uppercase character...
-            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
-                // So we add 32 to make it lowercase
-                bLower[i] = bytes1(uint8(bStr[i]) + 32);
-            } else {
-                bLower[i] = bStr[i];
-            }
-        }
-        return string(bLower);
     }
 }

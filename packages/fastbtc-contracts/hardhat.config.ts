@@ -2,6 +2,7 @@ import "@nomiclabs/hardhat-waffle";
 import "hardhat-deploy";
 import dotenv from "dotenv";
 import {task} from "hardhat/config";
+import {Signer, Wallet} from 'ethers';
 
 dotenv.config();
 
@@ -12,6 +13,19 @@ task("accounts", "Prints the list of accounts", async (args, hre) => {
 
     for (const account of accounts) {
         console.log(account.address);
+    }
+});
+
+task("federators", "Prints the list of federators", async (args, hre) => {
+    const deployment = await hre.deployments.get('FastBTCAccessControl');
+    const accessControl = await hre.ethers.getContractAt(
+        'FastBTCAccessControl',
+        deployment.address,
+    );
+    const federators = await accessControl.federators();
+
+    for (const federator of federators) {
+        console.log(federator);
     }
 });
 
@@ -62,6 +76,72 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
             btcAddress,
             nonce,
             {value: rbtcAmountWei}
+        );
+        console.log('tx hash:', receipt.hash);
+    });
+
+
+task("add-federator", "Add federator")
+    .addPositionalParam("address", "RSK address to add")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .setAction(async ({ address, privateKey }, hre) => {
+        if (!address) {
+            throw new Error("Address must be given");
+        }
+
+        let signer: Signer;
+        if(privateKey) {
+            const provider = hre.ethers.provider;
+            signer = new hre.ethers.Wallet(privateKey, provider);
+        } else {
+            const {deployer} = await hre.getNamedAccounts();
+            signer = await hre.ethers.getSigner(deployer);
+        }
+
+        const deployment = await hre.deployments.get('FastBTCAccessControl');
+        console.log('Bridge address', deployment.address);
+        console.log(`Making ${address} a federator`);
+        const accessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
+            deployment.address,
+            signer,
+        );
+
+        const receipt = await accessControl.addFederator(
+            address
+        );
+        console.log('tx hash:', receipt.hash);
+    });
+
+
+task("remove-federator", "Remove federator")
+    .addPositionalParam("address", "RSK address to add")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .setAction(async ({ address, privateKey }, hre) => {
+        if (!address) {
+            throw new Error("Address must be given");
+        }
+
+        let signer: Signer;
+        if(privateKey) {
+            const provider = hre.ethers.provider;
+            signer = new hre.ethers.Wallet(privateKey, provider);
+        } else {
+            const {deployer} = await hre.getNamedAccounts();
+            signer = await hre.ethers.getSigner(deployer);
+        }
+
+        const deployment = await hre.deployments.get('FastBTCAccessControl');
+        console.log('Bridge address', deployment.address);
+        console.log(`Removing ${address} from federators`);
+        const accessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
+            deployment.address,
+            signer,
+        );
+
+        const receipt = await accessControl.removeFederator(
+            address
         );
         console.log('tx hash:', receipt.hash);
     });
