@@ -35,7 +35,7 @@ class RegTestNodeWrapper implements IBitcoinNodeWrapper {
     }
 
     async generateToAddress(address: string, blocks: number): Promise<any> {
-        return this.nodeWrapper.call('generatetoaddress', [blocks, address]);
+        return this.call('generatetoaddress', [blocks, address]);
     }
 }
 
