@@ -17,12 +17,12 @@ task("accounts", "Prints the list of accounts", async (args, hre) => {
 });
 
 task("federators", "Prints the list of federators", async (args, hre) => {
-    const deployment = await hre.deployments.get('FastBTCBridge');
-    const fastBtcBridge = await hre.ethers.getContractAt(
-        'FastBTCBridge',
+    const deployment = await hre.deployments.get('FastBTCAccessControl');
+    const accessControl = await hre.ethers.getContractAt(
+        'FastBTCAccessControl',
         deployment.address,
     );
-    const federators = await fastBtcBridge.federators();
+    const federators = await accessControl.federators();
 
     for (const federator of federators) {
         console.log(federator);
@@ -98,16 +98,16 @@ task("add-federator", "Add federator")
             signer = await hre.ethers.getSigner(deployer);
         }
 
-        const deployment = await hre.deployments.get('FastBTCBridge');
+        const deployment = await hre.deployments.get('FastBTCAccessControl');
         console.log('Bridge address', deployment.address);
         console.log(`Making ${address} a federator`);
-        const fastBtcBridge = await hre.ethers.getContractAt(
-            'FastBTCBridge',
+        const accessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
             deployment.address,
             signer,
         );
 
-        const receipt = await fastBtcBridge.addFederator(
+        const receipt = await accessControl.addFederator(
             address
         );
         console.log('tx hash:', receipt.hash);
@@ -131,16 +131,16 @@ task("remove-federator", "Remove federator")
             signer = await hre.ethers.getSigner(deployer);
         }
 
-        const deployment = await hre.deployments.get('FastBTCBridge');
+        const deployment = await hre.deployments.get('FastBTCAccessControl');
         console.log('Bridge address', deployment.address);
         console.log(`Removing ${address} from federators`);
-        const fastBtcBridge = await hre.ethers.getContractAt(
-            'FastBTCBridge',
+        const accessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
             deployment.address,
             signer,
         );
 
-        const receipt = await fastBtcBridge.removeFederator(
+        const receipt = await accessControl.removeFederator(
             address
         );
         console.log('tx hash:', receipt.hash);
