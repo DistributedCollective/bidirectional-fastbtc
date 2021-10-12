@@ -127,15 +127,26 @@ contract FastBTCBridge is FastBTCAccessControllable {
         }
     }
 
-    function getTransferId(
-        string calldata _btcAddress,
-        uint nonce
+    function getTransferBatchUpdateHash(
+        bytes32[] calldata _transferIds,
+        int _newStatus
     )
     public
     pure
     returns (bytes32)
     {
-        return keccak256(abi.encodePacked(_btcAddress, ":", nonce));
+        return keccak256(abi.encodePacked("batchUpdate:", _newStatus, ":", _transferIds));
+    }
+
+    function getTransferId(
+        string calldata _btcAddress,
+        uint _nonce
+    )
+    public
+    pure
+    returns (bytes32)
+    {
+        return keccak256(abi.encodePacked("transfer:", _btcAddress, ":", _nonce));
     }
 
     function getNextNonce(
@@ -166,6 +177,35 @@ contract FastBTCBridge is FastBTCAccessControllable {
     returns (uint) {
         uint amountSatoshi = amountWei / SATOSHI_DIVISOR;
         return calculateFeeSatoshi(amountSatoshi) * SATOSHI_DIVISOR;
+    }
+
+    function getTransfer(
+        string calldata _btcAddress,
+        uint _nonce
+    )
+    public
+    view
+    returns (Transfer memory) {
+        bytes32 transferId = getTransferId(_btcAddress, _nonce);
+        Transfer memory transfer = transfers[transferId];
+        require(transfer.status != 0, "transfer doesn't exist");
+        return transfer;
+    }
+
+    function getTransfers(
+        string[] calldata _btcAddresses,
+        uint[] calldata _nonces
+    )
+    public
+    view
+    returns (Transfer[] memory) {
+        require(_btcAddresses.length == _nonces.length, "same amount of btcAddresses and nonces must be given");
+        Transfer[] memory ret = new Transfer[](_btcAddresses.length);
+        for (uint i = 0; i < _btcAddresses.length; i++) {
+            ret[i] = transfers[getTransferId(_btcAddresses[i], _nonces[i])];
+            require(ret[i].status != 0, "transfer doesn't exist");
+        }
+        return ret;
     }
 
     // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
