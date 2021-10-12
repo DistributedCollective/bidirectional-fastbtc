@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 contract FastBTCAccessControl is AccessControlEnumerable {
     bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
@@ -10,6 +11,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     constructor() {
         _setupRole(ROLE_ADMIN, msg.sender);
     }
+
 
     function checkFederator(
         address addressToCheck
@@ -29,12 +31,44 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         _checkRole(ROLE_ADMIN, addressToCheck);
     }
 
+    function checkFederatorSignatures(
+        bytes32 _messageHash,
+        bytes[] memory _signatures
+    )
+    public
+    view
+    {
+        _messageHash = ECDSA.toEthSignedMessageHash(_messageHash);
+
+        uint numRequired = numRequiredFederators();
+        require(_signatures.length >= numRequired, "Not enough signatures");
+
+        address[] memory seen = new address[](_signatures.length);
+        for (uint i = 0; i < _signatures.length; i++) {
+            address recovered = ECDSA.recover(_messageHash, _signatures[i]);
+            require(recovered != address(0), "recover failed");
+            checkFederator(recovered);
+            for (uint j = 0; j < i; j++) {
+                require(seen[j] != recovered, "already signed by federator");
+            }
+            seen[i] = recovered;
+        }
+    }
+
     function numFederators()
     public
     view
     returns (uint)
     {
         return getRoleMemberCount(ROLE_FEDERATOR);
+    }
+
+    function numRequiredFederators()
+    public
+    view
+    returns (uint)
+    {
+        return getRoleMemberCount(ROLE_FEDERATOR) / 2 + 1;
     }
 
     function federators()
