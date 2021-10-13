@@ -33,6 +33,7 @@ contract FastBTCBridge is FastBTCAccessControllable {
         uint amountSatoshi;
         uint feeSatoshi;
         address rskAddress;
+        uint256 blockNumber;
     }
 
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
@@ -40,7 +41,13 @@ contract FastBTCBridge is FastBTCAccessControllable {
     int public constant TRANSFER_STATUS_NEW = 1; // not 0 to make checks easier
     int public constant TRANSFER_STATUS_SENT = 3;
     int public constant TRANSFER_STATUS_REFUNDED = -2;
+    int public constant TRANSFER_STATUS_RECLAIMED = -3;
+
     uint256 public constant MAX_DEPOSITS_PER_BTC_ADDRESS = 255;
+    uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
+
+    mapping(bytes32 => Transfer) public transfers;
+    mapping(string => uint) public nextNonces;
 
     IBTCAddressValidator public btcAddressValidator;
 
@@ -48,9 +55,7 @@ contract FastBTCBridge is FastBTCAccessControllable {
     uint public maxTransferSatoshi = 200_000_000; // 2 BTC
     uint public baseFeeSatoshi = 500;
     uint public dynamicFee = 1;  // 0.0001 = 0.01 %
-
-    mapping(bytes32 => Transfer) public transfers;
-    mapping(string => uint) public nextNonces;
+    uint public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
 
     constructor(
         FastBTCAccessControl _accessControl,
@@ -60,6 +65,9 @@ contract FastBTCBridge is FastBTCAccessControllable {
     {
         btcAddressValidator = _btcAddressValidator;
     }
+
+    // PUBLIC USER API
+    // ===============
 
     function transferToBtc(
         string calldata _btcAddress,
@@ -90,7 +98,8 @@ contract FastBTCBridge is FastBTCAccessControllable {
             _nonce,
             amountSatoshi,
             feeSatoshi,
-            msg.sender
+            msg.sender,
+            block.number
         );
         nextNonces[_btcAddress]++;
 
@@ -103,6 +112,33 @@ contract FastBTCBridge is FastBTCAccessControllable {
             msg.sender
         );
     }
+
+    function reclaimTransfer(
+        bytes32 _transferId
+    )
+    external
+    {
+        Transfer storage transfer = transfers[_transferId];
+        // TODO: decide if it should be possible to also reclaim sent transfers
+        require(
+            transfer.status == TRANSFER_STATUS_NEW,
+            "Invalid existing transfer status or transfer not found"
+        );
+        require(
+            transfer.rskAddress == msg.sender,
+            "Can only reclaim own transfers"
+        );
+        require(
+            block.number - transfer.blockNumber >= requiredBlocksBeforeReclaim,
+            "Not enough blocks passed before reclaim"
+        );
+
+        _updateTransferStatus(_transferId, transfer, TRANSFER_STATUS_RECLAIMED);
+        _refundTransferRbtc(transfer);
+    }
+
+    // FEDERATOR API
+    // ==============
 
     function markTransfersAsSent(
         bytes32[] calldata _transferIds,
@@ -121,12 +157,8 @@ contract FastBTCBridge is FastBTCAccessControllable {
             if (transfer.status == TRANSFER_STATUS_SENT) {
                 continue;
             }
-            require(transfer.status == TRANSFER_STATUS_NEW, "invalid existing transfer status or transfer not found");
-            transfer.status = TRANSFER_STATUS_SENT;
-            emit TransferStatusUpdated(
-                _transferIds[i],
-                TRANSFER_STATUS_SENT
-            );
+            require(transfer.status == TRANSFER_STATUS_NEW, "Invalid existing transfer status or transfer not found");
+            _updateTransferStatus(_transferIds[i], transfer, TRANSFER_STATUS_SENT);
         }
     }
 
@@ -144,20 +176,15 @@ contract FastBTCBridge is FastBTCAccessControllable {
 
         for (uint i = 0; i < _transferIds.length; i++) {
             Transfer storage transfer = transfers[_transferIds[i]];
-            require(transfer.status == TRANSFER_STATUS_NEW, "invalid existing transfer status or transfer not found");
+            require(transfer.status == TRANSFER_STATUS_NEW, "Invalid existing transfer status or transfer not found");
 
-            uint refundSatoshi = transfer.amountSatoshi + transfer.feeSatoshi;
-            uint256 refundWei = refundSatoshi * SATOSHI_DIVISOR;
-
-            payable(transfer.rskAddress).transfer(refundWei);
-
-            transfer.status = TRANSFER_STATUS_REFUNDED;
-            emit TransferStatusUpdated(
-                _transferIds[i],
-                TRANSFER_STATUS_REFUNDED
-            );
+            _updateTransferStatus(_transferIds[i], transfer, TRANSFER_STATUS_REFUNDED);
+            _refundTransferRbtc(transfer);
         }
     }
+
+    // FEDERATOR UTILITY METHODS
+    // =========================
 
     function getTransferBatchUpdateHash(
         bytes32[] calldata _transferIds,
@@ -169,6 +196,36 @@ contract FastBTCBridge is FastBTCAccessControllable {
     {
         return keccak256(abi.encodePacked("batchUpdate:", _newStatus, ":", _transferIds));
     }
+
+    // FEDERATOR PRIVATE METHODS
+    // =========================
+
+    function _updateTransferStatus(
+        bytes32 _transferId,
+        Transfer storage _transfer,
+        int _newStatus
+    )
+    private
+    {
+        _transfer.status = _newStatus;
+        emit TransferStatusUpdated(
+            _transferId,
+            _newStatus
+        );
+    }
+
+    function _refundTransferRbtc(
+        Transfer storage _transfer
+    )
+    private
+    {
+        uint refundSatoshi = _transfer.amountSatoshi + _transfer.feeSatoshi;
+        uint256 refundWei = refundSatoshi * SATOSHI_DIVISOR;
+        payable(_transfer.rskAddress).transfer(refundWei);
+    }
+
+    // PUBLIC UTILITY METHODS
+    // ======================
 
     function getTransferId(
         string calldata _btcAddress,
@@ -283,8 +340,9 @@ contract FastBTCBridge is FastBTCAccessControllable {
         return accessControl.federators();
     }
 
+    // ADMIN API
+    // =========
 
-    // Utility functions
     function setBtcAddressValidator(
         IBTCAddressValidator _btcAddressValidator
     )
@@ -331,6 +389,19 @@ contract FastBTCBridge is FastBTCAccessControllable {
     {
         require(_dynamicFee <= DYNAMIC_FEE_DIVISOR, "Dynamic fee too large");
         dynamicFee = _dynamicFee;
+    }
+
+    function setRequiredBlocksBeforeReclaim(
+        uint256 _requiredBlocksBeforeReclaim
+    )
+    external
+    onlyAdmin
+    {
+        require(
+            _requiredBlocksBeforeReclaim <= MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM,
+            "Required blocks before reclaim too large"
+        );
+        requiredBlocksBeforeReclaim = _requiredBlocksBeforeReclaim;
     }
 
     // TODO: figure out if we want to lock this so that only fees can be retrieved

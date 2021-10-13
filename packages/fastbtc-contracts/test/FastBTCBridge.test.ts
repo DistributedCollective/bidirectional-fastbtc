@@ -8,6 +8,7 @@ import {parseEther, parseUnits} from 'ethers/lib/utils';
 const TRANSFER_STATUS_NEW = 1; // not 0 to make checks easier
 const TRANSFER_STATUS_SENT = 3;
 const TRANSFER_STATUS_REFUNDED = -2;
+const TRANSFER_STATUS_RECLAIMED = -3;
 
 describe("FastBTCBridge", function() {
     let fastBtcBridge: Contract;
@@ -56,12 +57,12 @@ describe("FastBTCBridge", function() {
         fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
     });
 
-    const createExampleTransfer = async (
+    async function createExampleTransfer(
         transferAccount: Signer,
         transferAmount: BigNumber,
         transferBtcAddress: string,
         transferNonce: BigNumber
-    ): Promise<string> => {
+    ): Promise<string> {
         await ownerAccount.sendTransaction({
             value: transferAmount,
             to: await transferAccount.getAddress(),
@@ -78,6 +79,12 @@ describe("FastBTCBridge", function() {
             }
         );
         return transferId;
+    }
+
+    async function mineToBlock(targetBlock: number) {
+        while (await ethers.provider.getBlockNumber() < targetBlock) {
+            await ethers.provider.send('evm_mine', []);
+        }
     }
 
     it("#isValidBtcAddress", async () => {
@@ -300,7 +307,7 @@ describe("FastBTCBridge", function() {
                 expect(transfer.status).to.equal(TRANSFER_STATUS_REFUNDED);
             });
 
-            it('sends events', async () => {
+            it('emits events', async () => {
                 await expect(
                     await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
                 ).to.changeEtherBalances(
@@ -327,6 +334,64 @@ describe("FastBTCBridge", function() {
                 await expect(
                     fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
                 ).to.be.reverted;
+            });
+        });
+
+        describe('#reclaimTransfer', () => {
+            const requiredBlocks = 10;
+            let transfer: any;
+            let reclaimableBlock: number;
+
+            beforeEach(async () => {
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                await fastBtcBridge.setRequiredBlocksBeforeReclaim(requiredBlocks)
+                reclaimableBlock = transfer.blockNumber.toNumber() + requiredBlocks;
+            });
+
+            it("doesn't reclaim transfers when not enough blocks have passed", async () => {
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.revertedWith("Not enough blocks passed before reclaim");
+                // next block will be the block we mine to +1, so we mine to -2
+                await mineToBlock(reclaimableBlock - 2);
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.revertedWith("Not enough blocks passed before reclaim");
+            });
+
+            it('reclaims transfer when enough block have passed', async () => {
+                expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
+                await mineToBlock(reclaimableBlock - 1);
+                await expect(
+                    await fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.changeEtherBalances(
+                    [anotherAccount, fastBtcBridge],
+                    [transferAmount, transferAmount.mul(-1)]
+                );
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_RECLAIMED);
+
+                // cannot reclaim again
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.reverted;
+            });
+
+            it('emits events', async () => {
+                await mineToBlock(reclaimableBlock);
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.emit(fastBtcBridgeFromFederator, 'TransferStatusUpdated').withArgs(
+                    transferId,
+                    TRANSFER_STATUS_RECLAIMED
+                );
+            });
+
+            it('only allows reclaiming own transfers', async () => {
+                await mineToBlock(reclaimableBlock);
+                await expect(
+                    fastBtcBridge.reclaimTransfer(transferId)
+                ).to.be.revertedWith("Can only reclaim own transfers");
             });
         });
     });
