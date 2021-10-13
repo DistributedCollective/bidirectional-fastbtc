@@ -104,9 +104,6 @@ contract FastBTCBridge is FastBTCAccessControllable {
         );
     }
 
-    // TODO:
-    // - refunding
-
     function markTransfersAsSent(
         bytes32[] calldata _transferIds,
         bytes[] memory _signatures
@@ -129,6 +126,35 @@ contract FastBTCBridge is FastBTCAccessControllable {
             emit TransferStatusUpdated(
                 _transferIds[i],
                 TRANSFER_STATUS_SENT
+            );
+        }
+    }
+
+    function refundTransfers(
+        bytes32[] calldata _transferIds,
+        bytes[] memory _signatures
+    )
+    public
+    onlyFederator
+    {
+        accessControl.checkFederatorSignatures(
+            getTransferBatchUpdateHash(_transferIds, TRANSFER_STATUS_REFUNDED),
+            _signatures
+        );
+
+        for (uint i = 0; i < _transferIds.length; i++) {
+            Transfer storage transfer = transfers[_transferIds[i]];
+            require(transfer.status == TRANSFER_STATUS_NEW, "invalid existing transfer status or transfer not found");
+
+            uint refundSatoshi = transfer.amountSatoshi + transfer.feeSatoshi;
+            uint256 refundWei = refundSatoshi * SATOSHI_DIVISOR;
+
+            payable(transfer.rskAddress).transfer(refundWei);
+
+            transfer.status = TRANSFER_STATUS_REFUNDED;
+            emit TransferStatusUpdated(
+                _transferIds[i],
+                TRANSFER_STATUS_REFUNDED
             );
         }
     }

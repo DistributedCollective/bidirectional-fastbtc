@@ -11,6 +11,7 @@ const TRANSFER_STATUS_REFUNDED = -2;
 
 describe("FastBTCBridge", function() {
     let fastBtcBridge: Contract;
+    let fastBtcBridgeFromFederator: Contract;
     let accessControl: Contract;
     let btcAddressValidator: Contract;
     let ownerAccount: Signer;
@@ -51,7 +52,33 @@ describe("FastBTCBridge", function() {
             btcAddressValidator.address
         );
         await fastBtcBridge.deployed();
+
+        fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
     });
+
+    const createExampleTransfer = async (
+        transferAccount: Signer,
+        transferAmount: BigNumber,
+        transferBtcAddress: string,
+        transferNonce: BigNumber
+    ): Promise<string> => {
+        await ownerAccount.sendTransaction({
+            value: transferAmount,
+            to: await transferAccount.getAddress(),
+        });
+        const transferArgs = [
+            transferBtcAddress,
+            transferNonce,
+        ];
+        const transferId = await fastBtcBridge.getTransferId(...transferArgs);
+        await fastBtcBridge.connect(transferAccount).transferToBtc(
+            ...transferArgs,
+            {
+                value: transferAmount,
+            }
+        );
+        return transferId;
+    }
 
     it("#isValidBtcAddress", async () => {
         // just test something so we can live in peace
@@ -155,28 +182,16 @@ describe("FastBTCBridge", function() {
         let transferBtcAddress = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
         let transferNonce = BigNumber.from(0);
         let transferId: string;
-        let fastBtcBridgeFromFederator: Contract;
         let updateHashBytes: Uint8Array;
 
         beforeEach(async () => {
             const amountEther = parseEther('0.1');
-            await ownerAccount.sendTransaction({
-                value: amountEther,
-                to: anotherAddress,
-            });
-            transferArgs = [
+            transferId = await createExampleTransfer(
+                anotherAccount,
+                amountEther,
                 transferBtcAddress,
-                transferNonce,
-            ];
-            transferId = await fastBtcBridge.getTransferId(...transferArgs);
-            fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
-            await fastBtcBridge.connect(anotherAccount).transferToBtc(
-                ...transferArgs,
-                {
-                    value: amountEther,
-                }
+                transferNonce
             );
-
             const updateHash = await fastBtcBridge.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_SENT);
             updateHashBytes = ethers.utils.arrayify(updateHash);
         });
@@ -247,6 +262,72 @@ describe("FastBTCBridge", function() {
 
             await expect(
                 fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
+            ).to.be.reverted;
+        });
+    });
+
+    describe('#refundTransfers', () => {
+        let transferAmount: BigNumber;
+        let transferBtcAddress = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+        let transferNonce = BigNumber.from(0);
+        let transferId: string;
+        let updateSignatures: string[];
+
+        beforeEach(async () => {
+            transferAmount = parseEther('0.1');
+            transferId = await createExampleTransfer(
+                anotherAccount,
+                transferAmount,
+                transferBtcAddress,
+                transferNonce
+            );
+            const updateHash = await fastBtcBridge.getTransferBatchUpdateHash(
+                [transferId],
+                TRANSFER_STATUS_REFUNDED
+            );
+            const updateHashBytes = ethers.utils.arrayify(updateHash);
+
+            updateSignatures = [
+                await federators[0].signMessage(updateHashBytes),
+                await federators[1].signMessage(updateHashBytes),
+            ];
+        });
+
+        it('refunds transfer', async () => {
+            await expect(
+                await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
+            ).to.changeEtherBalances(
+                [anotherAccount, fastBtcBridge],
+                [transferAmount, transferAmount.mul(-1)]
+            );
+        });
+
+        it('sends events', async () => {
+            await expect(
+                await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
+            ).to.changeEtherBalances(
+                [anotherAccount, fastBtcBridge],
+                [transferAmount, transferAmount.mul(-1)]
+            );
+        });
+
+        it('does not refund already refunded transfer', async () => {
+            await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures);
+            await expect(
+                fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
+            ).to.be.reverted;
+        });
+
+        it('does not refund sent transfers', async () => {
+            const sentHash = await fastBtcBridge.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_SENT);
+            const sentHashBytes = ethers.utils.arrayify(sentHash);
+            const sentSignatures = [
+                await federators[0].signMessage(sentHashBytes),
+                await federators[1].signMessage(sentHashBytes),
+            ];
+            await fastBtcBridgeFromFederator.markTransfersAsSent([transferId], sentSignatures)
+            await expect(
+                fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
             ).to.be.reverted;
         });
     });
