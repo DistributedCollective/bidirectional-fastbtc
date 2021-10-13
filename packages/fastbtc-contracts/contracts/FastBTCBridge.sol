@@ -2,15 +2,18 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 import "./interfaces/IBTCAddressValidator.sol";
 import "./FastBTCAccessControl.sol";
 import "./FastBTCAccessControllable.sol";
 
-contract FastBTCBridge is FastBTCAccessControllable {
+contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     using SafeERC20 for IERC20;
+    using Address for address payable;
 
     event NewTransfer(
         bytes32 _transferId,
@@ -117,6 +120,7 @@ contract FastBTCBridge is FastBTCAccessControllable {
         bytes32 _transferId
     )
     external
+    nonReentrant
     {
         Transfer storage transfer = transfers[_transferId];
         // TODO: decide if it should be possible to also reclaim sent transfers
@@ -221,7 +225,7 @@ contract FastBTCBridge is FastBTCAccessControllable {
     {
         uint refundSatoshi = _transfer.amountSatoshi + _transfer.feeSatoshi;
         uint256 refundWei = refundSatoshi * SATOSHI_DIVISOR;
-        payable(_transfer.rskAddress).transfer(refundWei);
+        payable(_transfer.rskAddress).sendValue(refundWei);
     }
 
     // PUBLIC UTILITY METHODS
@@ -413,7 +417,7 @@ contract FastBTCBridge is FastBTCAccessControllable {
     external
     onlyAdmin
     {
-        _receiver.transfer(_amount);
+        _receiver.sendValue(_amount);
     }
 
     /// @dev utility for withdrawing tokens accidentally sent to the contract
