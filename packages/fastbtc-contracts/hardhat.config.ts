@@ -2,7 +2,7 @@ import "@nomiclabs/hardhat-waffle";
 import "hardhat-deploy";
 import dotenv from "dotenv";
 import {task} from "hardhat/config";
-import {Signer, Wallet} from 'ethers';
+import {BigNumber, Signer, Wallet} from 'ethers';
 
 dotenv.config();
 
@@ -28,6 +28,39 @@ task("federators", "Prints the list of federators", async (args, hre) => {
         console.log(federator);
     }
 });
+
+
+task("show-transfer", "Show transfer details")
+    .addPositionalParam('btcAddressOrTransferId')
+    .addOptionalPositionalParam('nonce')
+    .setAction(async ({ btcAddressOrTransferId, nonce }, hre) => {
+        const deployment = await hre.deployments.get('FastBTCBridge');
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            deployment.address,
+        );
+
+        let transferId;
+        if (nonce === undefined) {
+            console.log('Nonce not given, treat', btcAddressOrTransferId, 'as transferId');
+            transferId = btcAddressOrTransferId;
+        } else {
+            console.log('Nonce given, treat', btcAddressOrTransferId, 'as btcAddress');
+            transferId = await contract.getTransferId(btcAddressOrTransferId, nonce);
+        }
+
+        console.log('transferId', transferId);
+
+        const transfer = await contract.getTransferByTransferId(transferId);
+        for (let [key, value] of transfer.entries()) {
+            console.log(
+                key,
+                BigNumber.isBigNumber(value) ? value.toString() : value
+            );
+        }
+        console.log(transfer);
+
+    });
 
 task("free-money", "Sends free money to address")
     .addPositionalParam("address", "Address to send free money to")

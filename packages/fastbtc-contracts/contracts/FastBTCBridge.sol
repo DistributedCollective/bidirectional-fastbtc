@@ -185,6 +185,17 @@ contract FastBTCBridge is FastBTCAccessControllable {
         return calculateFeeSatoshi(amountSatoshi) * SATOSHI_DIVISOR;
     }
 
+    function getTransferByTransferId(
+        bytes32 _transferId
+    )
+    public
+    view
+    returns (Transfer memory) {
+        Transfer memory transfer = transfers[_transferId];
+        require(transfer.status != 0, "transfer doesn't exist");
+        return transfer;
+    }
+
     function getTransfer(
         string calldata _btcAddress,
         uint _nonce
@@ -193,9 +204,21 @@ contract FastBTCBridge is FastBTCAccessControllable {
     view
     returns (Transfer memory) {
         bytes32 transferId = getTransferId(_btcAddress, _nonce);
-        Transfer memory transfer = transfers[transferId];
-        require(transfer.status != 0, "transfer doesn't exist");
-        return transfer;
+        return getTransferByTransferId(transferId);
+    }
+
+    function getTransfersByTransferId(
+        bytes32[] calldata _transferIds
+    )
+    public
+    view
+    returns (Transfer[] memory) {
+        Transfer[] memory ret = new Transfer[](_transferIds.length);
+        for (uint i = 0; i < _transferIds.length; i++) {
+            ret[i] = transfers[_transferIds[i]];
+            require(ret[i].status != 0, "transfer doesn't exist");
+        }
+        return ret;
     }
 
     function getTransfers(
