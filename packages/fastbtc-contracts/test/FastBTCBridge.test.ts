@@ -271,7 +271,6 @@ describe("FastBTCBridge", function() {
             });
         });
 
-
         describe('#refundTransfers', () => {
             let updateSignatures: string[];
 
@@ -289,12 +288,16 @@ describe("FastBTCBridge", function() {
             });
 
             it('refunds transfer', async () => {
+                let transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
                 await expect(
                     await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
                 ).to.changeEtherBalances(
                     [anotherAccount, fastBtcBridge],
                     [transferAmount, transferAmount.mul(-1)]
                 );
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_REFUNDED);
             });
 
             it('sends events', async () => {
