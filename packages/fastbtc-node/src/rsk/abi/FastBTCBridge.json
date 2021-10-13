@@ -286,7 +286,87 @@
             },
             {
                 "internalType": "uint256",
-                "name": "nonce",
+                "name": "_nonce",
+                "type": "uint256"
+            }
+        ],
+        "name": "getTransfer",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "int256",
+                        "name": "status",
+                        "type": "int256"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "btcAddress",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "amountSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "feeSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "rskAddress",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct FastBTCBridge.Transfer",
+                "name": "",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32[]",
+                "name": "_transferIds",
+                "type": "bytes32[]"
+            },
+            {
+                "internalType": "int256",
+                "name": "_newStatus",
+                "type": "int256"
+            }
+        ],
+        "name": "getTransferBatchUpdateHash",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "string",
+                "name": "_btcAddress",
+                "type": "string"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_nonce",
                 "type": "uint256"
             }
         ],
@@ -299,6 +379,62 @@
             }
         ],
         "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "string[]",
+                "name": "_btcAddresses",
+                "type": "string[]"
+            },
+            {
+                "internalType": "uint256[]",
+                "name": "_nonces",
+                "type": "uint256[]"
+            }
+        ],
+        "name": "getTransfers",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "int256",
+                        "name": "status",
+                        "type": "int256"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "btcAddress",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "amountSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "feeSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "rskAddress",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct FastBTCBridge.Transfer[]",
+                "name": "",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -326,6 +462,11 @@
                 "internalType": "bytes32[]",
                 "name": "_transferIds",
                 "type": "bytes32[]"
+            },
+            {
+                "internalType": "bytes[]",
+                "name": "_signatures",
+                "type": "bytes[]"
             }
         ],
         "name": "markTransfersAsSent",

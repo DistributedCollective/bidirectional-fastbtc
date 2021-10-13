@@ -2,7 +2,7 @@ import {inject, injectable} from 'inversify';
 import {BigNumber, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
 import {KeyValuePairRepository, Transfer, TransferStatus} from '../db/models';
-import {EthersProvider, FastBtcBridgeContract} from './base';
+import {EthersProvider, EthersSigner, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
 import {Connection} from 'typeorm';
 import {getEvents} from './utils';
@@ -20,6 +20,7 @@ export class EventScanner {
 
     constructor(
         @inject(EthersProvider) private ethersProvider: ethers.providers.Provider,
+        @inject(EthersSigner) private ethersSigner: ethers.Signer,
         @inject(FastBtcBridgeContract) private fastBtcBridge: ethers.Contract,
         @inject(DBConnection) private dbConnection: Connection,
         @inject(Config) private config: Config,
@@ -177,16 +178,28 @@ export class EventScanner {
 
     async markTransfersAsSent(
         transfers: Transfer[] | string[],
-        // TODO: signatures
+        signatures: string[],
     ): Promise<void> {
         const transferIds = this.getTransferIds(transfers);
-        const tx = await this.fastBtcBridge.markTransfersAsSent(transferIds);
+        const tx = await this.fastBtcBridge.markTransfersAsSent(
+            transferIds,
+            signatures,
+        );
         this.logger.debug('markTransfersAsSent tx hash', tx.hash);
         const receipt = await tx.wait();
         if (receipt.status !== 1) {
             this.logger.error('Invalid status for markTransfersAsSent receipt', receipt);
             throw new Error('invalid status for markTransfersAsSent receipt');
         }
+    }
+
+    async signTransferStatusUpdate(
+        transfers: Transfer[] | string[],
+        newStatus: TransferStatus
+    ): Promise<string> {
+        const transferIds = this.getTransferIds(transfers);
+        const updateHash = await this.fastBtcBridge.getTransferBatchUpdateHash(transferIds, newStatus);
+        return await this.ethersSigner.signMessage(ethers.utils.arrayify(updateHash));
     }
 
     private getTransferIds(

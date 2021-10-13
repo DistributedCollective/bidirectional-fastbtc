@@ -105,19 +105,25 @@ contract FastBTCBridge is FastBTCAccessControllable {
     }
 
     // TODO:
-    // - limit federator-only actions
-    // - marking as processed
-    // - reclaiming
+    // - refunding
 
     function markTransfersAsSent(
-        bytes32[] calldata _transferIds
+        bytes32[] calldata _transferIds,
+        bytes[] memory _signatures
     )
     public
     onlyFederator
     {
-        // TODO: check signatures
+        accessControl.checkFederatorSignatures(
+            getTransferBatchUpdateHash(_transferIds, TRANSFER_STATUS_SENT),
+            _signatures
+        );
+
         for (uint i = 0; i < _transferIds.length; i++) {
             Transfer storage transfer = transfers[_transferIds[i]];
+            if (transfer.status == TRANSFER_STATUS_SENT) {
+                continue;
+            }
             require(transfer.status == TRANSFER_STATUS_NEW, "invalid existing transfer status or transfer not found");
             transfer.status = TRANSFER_STATUS_SENT;
             emit TransferStatusUpdated(
