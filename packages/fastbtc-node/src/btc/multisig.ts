@@ -27,7 +27,6 @@ export type BitcoinMultisigConfig = Pick<Config,
 export class BitcoinMultisig {
     private readonly network: Network;
     private gasSatoshi = 10; // TODO: make variable/configurable
-    private cosigners = 2; // TODO: make configurable
     private nodeWrapper: IBitcoinNodeWrapper;
     private readonly masterPrivateKey: string;
     private readonly masterPublicKey: string;
@@ -265,5 +264,10 @@ export class BitcoinMultisig {
 
     private async getRawTx(txId: string): Promise<any> {
         return await this.nodeWrapper.call("gettransaction", [txId, true]);
+    }
+
+    private get cosigners(): number {
+        // number of required signers -- currently calculated but should maybe be configurable
+        return Math.floor(this.masterPublicKeys.length / 2) + 1;
     }
 }
