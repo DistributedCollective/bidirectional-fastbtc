@@ -14,7 +14,7 @@ cd ../packages/fastbtc-contracts
 make
 
 echo "Starting Hardhat chain"
-npx hardhat node >$THIS_DIR/logs/hardhat.log 2>$THIS_DIR/logs/hardhat-error.log &
+npx hardhat node --hostname 0.0.0.0 >$THIS_DIR/logs/hardhat.log 2>$THIS_DIR/logs/hardhat-error.log &
 HARDHAT_PID=$!
 echo $HARDHAT_PID > $THIS_DIR/run/hardhat.pid
 echo "Hardhat started pid $HARDHAT_PID, logs at $THIS_DIR/logs/hardhat.log, sleeping 5s"

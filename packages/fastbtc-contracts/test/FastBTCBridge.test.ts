@@ -8,6 +8,7 @@ import {parseEther, parseUnits} from 'ethers/lib/utils';
 const TRANSFER_STATUS_NEW = 1; // not 0 to make checks easier
 const TRANSFER_STATUS_SENT = 3;
 const TRANSFER_STATUS_REFUNDED = -2;
+const TRANSFER_STATUS_RECLAIMED = -3;
 
 describe("FastBTCBridge", function() {
     let fastBtcBridge: Contract;
@@ -56,12 +57,12 @@ describe("FastBTCBridge", function() {
         fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
     });
 
-    const createExampleTransfer = async (
+    async function createExampleTransfer(
         transferAccount: Signer,
         transferAmount: BigNumber,
         transferBtcAddress: string,
         transferNonce: BigNumber
-    ): Promise<string> => {
+    ): Promise<string> {
         await ownerAccount.sendTransaction({
             value: transferAmount,
             to: await transferAccount.getAddress(),
@@ -78,6 +79,12 @@ describe("FastBTCBridge", function() {
             }
         );
         return transferId;
+    }
+
+    async function mineToBlock(targetBlock: number) {
+        while (await ethers.provider.getBlockNumber() < targetBlock) {
+            await ethers.provider.send('evm_mine', []);
+        }
     }
 
     it("#isValidBtcAddress", async () => {
@@ -177,101 +184,11 @@ describe("FastBTCBridge", function() {
         });
     });
 
-    describe('#markTransfersAsSent', () => {
-        let transferArgs: [string, BigNumber];
-        let transferBtcAddress = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
-        let transferNonce = BigNumber.from(0);
-        let transferId: string;
-        let updateHashBytes: Uint8Array;
-
-        beforeEach(async () => {
-            const amountEther = parseEther('0.1');
-            transferId = await createExampleTransfer(
-                anotherAccount,
-                amountEther,
-                transferBtcAddress,
-                transferNonce
-            );
-            const updateHash = await fastBtcBridge.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_SENT);
-            updateHashBytes = ethers.utils.arrayify(updateHash);
-        });
-
-        it('does not mark transfers as sent without signatures', async () => {
-            await expect(
-                fastBtcBridgeFromFederator.markTransfersAsSent([transferId], [])
-            ).to.be.reverted;
-        });
-
-        it('marks transfers as sent if signed by enough federators', async () => {
-            let transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
-            expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
-
-            const signatures = [
-                await federators[0].signMessage(updateHashBytes),
-                await federators[1].signMessage(updateHashBytes),
-            ];
-
-            await expect(
-                fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
-            ).to.emit(fastBtcBridgeFromFederator, 'TransferStatusUpdated').withArgs(
-                transferId,
-                TRANSFER_STATUS_SENT
-            );
-
-            transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
-            expect(transfer.status).to.equal(TRANSFER_STATUS_SENT);
-
-            // test idempodency
-            await expect(
-                fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
-            ).to.not.emit(fastBtcBridgeFromFederator, 'TransferStatusUpdated');
-            transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
-            expect(transfer.status).to.equal(TRANSFER_STATUS_SENT);
-        });
-
-        it('does not mark transfers as sent if signed by too few federators', async () => {
-            const signatures = [
-                await federators[0].signMessage(updateHashBytes),
-            ];
-
-            await expect(
-                fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
-            ).to.be.reverted;
-        });
-
-        it('does not mark transfers as sent if signed by non-federators', async () => {
-            const signatures = [
-                await federators[0].signMessage(updateHashBytes),
-                await anotherAccount.signMessage(updateHashBytes),
-            ];
-
-            await expect(
-                fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
-            ).to.be.reverted;
-        });
-
-        it('does not mark transfers as sent if wrong hash signed', async () => {
-            const signatures = [
-                await federators[0].signMessage(ethers.utils.arrayify(
-                    await fastBtcBridgeFromFederator.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_NEW),
-                )),
-                await federators[1].signMessage(ethers.utils.arrayify(
-                    await fastBtcBridgeFromFederator.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_NEW),
-                )),
-            ];
-
-            await expect(
-                fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
-            ).to.be.reverted;
-        });
-    });
-
-    describe('#refundTransfers', () => {
+    describe('transfer update methods', () => {
         let transferAmount: BigNumber;
         let transferBtcAddress = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
         let transferNonce = BigNumber.from(0);
         let transferId: string;
-        let updateSignatures: string[];
 
         beforeEach(async () => {
             transferAmount = parseEther('0.1');
@@ -281,54 +198,201 @@ describe("FastBTCBridge", function() {
                 transferBtcAddress,
                 transferNonce
             );
-            const updateHash = await fastBtcBridge.getTransferBatchUpdateHash(
-                [transferId],
-                TRANSFER_STATUS_REFUNDED
-            );
-            const updateHashBytes = ethers.utils.arrayify(updateHash);
-
-            updateSignatures = [
-                await federators[0].signMessage(updateHashBytes),
-                await federators[1].signMessage(updateHashBytes),
-            ];
         });
 
-        it('refunds transfer', async () => {
-            await expect(
-                await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
-            ).to.changeEtherBalances(
-                [anotherAccount, fastBtcBridge],
-                [transferAmount, transferAmount.mul(-1)]
-            );
+        describe('#markTransfersAsSent', () => {
+            let updateHashBytes: Uint8Array;
+
+            beforeEach(async () => {
+                const updateHash = await fastBtcBridge.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_SENT);
+                updateHashBytes = ethers.utils.arrayify(updateHash);
+            });
+
+            it('does not mark transfers as sent without signatures', async () => {
+                await expect(
+                    fastBtcBridgeFromFederator.markTransfersAsSent([transferId], [])
+                ).to.be.reverted;
+            });
+
+            it('marks transfers as sent if signed by enough federators', async () => {
+                let transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
+
+                const signatures = [
+                    await federators[0].signMessage(updateHashBytes),
+                    await federators[1].signMessage(updateHashBytes),
+                ];
+
+                await expect(
+                    fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
+                ).to.emit(fastBtcBridgeFromFederator, 'TransferStatusUpdated').withArgs(
+                    transferId,
+                    TRANSFER_STATUS_SENT
+                );
+
+                transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_SENT);
+
+                // test idempodency
+                await expect(
+                    fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
+                ).to.not.emit(fastBtcBridgeFromFederator, 'TransferStatusUpdated');
+                transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_SENT);
+            });
+
+            it('does not mark transfers as sent if signed by too few federators', async () => {
+                const signatures = [
+                    await federators[0].signMessage(updateHashBytes),
+                ];
+
+                await expect(
+                    fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
+                ).to.be.reverted;
+            });
+
+            it('does not mark transfers as sent if signed by non-federators', async () => {
+                const signatures = [
+                    await federators[0].signMessage(updateHashBytes),
+                    await anotherAccount.signMessage(updateHashBytes),
+                ];
+
+                await expect(
+                    fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
+                ).to.be.reverted;
+            });
+
+            it('does not mark transfers as sent if wrong hash signed', async () => {
+                const signatures = [
+                    await federators[0].signMessage(ethers.utils.arrayify(
+                        await fastBtcBridgeFromFederator.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_NEW),
+                    )),
+                    await federators[1].signMessage(ethers.utils.arrayify(
+                        await fastBtcBridgeFromFederator.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_NEW),
+                    )),
+                ];
+
+                await expect(
+                    fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
+                ).to.be.reverted;
+            });
         });
 
-        it('sends events', async () => {
-            await expect(
-                await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
-            ).to.changeEtherBalances(
-                [anotherAccount, fastBtcBridge],
-                [transferAmount, transferAmount.mul(-1)]
-            );
+        describe('#refundTransfers', () => {
+            let updateSignatures: string[];
+
+            beforeEach(async () => {
+                const updateHash = await fastBtcBridge.getTransferBatchUpdateHash(
+                    [transferId],
+                    TRANSFER_STATUS_REFUNDED
+                );
+                const updateHashBytes = ethers.utils.arrayify(updateHash);
+
+                updateSignatures = [
+                    await federators[0].signMessage(updateHashBytes),
+                    await federators[1].signMessage(updateHashBytes),
+                ];
+            });
+
+            it('refunds transfer', async () => {
+                let transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
+                await expect(
+                    await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
+                ).to.changeEtherBalances(
+                    [anotherAccount, fastBtcBridge],
+                    [transferAmount, transferAmount.mul(-1)]
+                );
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_REFUNDED);
+            });
+
+            it('emits events', async () => {
+                await expect(
+                    await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
+                ).to.changeEtherBalances(
+                    [anotherAccount, fastBtcBridge],
+                    [transferAmount, transferAmount.mul(-1)]
+                );
+            });
+
+            it('does not refund already refunded transfer', async () => {
+                await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures);
+                await expect(
+                    fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
+                ).to.be.reverted;
+            });
+
+            it('does not refund sent transfers', async () => {
+                const sentHash = await fastBtcBridge.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_SENT);
+                const sentHashBytes = ethers.utils.arrayify(sentHash);
+                const sentSignatures = [
+                    await federators[0].signMessage(sentHashBytes),
+                    await federators[1].signMessage(sentHashBytes),
+                ];
+                await fastBtcBridgeFromFederator.markTransfersAsSent([transferId], sentSignatures)
+                await expect(
+                    fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
+                ).to.be.reverted;
+            });
         });
 
-        it('does not refund already refunded transfer', async () => {
-            await fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures);
-            await expect(
-                fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
-            ).to.be.reverted;
-        });
+        describe('#reclaimTransfer', () => {
+            const requiredBlocks = 10;
+            let transfer: any;
+            let reclaimableBlock: number;
 
-        it('does not refund sent transfers', async () => {
-            const sentHash = await fastBtcBridge.getTransferBatchUpdateHash([transferId], TRANSFER_STATUS_SENT);
-            const sentHashBytes = ethers.utils.arrayify(sentHash);
-            const sentSignatures = [
-                await federators[0].signMessage(sentHashBytes),
-                await federators[1].signMessage(sentHashBytes),
-            ];
-            await fastBtcBridgeFromFederator.markTransfersAsSent([transferId], sentSignatures)
-            await expect(
-                fastBtcBridgeFromFederator.refundTransfers([transferId], updateSignatures)
-            ).to.be.reverted;
+            beforeEach(async () => {
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                await fastBtcBridge.setRequiredBlocksBeforeReclaim(requiredBlocks)
+                reclaimableBlock = transfer.blockNumber.toNumber() + requiredBlocks;
+            });
+
+            it("doesn't reclaim transfers when not enough blocks have passed", async () => {
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.revertedWith("Not enough blocks passed before reclaim");
+                // next block will be the block we mine to +1, so we mine to -2
+                await mineToBlock(reclaimableBlock - 2);
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.revertedWith("Not enough blocks passed before reclaim");
+            });
+
+            it('reclaims transfer when enough block have passed', async () => {
+                expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
+                await mineToBlock(reclaimableBlock - 1);
+                await expect(
+                    await fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.changeEtherBalances(
+                    [anotherAccount, fastBtcBridge],
+                    [transferAmount, transferAmount.mul(-1)]
+                );
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_RECLAIMED);
+
+                // cannot reclaim again
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.reverted;
+            });
+
+            it('emits events', async () => {
+                await mineToBlock(reclaimableBlock);
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.emit(fastBtcBridgeFromFederator, 'TransferStatusUpdated').withArgs(
+                    transferId,
+                    TRANSFER_STATUS_RECLAIMED
+                );
+            });
+
+            it('only allows reclaiming own transfers', async () => {
+                await mineToBlock(reclaimableBlock);
+                await expect(
+                    fastBtcBridge.reclaimTransfer(transferId)
+                ).to.be.revertedWith("Can only reclaim own transfers");
+            });
         });
     });
 });

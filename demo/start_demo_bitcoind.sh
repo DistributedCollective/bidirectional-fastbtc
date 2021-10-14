@@ -4,8 +4,8 @@ cd "$(dirname "$0")"
 THIS_DIR=$(pwd)
 DATA_DIR=$THIS_DIR/bitcoindata
 CONF_FILE=$THIS_DIR/bitcoin.conf
-BITCOIND="bitcoind -conf=$CONF_FILE"
-BITCOIN_CLI="bitcoin-cli -conf=$CONF_FILE"
+BITCOIND="bitcoin-core.daemon -conf=$CONF_FILE"
+BITCOIN_CLI="bitcoin-core.cli -conf=$CONF_FILE"
 
 if test -f "$THIS_DIR/run/bitcoind.pid" ; then
     echo "Killing existing Bitcoind instance"

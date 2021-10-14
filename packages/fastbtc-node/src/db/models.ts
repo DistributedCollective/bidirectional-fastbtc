@@ -51,6 +51,7 @@ export enum TransferStatus {
     Sent = 3, // Sent to RSK/BTC
     Rejected = -1,
     Refunded = -2,
+    Reclaimed = -3, // self-refund
 }
 
 @Entity()

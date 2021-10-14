@@ -9,6 +9,6 @@ echo "Starting automining - generating a block every $INTERVAL s (rewards go to 
 while true
 do
         echo "Mine a block $(date '+%d/%m/%Y %H:%M:%S')"
-        bitcoin-cli -conf=$THIS_DIR/bitcoin.conf generatetoaddress 1 $ADDRESS
+        bitcoin-core.cli -conf=$THIS_DIR/bitcoin.conf generatetoaddress 1 $ADDRESS
         sleep $INTERVAL
 done
