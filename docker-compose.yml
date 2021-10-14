@@ -7,7 +7,7 @@ services:
       context: ./packages/fastbtc-node/
     env_file:
       - demo/docker-env1
-      - demo/docker-env1-secret
+        #- demo/docker-env1-secret
     ports:
       - 11125:11125
     depends_on:
@@ -20,7 +20,7 @@ services:
     image: fastbtc:latest
     env_file:
       - demo/docker-env2
-      - demo/docker-env2-secret
+        #- demo/docker-env2-secret
     ports:
       - 11126:11126
     depends_on:
