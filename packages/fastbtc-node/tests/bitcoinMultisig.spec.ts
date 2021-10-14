@@ -18,7 +18,7 @@ class RegTestNodeWrapper implements IBitcoinNodeWrapper {
     constructor() {
         this.network = networks.regtest;
         this.nodeWrapper = new BitcoinNodeWrapper({
-            url: 'http://127.0.0.1:18543/1',
+            url: 'http://127.0.0.1:18543/wallet/node1',
             user: 'fastbtc',
             password: 'hunter2',
             btcNetwork: 'regtest',
@@ -78,5 +78,20 @@ it("should work", async function () {
         assert(recoveredOut.btcAddress == outputs[index].btcAddress);
         assert(recoveredOut.amountSatoshi.eq(outputs[index].amountSatoshi));
         assert(recoveredOut.nonce == outputs[index].nonce);
+    }
+
+    // single output encoded differently
+    const oneOutput = [
+        {btcAddress: randomBech32(), nonce: 1, amountSatoshi: BigNumber.from(100)},
+    ];
+
+    const transaction2 = await multiSig.createPartiallySignedTransaction(oneOutput);
+    const recoveredOutputs2 = multiSig.getTransactionTransfers(transaction2);
+
+    assert(recoveredOutputs2.length == oneOutput.length, 'recovered output length matches');
+    for (const [index, recoveredOut] of recoveredOutputs2.entries()) {
+        assert(recoveredOut.btcAddress == oneOutput[index].btcAddress);
+        assert(recoveredOut.amountSatoshi.eq(oneOutput[index].amountSatoshi));
+        assert(recoveredOut.nonce == oneOutput[index].nonce);
     }
 });

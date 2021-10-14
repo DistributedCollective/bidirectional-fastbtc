@@ -64,6 +64,7 @@ export class RSKKeyedAuth implements AuthProvider {
         const that = this;
         return {
             async initialMessage() {
+                console.log("preparing challenge to server");
                 return encode({
                     version: 1,
                     challenge: hexlify(challenge)
@@ -71,39 +72,45 @@ export class RSKKeyedAuth implements AuthProvider {
             },
 
             async receiveData(data) {
-                const payload = decode(Buffer.from(data));
-                if (payload.version !== 1) {
-                    console.error(`Invalid payload version ${payload.version} received from server`)
+                try {
+                    const payload = decode(Buffer.from(data));
+                    if (payload.version !== 1) {
+                        console.error(`Invalid payload version ${payload.version} received from server`)
+                        return {
+                            type: AuthClientReplyType.Reject
+                        };
+                    }
+
+                    const serverChallenge: Buffer = Buffer.from(arrayify(payload.challenge as any));
+                    const serverResponse: string = payload.response as any;
+
+                    const serverMessage = createMessage(Buffer.concat([prefix, challenge]), context.remotePublicSecurity);
+                    const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(serverMessage), serverResponse);
+
+                    const peerAddresses = await that.getPeerAddresses();
+                    if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
+                        console.error(`Invalid signature from server, recovered address ` +
+                            `${recoveredAddress} does not match any configured peer address`);
+
+                        return {
+                            type: AuthClientReplyType.Reject
+                        };
+                    }
+
+                    const clientMessage = createMessage(Buffer.concat([prefix, serverChallenge]), context.localPublicSecurity);
+
+                    console.log(`successful server challenge from ${recoveredAddress}`);
                     return {
-                        type: AuthClientReplyType.Reject
+                        type: AuthClientReplyType.Data,
+                        data: encode({
+                            response: await that.signer.signMessage(clientMessage)
+                        })
                     };
                 }
-
-                const serverChallenge: Buffer = Buffer.from(arrayify(payload.challenge as any));
-                const serverResponse: string = payload.response as any;
-
-                const serverMessage = createMessage(Buffer.concat([prefix, challenge]), context.remotePublicSecurity);
-                const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(serverMessage), serverResponse);
-
-                const peerAddresses = await that.getPeerAddresses();
-                if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
-                    console.error(`Invalid signature from server, recovered address ` +
-                        `${recoveredAddress} does not match any configured peer address`);
-
-                    return {
-                        type: AuthClientReplyType.Reject
-                    };
+                catch (e) {
+                    console.log(e);
+                    throw e;
                 }
-
-                const clientMessage = createMessage(Buffer.concat([prefix, serverChallenge]), context.localPublicSecurity);
-
-                console.log(`successful server challenge from ${recoveredAddress}`);
-                return {
-                    type: AuthClientReplyType.Data,
-                    data: encode({
-                        response: await that.signer.signMessage(clientMessage)
-                    })
-                };
             },
 
             destroy() {
@@ -119,7 +126,10 @@ export class RSKKeyedAuth implements AuthProvider {
 
         return {
             async receiveInitial(data: ArrayBuffer) {
-                const payload = decode(Buffer.from(data));
+                console.log("received client authentication handshake");
+                let payload;
+                try {
+                    payload = decode(Buffer.from(data));
                 if (payload.version !== 1) {
                     console.error(`Invalid payload version ${payload.version} received from client`);
 
@@ -141,6 +151,11 @@ export class RSKKeyedAuth implements AuthProvider {
                         version: 1,
                     })
                 };
+                }
+                catch (e) {
+                    console.log(e);
+                    throw e;
+                }
             },
 
             async receiveData(data) {
@@ -153,7 +168,10 @@ export class RSKKeyedAuth implements AuthProvider {
                     payload.response as any
                 );
 
+                console.log("getting peer account addresses...");
                 const peerAddresses = await that.getPeerAddresses();
+                console.log("got");
+
                 if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
                     console.error(`Invalid signature from client, recovered address ` +
                         `${recoveredAddress} does not match any configured peer address`);

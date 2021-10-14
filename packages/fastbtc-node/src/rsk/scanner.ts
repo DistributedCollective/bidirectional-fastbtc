@@ -6,10 +6,20 @@ import {EthersProvider, EthersSigner, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
 import {Connection} from 'typeorm';
 import {getEvents} from './utils';
+import {Satoshis} from "../btc/types";
 
 export const Scanner = Symbol.for('Scanner');
 
 const LAST_PROCESSED_BLOCK_KEY = 'eventscanner-last-processed-block';
+
+interface RskTransferInfo {
+    btcAddress: string;
+    nonce: number;
+    amountSatoshi: Satoshis;
+    feeSatoshi: Satoshis;
+    rskAddress: string;
+    status: TransferStatus;
+}
 
 // TODO: the name might be a misnomer since this does quite a few things beside scanning for new events
 @injectable()
@@ -49,7 +59,7 @@ export class EventScanner {
         this.logger.debug("Last processed block is", lastProcessedBlock);
         let fromBlock = lastProcessedBlock + 1;
         const toBlock = currentBlock - this.requiredConfirmations;
-        if(toBlock < fromBlock) {
+        if (toBlock < fromBlock) {
             this.logger.debug(`toBlock ${toBlock} is smaller than fromBlock ${fromBlock}, aborting`)
             return [];
         }
@@ -71,9 +81,9 @@ export class EventScanner {
             const transfers: Transfer[] = [];
             const transfersByTransferId: Record<string, Transfer> = {};
 
-            for(let event of events) {
+            for (let event of events) {
                 const args = event.args;
-                if(!args) {
+                if (!args) {
                     this.logger.warn('Event has no args', event);
                     continue;
                 }
@@ -124,7 +134,7 @@ export class EventScanner {
                 }
             }
 
-            if(transfers.length) {
+            if (transfers.length) {
                 await transferRepository.save(transfers);
             }
 
@@ -191,6 +201,30 @@ export class EventScanner {
             this.logger.error('Invalid status for markTransfersAsSent receipt', receipt);
             throw new Error('invalid status for markTransfersAsSent receipt');
         }
+    }
+
+    async fetchDepositInfo(btcPaymentAddress: string, nonce: number): Promise<RskTransferInfo> {
+        const currentBlock = await this.ethersProvider.getBlockNumber();
+        const transferData = await this.fastBtcBridge.getTransfer(btcPaymentAddress, nonce);
+        const nBlocksBeforeData = await this.fastBtcBridge.getTransfer(
+            btcPaymentAddress, nonce,
+            {blockTag: currentBlock - this.requiredConfirmations}
+        );
+
+        const transfer: Transfer = {...transferData, nonce: transferData.nonce.toNumber(), status: transferData.status.toNumber()};
+        const nBlocksBefore: Transfer = {...nBlocksBeforeData, nonce: nBlocksBeforeData.nonce.toNumber()};
+
+        if (
+            transfer.btcAddress !== nBlocksBefore.btcAddress ||
+            transfer.nonce !== nBlocksBefore.nonce ||
+            !transfer.amountSatoshi.eq(nBlocksBefore.amountSatoshi) ||
+            !transfer.feeSatoshi.eq(nBlocksBefore.feeSatoshi) ||
+            transfer.rskAddress !== nBlocksBefore.rskAddress
+        ) {
+            throw new Error(`The transaction data does not match the one ${this.requiredConfirmations} blocks before`);
+        }
+
+        return transfer;
     }
 
     async signTransferStatusUpdate(

@@ -1,11 +1,11 @@
 import {inject, injectable} from 'inversify';
-import {bip32, ECPair, Network, networks, Payment, payments, Psbt} from "bitcoinjs-lib";
+import {bip32, ECPair, Network, Payment, payments, Psbt} from "bitcoinjs-lib";
 import {normalizeKey, xprvToPublic} from './utils';
 import getByteCount from './bytecount';
 import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
 import {BigNumber} from 'ethers';
 import {Config} from '../config';
-import {pbkdf2} from 'crypto';
+import {script} from "bitcoinjs-lib";
 
 
 export interface PartiallySignedBitcoinTransaction {
@@ -178,14 +178,36 @@ export class BitcoinMultisig {
             throw new Error(`The OP_RETURN output has non-zero value!`);
         }
 
-        if (dataOutput.script[0] != 0x6A) {
+        const fragments = script.decompile(dataOutput.script.slice(0))!;
+        if (fragments[0] !== 0x6A) {
             throw new Error(`The data part does not start with OP_RETURN!`);
         }
-        if (dataOutput.script[1] != dataOutput.script.length - 2) {
-            throw new Error(`Invalid length field in the OP_RETURN field`);
+
+        if (fragments.length !== 2) {
+            throw new Error('Malformed OP_RETURN data embed, does not decompile to two parts')
         }
 
-        const rv: BtcTransfer[] = psbtUnserialized.txOutputs.slice(1, -1).map((output, i) => {
+        const [dataPayment] = script.toStack([fragments[1]]);
+
+        if (dataPayment.length !== transferLength) {
+            throw new Error("The OP_RETURN embedded data size does not match the number of transfers!");
+        }
+
+        const changeOutput = psbtUnserialized.txOutputs[psbtUnserialized.txOutputs.length - 1];
+        if (! changeOutput.address || changeOutput.address !== this.payoutScript.address) {
+            throw new Error(`Proposed transaction is trying to pay change to ${changeOutput.address}, which does not match expected ${this.payoutScript.address}`);
+        }
+
+        // TODO: estimate the Bitcoin network fee and make it sensible  !
+
+        const alreadyTransferred = new Set<string>();
+
+        // ensure that all the transfers are sane, and make a list of them. Check that
+        // - the output has address
+        // - that the output address is a bech32 address for this network
+        // - that the nonce is valid (i.e. not 255 and that we do not suddenly get negative ones...
+        // - that the address/nonce pair is not being spent *twice* in this transaction
+        return psbtUnserialized.txOutputs.slice(1, -1).map((output, i) => {
             if (!output.address) {
                 throw new Error(`Transaction output ${output.script} does not have address!`);
             }
@@ -194,19 +216,23 @@ export class BitcoinMultisig {
                 throw new Error(`The transaction ${output.script}/${output.address} does not pay to a Bech32 address!`);
             }
 
-            const nonce = dataOutput.script[2 + i];
+            const nonce = dataPayment[i];
             // 0xFF is considered invalid!
             if (nonce < 0 || nonce >= 255) {
                 throw new Error(`Invalid nonce ${nonce}`);
             }
+
+            const key = `${output.address}/${nonce}`;
+            if (alreadyTransferred.has(key)) {
+                throw new Error(`${output.address}/${nonce} is spent twice!`);
+            }
+
             return {
                 btcAddress: output.address!,
                 amountSatoshi: BigNumber.from(output.value),
                 nonce: nonce,
             };
         });
-
-        return rv;
     }
 
     signTransaction(tx: PartiallySignedBitcoinTransaction): PartiallySignedBitcoinTransaction {

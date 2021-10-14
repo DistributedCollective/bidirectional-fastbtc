@@ -360,6 +360,57 @@
     {
         "inputs": [
             {
+                "internalType": "bytes32",
+                "name": "_transferId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "getTransferByTransferId",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "int256",
+                        "name": "status",
+                        "type": "int256"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "btcAddress",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "amountSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "feeSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "rskAddress",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct FastBTCBridge.Transfer",
+                "name": "",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "string",
                 "name": "_btcAddress",
                 "type": "string"
@@ -395,6 +446,57 @@
             }
         ],
         "name": "getTransfers",
+        "outputs": [
+            {
+                "components": [
+                    {
+                        "internalType": "int256",
+                        "name": "status",
+                        "type": "int256"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "btcAddress",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "amountSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "feeSatoshi",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address",
+                        "name": "rskAddress",
+                        "type": "address"
+                    }
+                ],
+                "internalType": "struct FastBTCBridge.Transfer[]",
+                "name": "",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32[]",
+                "name": "_transferIds",
+                "type": "bytes32[]"
+            }
+        ],
+        "name": "getTransfersByTransferId",
         "outputs": [
             {
                 "components": [
@@ -517,6 +619,24 @@
             }
         ],
         "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32[]",
+                "name": "_transferIds",
+                "type": "bytes32[]"
+            },
+            {
+                "internalType": "bytes[]",
+                "name": "_signatures",
+                "type": "bytes[]"
+            }
+        ],
+        "name": "refundTransfers",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     },
     {

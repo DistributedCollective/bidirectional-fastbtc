@@ -68,7 +68,7 @@ export class FastBTCNode {
         }
         process.on('SIGINT', exitHandler);
         try {
-            while(this.running) {
+            while (this.running) {
                 try {
                     await this.runIteration();
                 } catch (e) {
@@ -76,7 +76,7 @@ export class FastBTCNode {
                 }
 
                 // sleeping in loop is more graceful for ctrl-c
-                for(let i = 0; i < 30 && this.running; i++) {
+                for (let i = 0; i < 30 && this.running; i++) {
                     await sleep(1_000);
                 }
             }
@@ -91,7 +91,7 @@ export class FastBTCNode {
     private async runIteration() {
         const network = this.network;
         const newEvents = await this.eventScanner.scanNewEvents();
-        if(newEvents.length) {
+        if (newEvents.length) {
             this.logger.info(`scanned ${newEvents.length} new events`);
         }
 
@@ -147,21 +147,35 @@ export class FastBTCNode {
         await successor.send('propagate-transfer-batch', transferBatch);
     }
 
-    private async onPropagateTransferBatch({ data }: Message) {
+    private async onPropagateTransferBatch({data}: Message) {
         let transferBatch: TransferBatch = data;
         this.logger.log(`node #${this.getNodeIndex()}: received transfer batch`, transferBatch);
 
-        // TODO: validate that node has not already signed
-        // TODO: validate the transfer batch here
+        // validate the transfer batch
+        for (const transfer of this.btcMultisig.getTransactionTransfers(transferBatch.signedBtcTransaction)) {
+            const depositInfo = await this.eventScanner.fetchDepositInfo(transfer.btcAddress, transfer.nonce);
+
+            const depositId = `${transfer.btcAddress}/${transfer.nonce}`;
+
+            if (!transfer.amountSatoshi.eq(depositInfo.amountSatoshi)) {
+                throw new Error(`The deposit ${depositId} has ${depositInfo.amountSatoshi} in RSK but ${transfer.amountSatoshi} in proposed BTC batch`);
+            }
+
+            if (depositInfo.status != TransferStatus.New) {
+                throw new Error(`The RSK contract has invalid state for deposit ${depositId}; expected ${TransferStatus.New}, got ${depositInfo.status}`);
+            }
+        }
 
         const rskSignature = await this.eventScanner.signTransferStatusUpdate(
             transferBatch.transferIds,
             TransferStatus.Sent
         );
 
+        const signedTransaction = this.btcMultisig.signTransaction(transferBatch.signedBtcTransaction);
+
         transferBatch = {
             transferIds: transferBatch.transferIds,
-            signedBtcTransaction: this.btcMultisig.signTransaction(transferBatch.signedBtcTransaction),
+            signedBtcTransaction: signedTransaction,
             rskUpdateSignatures: [...transferBatch.rskUpdateSignatures, rskSignature],
             nodeIds: [...transferBatch.nodeIds, this.id],
         }
@@ -198,17 +212,17 @@ export class FastBTCNode {
         return this.network.networkId;
     }
 
-    getInitiatorId(): string|null {
+    getInitiatorId(): string | null {
         const nodes = this.getSortedNodes();
-        if(nodes.length === 0) {
+        if (nodes.length === 0) {
             return null;
         }
         return nodes[0].id;
     }
 
-    getSuccessor(): Node|null {
+    getSuccessor(): Node | null {
         const nodes = this.getSortedNodes();
-        if(nodes.length === 0) {
+        if (nodes.length === 0) {
             return null;
         }
         const ids = nodes.map(n => n.id);
@@ -220,10 +234,11 @@ export class FastBTCNode {
         return nodes[successorIndex];
     }
 
-    getNodeIndex(): number|null {
+    getNodeIndex(): number | null {
         const ids = this.getSortedNodes().map(x => x.id);
-        if (ids.length === 0)
+        if (ids.length === 0) {
             return null
+        }
         return ids.indexOf(this.id);
     }
 
