@@ -48,6 +48,7 @@ it("should work", async function () {
 
     const multiSig = new BitcoinMultisig({
             btcKeyDerivationPath: '0/0',
+            numRequiredSigners: 2,
             btcMasterPublicKeys: [
                 'tpubD6NzVbkrYhZ4WokHnVXX8CVBt1S88jkmeG78yWbLxn7Wd89nkNDe2J8b6opP4K38mRwXf9d9VVN5uA58epPKjj584R1rnDDbk6oHUD1MoWD',
                 'tpubD6NzVbkrYhZ4WpZfRZip3ALqLpXhHUbe6UyG8iiTzVDuvNUyysyiUJWejtbszZYrDaUM8UZpjLmHyvtV7r1QQNFmTqciAz1fYSYkw28Ux6y',

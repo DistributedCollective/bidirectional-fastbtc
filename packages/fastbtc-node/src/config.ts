@@ -4,6 +4,9 @@ export interface Config {
     dbUrl: string;
     knownPeers: string[];
     port: number;
+    numRequiredSigners: number; // this can be inferred but maybe it's better to be explicit now
+    maxTransfersInBatch: number;
+    maxPassedBlocksInBatch: number;
     rskRpcUrl: string;
     rskContractAddress: string;
     rskStartBlock: number;
@@ -38,6 +41,7 @@ export const createEnvConfig = (env = process.env, allowPartial: boolean = false
     if (!allowPartial) {
         for (let key of [
             'FASTBTC_DB_URL',
+            'FASTBTC_NUM_REQUIRED_SIGNERS',
             'FASTBTC_KNOWN_PEERS',
             'FASTBTC_RSK_RPC_URL',
             'FASTBTC_RSK_CONTRACT_ADDRESS',
@@ -63,7 +67,13 @@ export const createEnvConfig = (env = process.env, allowPartial: boolean = false
             throw new InvalidConfig(`Invalid port: ${env.FASTBTC_PORT}`);
         }
     }
-    if(VALID_BTC_NETWORKS.indexOf(env.FASTBTC_BTC_NETWORK!) === -1) {
+
+    const numRequiredSigners = parseInt(env.FASTBTC_NUM_REQUIRED_SIGNERS!);
+    if (!numRequiredSigners) {
+        throw new InvalidConfig(`numRequiredSigners must be integer > 0 (got ${env.FASTBTC_NUM_REQUIRED_SIGNERS})`);
+    }
+
+    if (VALID_BTC_NETWORKS.indexOf(env.FASTBTC_BTC_NETWORK!) === -1) {
         throw new InvalidConfig(
             `Invalid network: ${env.FASTBTC_BTC_NETWORK}, must be one of: ${VALID_BTC_NETWORKS.join(', ')}`
         );
@@ -71,6 +81,9 @@ export const createEnvConfig = (env = process.env, allowPartial: boolean = false
 
     return {
         dbUrl: env.FASTBTC_DB_URL!,
+        numRequiredSigners,
+        maxTransfersInBatch: parseInt(env.FASTBTC_MAX_TRANSFERS_IN_BATCH ?? '10'),
+        maxPassedBlocksInBatch: parseInt(env.FASTBTC_MAX_PASSED_BLOCKS_IN_BATCH ?? '10'),
         knownPeers: parseKnownPeers(env.FASTBTC_KNOWN_PEERS!),
         port,
         rskRpcUrl: env.FASTBTC_RSK_RPC_URL!,
