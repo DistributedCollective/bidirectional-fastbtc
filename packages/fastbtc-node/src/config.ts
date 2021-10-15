@@ -1,3 +1,5 @@
+import {URL} from 'url';
+
 export interface Config {
     dbUrl: string;
     knownPeers: string[];
@@ -15,9 +17,16 @@ export interface Config {
     btcMasterPublicKeys: string[]; // secret
     btcKeyDerivationPath: string;
 }
+const secretConfigKeys: Extract<keyof Config, string>[] = [
+    'dbUrl',
+    'rskPrivateKey',
+    'btcRpcPassword',
+    'btcMasterPrivateKey',
+]
 const defaults = {
     port: 11125,
 }
+
 const VALID_BTC_NETWORKS = ['mainnet', 'testnet', 'regtest'];
 
 export const Config = Symbol.for('Config');
@@ -91,4 +100,26 @@ function parseKnownPeers(raw: string) {
         }
     }
     return knownPeers;
+}
+
+export function getCensoredConfig(config: Config): Record<Extract<keyof Config, string>, any> {
+    const ret: any = {};
+    for (let [key, value] of Object.entries(config)) {
+        if (key === 'dbUrl') {
+            try {
+                const url = new URL(value);
+                if (url.password) {
+                    url.password = '*****';
+                }
+                value = url.toString();
+            } catch (e) {
+                value = '<censored>';
+            }
+
+        } else if (secretConfigKeys.indexOf(key as any) >= 0) {
+            value = '<censored>';
+        }
+        ret[key] = value;
+    }
+    return ret;
 }
