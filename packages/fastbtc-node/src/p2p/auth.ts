@@ -9,7 +9,7 @@ import {
 import {randomBytes} from 'crypto';
 import {ethers} from "ethers";
 import {arrayify, hexlify} from "ethers/lib/utils";
-
+import {TCPTransport} from "ataraxia-tcp";
 
 /**
  * Options for `SharedSecretAuth`. Used to provide the shared secret.
@@ -31,16 +31,26 @@ function decode(data: Buffer): Record<string, Json> {
 
 function createMessage(
     challenge: Buffer,
-    security: ArrayBuffer | undefined
+    security: ArrayBuffer
 ) {
-    if (security) {
-        return Buffer.concat([challenge, Buffer.from(security)])
-    } else {
-        return Buffer.from(challenge);
-    }
+    return Buffer.concat([challenge, Buffer.from(security)])
 }
 
+/**
+ * Monkey-patch the peer so that the public key pairs are supplied into the
+ * challenge.
+ */
+const originalAddPeer = (TCPTransport as any).prototype.addPeer;
+(TCPTransport as any).prototype.addPeer = function (peer: any) {
+    peer.localPublicSecurity = function () {
+        return Buffer.concat([this.stream.publicKey, this.stream.remotePublicKey]);
+    };
+    peer.remotePublicSecurity = function () {
+        return Buffer.concat([this.stream.remotePublicKey, this.stream.publicKey]);
+    };
 
+    return originalAddPeer.apply(this, [peer]);
+};
 /**
  * RSKKeyedAuth. Allows entering the network if the node controls
  * one of the trusted private keys.
@@ -62,6 +72,15 @@ export class RSKKeyedAuth implements AuthProvider {
         const challenge = randomBytes(32);
         const prefix = Buffer.from(this.prefixString, 'utf-8');
         const that = this;
+        const remotePublicSecurity = context.remotePublicSecurity;
+        if (! remotePublicSecurity) {
+            throw Error("Remote public security tag not provided");
+        }
+        const localPublicSecurity = context.localPublicSecurity;
+        if (! localPublicSecurity) {
+            throw Error("Local public security tag not provided");
+        }
+
         return {
             async initialMessage() {
                 console.log("preparing challenge to server");
@@ -84,7 +103,7 @@ export class RSKKeyedAuth implements AuthProvider {
                     const serverChallenge: Buffer = Buffer.from(arrayify(payload.challenge as any));
                     const serverResponse: string = payload.response as any;
 
-                    const serverMessage = createMessage(Buffer.concat([prefix, challenge]), context.remotePublicSecurity);
+                    const serverMessage = createMessage(Buffer.concat([prefix, challenge]), remotePublicSecurity);
                     const recoveredAddress = ethers.utils.verifyMessage(ethers.utils.arrayify(serverMessage), serverResponse);
 
                     const peerAddresses = await that.getPeerAddresses();
@@ -97,7 +116,7 @@ export class RSKKeyedAuth implements AuthProvider {
                         };
                     }
 
-                    const clientMessage = createMessage(Buffer.concat([prefix, serverChallenge]), context.localPublicSecurity);
+                    const clientMessage = createMessage(Buffer.concat([prefix, serverChallenge]), localPublicSecurity);
 
                     console.log(`successful server challenge from ${recoveredAddress}`);
                     return {
@@ -123,6 +142,14 @@ export class RSKKeyedAuth implements AuthProvider {
         const challenge = randomBytes(32);
         const prefix = Buffer.from(this.prefixString, 'utf-8');
         const that = this;
+        const remotePublicSecurity = context.remotePublicSecurity;
+        if (! remotePublicSecurity) {
+            throw Error("Remote public security tag not provided");
+        }
+        const localPublicSecurity = context.localPublicSecurity;
+        if (! localPublicSecurity) {
+            throw Error("Local public security tag not provided");
+        }
 
         return {
             async receiveInitial(data: ArrayBuffer) {
@@ -140,7 +167,7 @@ export class RSKKeyedAuth implements AuthProvider {
 
                 const serverMessage = createMessage(
                     Buffer.concat([prefix, Buffer.from(arrayify(payload.challenge as any))]),
-                    context.remotePublicSecurity,
+                    localPublicSecurity,
                 );
 
                 return {
@@ -153,7 +180,7 @@ export class RSKKeyedAuth implements AuthProvider {
                 };
                 }
                 catch (e) {
-                    console.log(e);
+                    console.error(e);
                     throw e;
                 }
             },
@@ -162,15 +189,13 @@ export class RSKKeyedAuth implements AuthProvider {
                 const payload = decode(Buffer.from(data));
 
                 // Calculate what the expected response is and compare them
-                const clientMessage = createMessage(Buffer.concat([prefix, challenge]), context.localPublicSecurity);
+                const clientMessage = createMessage(Buffer.concat([prefix, challenge]), remotePublicSecurity);
                 const recoveredAddress = ethers.utils.verifyMessage(
                     ethers.utils.arrayify(clientMessage),
                     payload.response as any
                 );
 
-                console.log("getting peer account addresses...");
                 const peerAddresses = await that.getPeerAddresses();
-                console.log("got");
 
                 if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
                     console.error(`Invalid signature from client, recovered address ` +

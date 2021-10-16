@@ -36,9 +36,9 @@ export async function getEvents(
         // TODO: this is ugly, we do 1 call for each event though we could just retrieve all events in a single
         // call by creating a combined OR filter. but the current implementation doesn't set event.args and I
         // don't have time to fix it now. So someone fix it later please.
-        for (let filter of filters) {
+        for (const filter of filters) {
             console.debug(`Querying from ${fromBlock} to ${batchToBlock} (up to ${toBlock})`);
-            let eventBatch: ethers.Event[];
+            let eventBatch: ethers.Event[] = [];
             let attempt = 0;
             while (true) {
                 attempt++;
