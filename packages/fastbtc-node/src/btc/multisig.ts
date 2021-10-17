@@ -137,7 +137,8 @@ export class BitcoinMultisig {
         if (totalSum.lt(amountSatoshi.add(fee))) {
             throw new Error(
                 `balance is too low (can only send up to ${totalSum.toString()} satoshi out of ` +
-                `${amountSatoshi.toString()} required)`
+                `${amountSatoshi.toString()} + ${fee.toString()} = ${amountSatoshi.add(fee).toString()} satoshi ` +
+                `required)`
             );
         }
 
