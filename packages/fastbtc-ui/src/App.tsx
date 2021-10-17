@@ -6,7 +6,7 @@ import TransferForm from './TransferForm';
 function App() {
   return (
     <div className="App">
-        <h1>FastBTC 2 proto</h1>
+        <h1>Bi-directional FastBTC proto</h1>
         <ConnectWalletWrapper>
             <TransferForm />
         </ConnectWalletWrapper>

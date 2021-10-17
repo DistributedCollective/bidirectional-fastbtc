@@ -19,11 +19,12 @@ export let fastbtcBridge: Contract;
 
 if (networkName === 'testnet') {
     configuredChainId = 31;
-    multicall = new Contract('0x9e469E1fc7FB4C5d17897B68eAf1afc9dF39F103', multicallAbi);
-    fastbtcBridge = new Contract('0x0000000000000000000000000000000000000000', fastbtcAbi);
+    multicall = new Contract('0x9e469e1fc7fb4c5d17897b68eaf1afc9df39f103', multicallAbi);
+    fastbtcBridge = new Contract('0xfd4994c50c6bb2417d2e6ed0056bf9c871116d29', fastbtcAbi);
 } else if (networkName === 'mainnet') {
     configuredChainId = 30;
     multicall = new Contract('0x6c62bf5440de2cb157205b15c424bceb5c3368f5', multicallAbi);
+    // TODO: mainnet contract
     fastbtcBridge = new Contract('0x0000000000000000000000000000000000000000', fastbtcAbi);
 } else {
     configuredChainId = 31337;

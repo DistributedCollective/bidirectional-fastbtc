@@ -11,7 +11,9 @@ import {configuredChainId, multicall} from './contracts';
 const config: Config = {
     readOnlyChainId: configuredChainId,
     readOnlyUrls: {
-        [configuredChainId]: 'http://localhost:8545',  // local hardhat rpc. TODO: make it configurable
+        31337: 'http://localhost:8545',
+        30: 'https://public-node.rsk.co',
+        31: 'https://public-node.testnet.rsk.co'
     },
     multicallAddresses: {
         [configuredChainId]: multicall.address,
