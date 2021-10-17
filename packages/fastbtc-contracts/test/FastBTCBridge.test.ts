@@ -395,4 +395,19 @@ describe("FastBTCBridge", function() {
             });
         });
     });
+
+    describe('#getTransferId', () => {
+        it('computes as expected', async () => {
+            for (const btcAddress of ['bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', '1foo', 'bar']) {
+                for (const nonce of [0, 1, 255]) {
+                    const transferId = await fastBtcBridge.getTransferId(btcAddress, nonce);
+                    const computed = ethers.utils.solidityKeccak256(
+                        ['string', 'string', 'string', 'uint256'],
+                        ['transfer:', btcAddress, ':', nonce]
+                    );
+                    expect(transferId).to.equal(computed);
+                }
+            }
+        })
+    })
 });
