@@ -38,7 +38,7 @@ const TransferForm: React.FC = () => {
     btcAddress && {
             abi: fastbtcBridge.interface,
             address: fastbtcBridge.address,
-            method: 'isValidBTCAddress',
+            method: 'isValidBtcAddress',
             args: [btcAddress],
         }
     ) ?? [];

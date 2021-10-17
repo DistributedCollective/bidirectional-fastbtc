@@ -21,13 +21,14 @@ export interface BtcTransfer {
 }
 
 export type BitcoinMultisigConfig = Pick<Config,
-    'btcRpcUrl' | 'btcRpcUsername' | 'btcRpcPassword' | 'btcNetwork' | 'btcMasterPrivateKey' | 'btcMasterPublicKeys' | 'btcKeyDerivationPath'>
+    'btcRpcUrl' | 'btcRpcUsername' | 'btcRpcPassword' | 'btcNetwork' | 'btcMasterPrivateKey' |
+    'btcMasterPublicKeys' | 'btcKeyDerivationPath' | 'numRequiredSigners'
+>
 
 @injectable()
 export class BitcoinMultisig {
     private readonly network: Network;
     private gasSatoshi = 10; // TODO: make variable/configurable
-    private cosigners = 2; // TODO: make configurable
     private nodeWrapper: IBitcoinNodeWrapper;
     private readonly masterPrivateKey: string;
     private readonly masterPublicKey: string;
@@ -35,6 +36,7 @@ export class BitcoinMultisig {
     private readonly keyDerivationPath: string;
     private readonly maximumBatchSize = 40;
     public readonly payoutScript: Payment;
+    private cosigners: number;
 
     constructor(
         @inject(Config) config: BitcoinMultisigConfig,
@@ -44,6 +46,7 @@ export class BitcoinMultisig {
 
         this.nodeWrapper = nodeWrapper;
 
+        this.cosigners = config.numRequiredSigners;
         this.masterPrivateKey = normalizeKey(config.btcMasterPrivateKey);
         this.masterPublicKey = xprvToPublic(this.masterPrivateKey, this.network);
         this.masterPublicKeys = config.btcMasterPublicKeys;

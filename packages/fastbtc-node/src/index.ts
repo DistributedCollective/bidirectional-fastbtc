@@ -1,5 +1,5 @@
 import bootstrap from "./inversify.config";
-import {Config} from './config';
+import {Config, getCensoredConfig} from './config';
 import {FastBTCNode} from './main';
 import {ConnectionProvider} from './db/connection';
 
@@ -8,10 +8,7 @@ async function main() {
     let container = bootstrap();
 
     const config = container.get<Config>(Config);
-    console.log('My config is', {
-        ...config,
-        rskPrivateKey: '<censored>',
-    });
+    console.log('My config is', getCensoredConfig(config));
 
     // TODO: this is silly, but we have to init the connection. Architect this thing better
     const dbConnection = await container.get<ConnectionProvider>(ConnectionProvider)();

@@ -5,6 +5,7 @@ import {Message, Network, Node} from 'ataraxia';
 import {sleep} from './utils';
 import {Transfer, TransferStatus} from './db/models';
 import {BitcoinMultisig, PartiallySignedBitcoinTransaction} from './btc/multisig';
+import {Config} from './config';
 
 interface TransferBatch {
     transferIds: string[];
@@ -13,22 +14,31 @@ interface TransferBatch {
     nodeIds: string[];
 }
 
+type FastBTCNodeConfig = Pick<
+    Config,
+    'maxTransfersInBatch' | 'maxPassedBlocksInBatch' | 'numRequiredSigners'
+>
+
 @injectable()
 export class FastBTCNode {
     private running = false;
     private logger = console;
 
     // TODO: these should be configurable or come from the blockchain
-    private numRequiredSigners = 2;
-    //private maxTransfersInBatch = 10;
-    private maxTransfersInBatch = 1;
-    private maxPassedBlocksInBatch = 5;
+    private numRequiredSigners: number;
+    private maxTransfersInBatch: number;
+    private maxPassedBlocksInBatch: number;
 
     constructor(
         @inject(Scanner) private eventScanner: EventScanner,
         @inject(BitcoinMultisig) private btcMultisig: BitcoinMultisig,
         @inject(P2PNetwork) private network: Network,
+        @inject(Config) private config: FastBTCNodeConfig
     ) {
+        this.numRequiredSigners = config.numRequiredSigners;
+        this.maxTransfersInBatch = config.maxTransfersInBatch;
+        this.maxPassedBlocksInBatch = config.maxPassedBlocksInBatch;
+
         network.onNodeAvailable(node => {
             this.logger.info('a new node is available:', node);
         });
