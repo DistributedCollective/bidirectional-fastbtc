@@ -135,7 +135,10 @@ export class BitcoinMultisig {
         }
 
         if (totalSum.lt(amountSatoshi.add(fee))) {
-            throw new Error("too schlong");
+            throw new Error(
+                `balance is too low (can only send up to ${totalSum.toString()} satoshi out of ` +
+                `${amountSatoshi.toString()} required)`
+            );
         }
 
         const dataPayload: number[] = transfers.map((e) => e.nonce);
