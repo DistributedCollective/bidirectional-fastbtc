@@ -1,5 +1,6 @@
 import "@nomiclabs/hardhat-waffle";
 import "hardhat-deploy";
+import "@tenderly/hardhat-tenderly";
 import dotenv from "dotenv";
 import {task} from "hardhat/config";
 import {BigNumber, Signer, Wallet} from 'ethers';
