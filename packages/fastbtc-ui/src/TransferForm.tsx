@@ -1,7 +1,7 @@
 import React from 'react';
 import {useContractCall, useContractFunction, useDebounce, useEtherBalance, useEthers} from '@usedapp/core';
 import {BigNumber} from 'ethers';
-import {parseEther, formatEther} from 'ethers/lib/utils';
+import {parseEther, formatEther, formatUnits} from 'ethers/lib/utils';
 
 import {Input, Button} from './forms';
 import {fastbtcBridge} from './contracts';
@@ -31,7 +31,7 @@ const TransferForm: React.FC = () => {
     const debounceInProgress = transferAmountWei !== debouncedTransferAmountWei || btcAddress !== debouncedBtcAddress;
 
     const [nextNonce] = useContractCall(
-    debouncedBtcAddress && {
+        debouncedBtcAddress && {
             abi: fastbtcBridge.interface,
             address: fastbtcBridge.address,
             method: 'getNextNonce',
@@ -52,6 +52,22 @@ const TransferForm: React.FC = () => {
             address: fastbtcBridge.address,
             method: 'calculateFeeWei',
             args: [debouncedTransferAmountWei],
+        }
+    ) ?? [];
+    const [minTransferSatoshi] = useContractCall(
+        {
+            abi: fastbtcBridge.interface,
+            address: fastbtcBridge.address,
+            method: 'minTransferSatoshi',
+            args: [],
+        }
+    ) ?? [];
+    const [maxTransferSatoshi] = useContractCall(
+        {
+            abi: fastbtcBridge.interface,
+            address: fastbtcBridge.address,
+            method: 'maxTransferSatoshi',
+            args: [],
         }
     ) ?? [];
     const {
@@ -105,6 +121,12 @@ const TransferForm: React.FC = () => {
             {rbtcBalance && (
                 <div className="transfer-details">
                     rBTC balance: <code>{formatEther(rbtcBalance)}</code>
+                </div>
+            )}
+            {minTransferSatoshi && maxTransferSatoshi && (
+                <div className="transfer-details">
+                    min <code>{formatUnits(minTransferSatoshi, 8)} rBTC</code>{' '}
+                    max <code>{formatUnits(maxTransferSatoshi, 8)} rBTC</code>
                 </div>
             )}
             <Input
