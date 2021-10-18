@@ -1,5 +1,5 @@
 import {inject, injectable} from 'inversify';
-import {EventScanner, Scanner} from './rsk/scanner';
+import {EventScanner, getTransferId, Scanner} from './rsk/scanner';
 import {P2PNetwork} from './p2p/network';
 import {Message, Network, Node} from 'ataraxia';
 import {sleep} from './utils';
@@ -57,6 +57,8 @@ export class FastBTCNode {
                 case 'propagate-transfer-batch':
                     await this.onPropagateTransferBatch(msg);
                     break;
+                case 'transfer-batch-complete':
+                    await this.onTransferBatchComplete(msg);
                 case 'exchange:query':
                 case 'exchange:membership':
                     // known cases -- need not react to these
@@ -162,8 +164,15 @@ export class FastBTCNode {
         this.logger.log(`node #${this.getNodeIndex()}: received transfer batch`, transferBatch);
 
         // validate the transfer batch
-        for (const transfer of this.btcMultisig.getTransactionTransfers(transferBatch.signedBtcTransaction)) {
-            const depositInfo = await this.eventScanner.fetchDepositInfo(transfer.btcAddress, transfer.nonce);
+        const transfers: Transfer[] = [];
+        for (const psbtTransfer of this.btcMultisig.getTransactionTransfers(transferBatch.signedBtcTransaction)) {
+            const depositInfo = await this.eventScanner.fetchDepositInfo(psbtTransfer.btcAddress, psbtTransfer.nonce);
+            const transfer = await this.eventScanner.getTransferById(getTransferId(psbtTransfer.btcAddress, psbtTransfer.nonce));
+
+            if (transfer.status != TransferStatus.New) {
+                // TODO: log to database
+                throw new Error(`Transfer ${transfer} had invalid status ${transfer.status}, expected ${TransferStatus.New}`);
+            }
 
             const depositId = `${transfer.btcAddress}/${transfer.nonce}`;
 
@@ -174,6 +183,8 @@ export class FastBTCNode {
             if (depositInfo.status != TransferStatus.New) {
                 throw new Error(`The RSK contract has invalid state for deposit ${depositId}; expected ${TransferStatus.New}, got ${depositInfo.status}`);
             }
+
+            transfers.push(transfer);
         }
 
         const rskSignature = await this.eventScanner.signTransferStatusUpdate(
@@ -190,12 +201,16 @@ export class FastBTCNode {
             nodeIds: [...transferBatch.nodeIds, this.id],
         }
 
+        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending);
         if (transferBatch.nodeIds.length >= this.numRequiredSigners) {
+            await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending);
+
             // submit to blockchain
             this.logger.log(`node #${this.getNodeIndex()}: submitting transfer batch to blockchain:`, transferBatch);
             await this.btcMultisig.submitTransaction(transferBatch.signedBtcTransaction);
             await this.eventScanner.markTransfersAsSent(transferBatch.transferIds, transferBatch.rskUpdateSignatures);
             this.logger.log(`node #${this.getNodeIndex()}: events marked as sent in rsk`);
+            await this.network.broadcast('transfer-batch-complete', transferBatch);
         } else {
             const successor = this.getSuccessor();
             successor?.send('propagate-transfer-batch', transferBatch);
@@ -256,5 +271,16 @@ export class FastBTCNode {
         const nodes = [...this.network.nodes];
         nodes.sort((a, b) => a.id < b.id ? -1 : 1);
         return nodes;
+    }
+
+    private async onTransferBatchComplete({data}: Message) {
+        let transferBatch: TransferBatch = data;
+        console.log(`Got batch: ${data}`);
+
+        // TODO: verify batch again
+        await this.eventScanner.updateLocalTransferStatus(
+            transferBatch.transferIds,
+            TransferStatus.Sent
+        )
     }
 }

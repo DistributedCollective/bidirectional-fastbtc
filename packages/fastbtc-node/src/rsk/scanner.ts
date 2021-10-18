@@ -21,6 +21,13 @@ interface RskTransferInfo {
     status: TransferStatus;
 }
 
+export function getTransferId(btcAddress: string, nonce: number): string {
+    return ethers.utils.solidityKeccak256(
+        ['string', 'string', 'string', 'uint256'],
+        ['transfer:', btcAddress, ':', nonce]
+    );
+}
+
 // TODO: the name might be a misnomer since this does quite a few things beside scanning for new events
 @injectable()
 export class EventScanner {
@@ -242,5 +249,10 @@ export class EventScanner {
         return transfers.map(t => (
             (typeof t === 'string') ? t : t.transferId
         ));
+    }
+
+    async getTransferById(transferId: string): Promise<Transfer> {
+        const transferRepository = this.dbConnection.getRepository(Transfer);
+        return transferRepository.findOneOrFail({where: {transferId, }});
     }
 }

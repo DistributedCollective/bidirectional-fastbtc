@@ -6,6 +6,7 @@ import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
 import {BigNumber} from 'ethers';
 import {Config} from '../config';
 import {script} from "bitcoinjs-lib";
+import {Satoshis} from "./types";
 
 
 export interface PartiallySignedBitcoinTransaction {
@@ -27,6 +28,8 @@ export type BitcoinMultisigConfig = Pick<Config,
 
 @injectable()
 export class BitcoinMultisig {
+    public static readonly maximumBatchSize = 40;
+
     private readonly network: Network;
     private gasSatoshi = 10; // TODO: make variable/configurable
     private nodeWrapper: IBitcoinNodeWrapper;
@@ -34,9 +37,9 @@ export class BitcoinMultisig {
     private readonly masterPublicKey: string;
     private masterPublicKeys: string[];
     private readonly keyDerivationPath: string;
-    private readonly maximumBatchSize = 40;
     public readonly payoutScript: Payment;
-    private cosigners: number;
+    private readonly cosigners: number;
+    private readonly inputType: string;
 
     constructor(
         @inject(Config) config: BitcoinMultisigConfig,
@@ -45,11 +48,11 @@ export class BitcoinMultisig {
         this.network = nodeWrapper.network;
 
         this.nodeWrapper = nodeWrapper;
-
         this.cosigners = config.numRequiredSigners;
         this.masterPrivateKey = normalizeKey(config.btcMasterPrivateKey);
         this.masterPublicKey = xprvToPublic(this.masterPrivateKey, this.network);
         this.masterPublicKeys = config.btcMasterPublicKeys;
+        this.inputType = `MULTISIG-P2WSH:${this.cosigners}-${this.masterPublicKeys.length}`;
 
         this.keyDerivationPath = config.btcKeyDerivationPath || '0/0/0';
 
@@ -62,12 +65,11 @@ export class BitcoinMultisig {
                 network: this.network,
             }),
         });
-
     }
 
     deriveChildPublicKeys(path: string): Buffer[] {
         const childPublic: Buffer[] = this.masterPublicKeys.map((pubKey) =>
-            bip32.fromBase58(pubKey, this.network).derivePath(this.keyDerivationPath).publicKey,
+            bip32.fromBase58(pubKey, this.network).derivePath(path).publicKey,
         );
         childPublic.sort((a, b) => {
             return a.toString('hex') < b.toString('hex') ? -1 : 1;
@@ -75,20 +77,26 @@ export class BitcoinMultisig {
         return childPublic;
     }
 
+    /**
+     * Calculate the PSBT of this transfer batch. The transfer batch may contain only up to maximumBatchSize items.
+     * The maximum is deduced so because each Bitcoin target address may receive up to 255 payments and each
+     * of these are distinguished by an entry in the initial OP_RETURN data item.
+     *
+     * @param transfers the list of transfers.
+     */
     async createPartiallySignedTransaction(transfers: BtcTransfer[]): Promise<PartiallySignedBitcoinTransaction> {
-        if (transfers.length > this.maximumBatchSize) {
-            throw new Error(`The number of transfers ${transfers.length} exceeds the maximum batch size ${this.maximumBatchSize}`);
+        if (transfers.length > BitcoinMultisig.maximumBatchSize) {
+            throw new Error(`The number of transfers ${transfers.length} exceeds the maximum batch size ${BitcoinMultisig.maximumBatchSize}`);
         }
 
         const network = this.network;
-        const inputType = `MULTISIG-P2WSH:${this.cosigners}-${this.masterPublicKeys.length}`;
         const payment = this.payoutScript;
 
-        const response = await this.nodeWrapper.call("listunspent",
+        const unspentCoins = await this.nodeWrapper.call("listunspent",
             [1, 9999999, [payment.address]],  // !!!
         );
 
-        response.sort((a: any, b: any) => {
+        unspentCoins.sort((a: any, b: any) => {
             if (a.confirmations > b.confirmations) {
                 return -1;
             } else if (a.confirmations < b.confirmations) {
@@ -108,11 +116,11 @@ export class BitcoinMultisig {
             'P2WSH': 2 + transfers.length, // change!
         };
         let inputCounts = {
-            [inputType]: 0,
+            [this.inputType]: 0,
         };
 
-        let fee = BigNumber.from(0);
-        for (const utxo of response) {
+        let totalFee: Satoshis = BigNumber.from(0);
+        for (const utxo of unspentCoins) {
             const tx = await this.getRawTx(utxo.txid);
 
             if (tx && tx.hex) {
@@ -124,21 +132,21 @@ export class BitcoinMultisig {
                 };
 
                 psbt.addInput(input);
-                inputCounts[inputType]++;
+                inputCounts[this.inputType]++;
                 totalSum = totalSum.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
 
-                fee = BigNumber.from(getByteCount(inputCounts, outputCounts) * this.gasSatoshi);
-                if (totalSum.gte(amountSatoshi.add(fee))) {
+                totalFee = BigNumber.from(getByteCount(inputCounts, outputCounts) * this.gasSatoshi);
+                if (totalSum.gte(amountSatoshi.add(totalFee))) {
                     break;
                 }
             }
         }
 
-        if (totalSum.lt(amountSatoshi.add(fee))) {
+        const transferSumIncludingFee = amountSatoshi.add(totalFee);
+        if (totalSum.lt(transferSumIncludingFee)) {
             throw new Error(
                 `balance is too low (can only send up to ${totalSum.toString()} satoshi out of ` +
-                `${amountSatoshi.toString()} + ${fee.toString()} = ${amountSatoshi.add(fee).toString()} satoshi ` +
-                `required)`
+                `${amountSatoshi.toString()} (+ ${totalFee.toString()} fee) = ${transferSumIncludingFee.toString()} required)`
             );
         }
 
@@ -162,7 +170,7 @@ export class BitcoinMultisig {
         // change money!
         psbt.addOutput({
             address: payment.address!,
-            value: totalSum.sub(fee).sub(amountSatoshi).toNumber(),
+            value: totalSum.sub(totalFee).sub(amountSatoshi).toNumber(),
         });
 
         return this.signTransaction({
@@ -172,6 +180,18 @@ export class BitcoinMultisig {
         });
     }
 
+    /**
+     * Verify the sanity of PSBT and return the BTC transfers within. This is supposed to verify that:
+     * - the first transaction is OP_RETURN with metadata
+     * - the OP_RETURN must not have value
+     * - the OP_RETURN contains data push
+     * - there is at least one value output in the transaction
+     * - the data push contains exactly one pushed byte for each transaction
+     * - the change is paid to our address
+     * - each payment target is consumed only once
+     * - each output payment is to a bech32 address
+     * @param tx the PSBT
+     */
     getTransactionTransfers(tx: PartiallySignedBitcoinTransaction): BtcTransfer[] {
         const psbtUnserialized = Psbt.fromBase64(tx.serializedTransaction, {network: this.network});
         const transferLength = psbtUnserialized.txOutputs.length - 2;
