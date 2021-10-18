@@ -109,8 +109,8 @@ const TransferForm: React.FC = () => {
         return wei;
     }
 
-    const isValid = transferAmountWei && btcAddress;
-    const isLoading = !feeWei || !nextNonce || !isValidBtcAddress;
+    const isValid = transferAmountWei && btcAddress && isValidBtcAddress;
+    const isLoading = feeWei === undefined || nextNonce === undefined || isValidBtcAddress === undefined;
 
     const submitTransfer = async () => {
         if(!isValid || isLoading || transferInProgress) {
@@ -148,8 +148,13 @@ const TransferForm: React.FC = () => {
             <Input
                 onValueChange={setBtcAddress}
                 convertValue={validateBitcoinAddress}
-                description="BTC address"
+                description="BTC address (only BECH32 supported)"
             />
+            {(isValidBtcAddress === false) && (
+                <div className="transfer-details" style={{color: 'red'}}>
+                    Please enter a valid BECH32 BTC address
+                </div>
+            )}
             {isValid && (
                 isLoading ? (
                     <div className="transfer-details">
@@ -171,7 +176,7 @@ const TransferForm: React.FC = () => {
             </Button>
             {transferState.status !== 'None' && (
                 <div className="transfer-details">
-                    Transfer status: <strong>{transferState.status}</strong>
+                    Transaction status: <strong>{transferState.status}</strong>
                     {transferState.transaction && (
                         <div>
                             Transaction: <code>{transferState.transaction.hash}</code>
