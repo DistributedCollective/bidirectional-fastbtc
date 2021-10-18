@@ -202,6 +202,55 @@ task("set-limits", "Set min/max transfer limits")
         }
     });
 
+
+const btcAddressValidatorReadVars = [
+    'bech32MinLength',
+    'bech32MaxLength',
+    'nonBech32MinLength',
+    'nonBech32MaxLength',
+    'bech32Prefix',
+]
+task("btc-address-validator", "Manage BTC address validator")
+    .addOptionalParam("nonBech32Prefixes", "Set non-bech32 prefixes to these (comma delimited)")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .setAction(async ({ nonBech32Prefixes, privateKey }, hre) => {
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
+
+        const deployment = await hre.deployments.get('BTCAddressValidator');
+        const contract = await hre.ethers.getContractAt(
+            'BTCAddressValidator',
+            deployment.address,
+            signer,
+        );
+
+        console.log('Current settings:')
+        for (const key of btcAddressValidatorReadVars) {
+            console.log(`${key}:`, (await contract[key]()).toString());
+        }
+        for (let i = 0; i < 10; i++) {
+            try {
+                console.log(`nonBech32Prefixes[${i}]:`, await contract.nonBech32Prefixes(i));
+            } catch (e) {
+                // length exceeded, probably
+                break;
+            }
+        }
+
+        if (nonBech32Prefixes !== undefined) {
+            const prefixes: string[] = nonBech32Prefixes.split(',').map((s: string) => s.trim()).filter((s: string) => s);
+            console.log('setting non-bech32 prefixes to %s (after 5s)', prefixes);
+            await sleep(5000)
+            const receipt = await contract.setNonBech32Prefixes(prefixes);
+            console.log('tx hash:', receipt.hash);
+            if (receipt.wait) {
+                console.log('waiting for tx to be mined')
+                console.log(await receipt.wait());
+                console.log('all done')
+            }
+        }
+    });
+
+
 async function getSignerFromPrivateKeyOrDeployer(
     privateKey: string | undefined,
     hre: HardhatRuntimeEnvironment
@@ -213,6 +262,12 @@ async function getSignerFromPrivateKeyOrDeployer(
         const {deployer} = await hre.getNamedAccounts();
         return await hre.ethers.getSigner(deployer);
     }
+}
+
+async function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
+    })
 }
 
 if (!DEPLOYER_PRIVATE_KEY) {
