@@ -3,6 +3,8 @@ import "hardhat-deploy";
 import dotenv from "dotenv";
 import {task} from "hardhat/config";
 import {BigNumber, Signer, Wallet} from 'ethers';
+import {HardhatRuntimeEnvironment} from 'hardhat/types';
+import {formatUnits, parseUnits} from 'ethers/lib/utils';
 
 dotenv.config();
 
@@ -122,14 +124,7 @@ task("add-federator", "Add federator")
             throw new Error("Address must be given");
         }
 
-        let signer: Signer;
-        if(privateKey) {
-            const provider = hre.ethers.provider;
-            signer = new hre.ethers.Wallet(privateKey, provider);
-        } else {
-            const {deployer} = await hre.getNamedAccounts();
-            signer = await hre.ethers.getSigner(deployer);
-        }
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
         const deployment = await hre.deployments.get('FastBTCAccessControl');
         console.log('Bridge address', deployment.address);
@@ -155,14 +150,7 @@ task("remove-federator", "Remove federator")
             throw new Error("Address must be given");
         }
 
-        let signer: Signer;
-        if(privateKey) {
-            const provider = hre.ethers.provider;
-            signer = new hre.ethers.Wallet(privateKey, provider);
-        } else {
-            const {deployer} = await hre.getNamedAccounts();
-            signer = await hre.ethers.getSigner(deployer);
-        }
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
         const deployment = await hre.deployments.get('FastBTCAccessControl');
         console.log('Bridge address', deployment.address);
@@ -178,6 +166,54 @@ task("remove-federator", "Remove federator")
         );
         console.log('tx hash:', receipt.hash);
     });
+
+
+task("set-limits", "Set min/max transfer limits")
+    .addOptionalParam("minBtc", "Min in BTC (will be converted to satoshi)")
+    .addOptionalParam("maxBtc", "Max in BTC (will be converted to satoshi)")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .setAction(async ({ privateKey, minBtc, maxBtc }, hre) => {
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
+
+        const deployment = await hre.deployments.get('FastBTCBridge');
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            deployment.address,
+            signer,
+        );
+
+        const currentMin = await contract.minTransferSatoshi();
+        console.log('Current min: %s BTC (%s sat)', formatUnits(currentMin, 8), currentMin.toString());
+        const currentMax = await contract.maxTransferSatoshi();
+        console.log('Current max: %s BTC (%s sat)', formatUnits(currentMax, 8), currentMax.toString());
+
+        if (minBtc) {
+            const newMinSatoshi = parseUnits(minBtc, 8);
+            console.log('Setting minimum to: %s BTC (%s sat)', minBtc, newMinSatoshi.toString());
+            const receipt = await contract.setMinTransferSatoshi(newMinSatoshi);
+            console.log('tx hash:', receipt.hash);
+        }
+
+        if (maxBtc) {
+            const newMaxSatoshi = parseUnits(maxBtc, 8);
+            console.log('Setting maximum to: %s BTC (%s sat)', maxBtc, newMaxSatoshi.toString());
+            const receipt = await contract.setMaxTransferSatoshi(newMaxSatoshi);
+            console.log('tx hash:', receipt.hash);
+        }
+    });
+
+async function getSignerFromPrivateKeyOrDeployer(
+    privateKey: string | undefined,
+    hre: HardhatRuntimeEnvironment
+): Promise<Signer> {
+    if(privateKey) {
+        const provider = hre.ethers.provider;
+        return new hre.ethers.Wallet(privateKey, provider);
+    } else {
+        const {deployer} = await hre.getNamedAccounts();
+        return await hre.ethers.getSigner(deployer);
+    }
+}
 
 if (!DEPLOYER_PRIVATE_KEY) {
     console.warn('DEPLOYER_PRIVATE_KEY missing, non-local deployments not working');
