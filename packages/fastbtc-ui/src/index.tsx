@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import {Config, DAppProvider} from '@usedapp/core';
+import {Config, DAppProvider, ChainId, CHAIN_NAMES} from '@usedapp/core';
 
 import './index.css';
 import App from './App';
@@ -13,7 +13,8 @@ const config: Config = {
     readOnlyUrls: {
         31337: 'http://localhost:8545',
         30: 'https://public-node.rsk.co',
-        31: 'https://public-node.testnet.rsk.co'
+        31: 'https://public-node.testnet.rsk.co',
+        // 31: 'https://testnet.sovryn.app/rpc',
     },
     multicallAddresses: {
         [configuredChainId]: multicall.address,
@@ -21,6 +22,25 @@ const config: Config = {
     supportedChains: [configuredChainId],
     pollingInterval: 1,
 };
+
+// money-patch stuff. fun fun fun
+(ChainId as any).RSK = 30;
+(ChainId as any).RSKTestnet = 31;
+(CHAIN_NAMES as any)[30] = 'RSK';
+(CHAIN_NAMES as any)[31] = 'RSKTestnet';
+
+// oh gawd, monkeypatch fetch
+// see this issue: https://github.com/NoahZinsmeister/web3-react/issues/173
+const originalFetch = window.fetch;
+window.fetch = (url, opts): Promise<Response> => {
+    if (url === config.readOnlyUrls![config.readOnlyChainId!] && opts) {
+        opts.headers = opts.headers || {
+            'Content-Type': 'application/json'
+        };
+    }
+    return originalFetch(url, opts);
+}
+
 console.log('Config', config);
 
 ReactDOM.render(

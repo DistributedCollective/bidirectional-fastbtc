@@ -1,5 +1,5 @@
 import React from 'react';
-import {useContractCall, useContractFunction, useEtherBalance, useEthers} from '@usedapp/core';
+import {useContractCall, useContractFunction, useDebounce, useEtherBalance, useEthers} from '@usedapp/core';
 import {BigNumber} from 'ethers';
 import {parseEther, formatEther} from 'ethers/lib/utils';
 
@@ -26,28 +26,32 @@ const TransferForm: React.FC = () => {
     const [btcAddress, setBtcAddress] = React.useState<string|null>(null);
     const [transferInProgress, setTransferInProgress] = React.useState(false);
 
+    const debouncedTransferAmountWei = useDebounce(transferAmountWei, 1000);
+    const debouncedBtcAddress = useDebounce(btcAddress, 1000);
+    const debounceInProgress = transferAmountWei !== debouncedTransferAmountWei || btcAddress !== debouncedBtcAddress;
+
     const [nextNonce] = useContractCall(
-    btcAddress && {
+    debouncedBtcAddress && {
             abi: fastbtcBridge.interface,
             address: fastbtcBridge.address,
             method: 'getNextNonce',
-            args: [btcAddress],
+            args: [debouncedBtcAddress],
         }
     ) ?? [];
     const [isValidBtcAddress] = useContractCall(
-    btcAddress && {
+    debouncedBtcAddress && {
             abi: fastbtcBridge.interface,
             address: fastbtcBridge.address,
             method: 'isValidBtcAddress',
-            args: [btcAddress],
+            args: [debouncedBtcAddress],
         }
     ) ?? [];
     const [feeWei] = useContractCall(
-    transferAmountWei && {
+    debouncedTransferAmountWei && {
             abi: fastbtcBridge.interface,
             address: fastbtcBridge.address,
             method: 'calculateFeeWei',
-            args: [transferAmountWei],
+            args: [debouncedTransferAmountWei],
         }
     ) ?? [];
     const {
@@ -58,8 +62,8 @@ const TransferForm: React.FC = () => {
         'transferToBtc'
     );
 
-    console.log('transferState', transferState);
-    console.log('sendTransfer', sendTransfer);
+    //console.log('transferState', transferState);
+    //console.log('sendTransfer', sendTransfer);
 
     const convertAndValidateTransferAmount = (s: string) => {
         let wei;
@@ -129,7 +133,7 @@ const TransferForm: React.FC = () => {
                 )
             )}
             <Button
-                disabled={!isValid || isLoading || transferInProgress}
+                disabled={!isValid || isLoading || transferInProgress || debounceInProgress}
                 onClick={submitTransfer}
             >
                 Transfer
