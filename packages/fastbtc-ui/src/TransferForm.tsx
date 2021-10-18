@@ -93,6 +93,15 @@ const TransferForm: React.FC = () => {
             throw new Error("Amount exceeds balance in wallet");
         }
 
+        if (!wei.isZero()) {
+            if (minTransferSatoshi && wei.lt(minTransferSatoshi.mul(SATOSHI_DIVISOR))) {
+                throw new Error("Amount is lower than min transfer amount");
+            }
+            if (maxTransferSatoshi && wei.gt(maxTransferSatoshi.mul(SATOSHI_DIVISOR))) {
+                throw new Error("Amount is greater than max transfer amount");
+            }
+        }
+
         if (!wei.mod(SATOSHI_DIVISOR).isZero()) {
             throw new Error("Too precise amount");
         }
