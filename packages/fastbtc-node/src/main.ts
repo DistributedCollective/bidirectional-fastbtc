@@ -59,6 +59,7 @@ export class FastBTCNode {
                     break;
                 case 'transfer-batch-complete':
                     await this.onTransferBatchComplete(msg);
+                    break;
                 case 'exchange:query':
                 case 'exchange:membership':
                     // known cases -- need not react to these
