@@ -15,118 +15,165 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     using SafeERC20 for IERC20;
     using Address for address payable;
 
-    event NewTransfer(
-        bytes32 _transferId,
-        string _btcAddress,
-        uint _nonce,
-        uint _amountSatoshi,
-        uint _feeSatoshi,
-        address _rskAddress
-    );
-
-    event TransferStatusUpdated(
-        bytes32 _transferId,
-        int _newStatus
-    );
-
-    struct Transfer {
-        int status;
-        string btcAddress;
-        uint nonce;
-        uint amountSatoshi;
-        uint feeSatoshi;
-        address rskAddress;
-        uint256 blockNumber;
+    enum BitcoinTransferStatus {
+        NOT_APPLICABLE,
+        NEW,
+        SENT,
+        MINED,
+        REFUNDED,
+        RECLAIMED
     }
 
-    uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
-    uint public constant DYNAMIC_FEE_DIVISOR = 10_000;
-    int public constant TRANSFER_STATUS_NEW = 1; // not 0 to make checks easier
-    int public constant TRANSFER_STATUS_SENT = 3;
-    int public constant TRANSFER_STATUS_REFUNDED = -2;
-    int public constant TRANSFER_STATUS_RECLAIMED = -3;
+    struct BitcoinTransfer {
+        address rskAddress;
+        BitcoinTransferStatus status;
+        uint8 nonce;
+        uint8 feeStructureIndex;
+        uint32 blockNumber;
+        uint40 totalAmountSatoshi;
+        string btcAddress;
+    }
 
-    uint256 public constant MAX_DEPOSITS_PER_BTC_ADDRESS = 255;
+    struct TransferFee {
+        // enough for up to 42 bitcoins :P
+        uint32 baseFeeSatoshi;
+
+        // 1 = 0.01 %
+        uint16 dynamicFee;
+    }
+
+    event NewBitcoinTransfer(
+        bytes32 indexed transferId,
+        string  btcAddress,
+        uint256 nonce,
+        uint256 amountSatoshi,
+        uint256 feeSatoshi,
+        address indexed rskAddress
+    );
+
+    event BitcoinTransferFeeChanged(
+        uint256 baseFeeSatoshi,
+        uint256 dynamicFee
+    );
+
+    event BitcoinTransferStatusUpdated(
+        bytes32               indexed transferId,
+        BitcoinTransferStatus newStatus
+    );
+
+    uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
+
+    // it is an uint32
+    uint256 public constant MAX_BASE_FEE_SATOSHI = (1 << 32) - 1;
+
+    // uint16; 0.01 % granularity
+    uint256 public constant DYNAMIC_FEE_DIVISOR = 10_000;
+
+    uint256 public constant MAXIMUM_VALID_NONCE = 254;
     uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
 
-    mapping(bytes32 => Transfer) public transfers;
-    mapping(string => uint) public nextNonces;
+    mapping(bytes32 => BitcoinTransfer) public transfers;
+    mapping(string => uint8) public nextNonces;
 
     IBTCAddressValidator public btcAddressValidator;
 
-    uint public minTransferSatoshi = 1000;
-    uint public maxTransferSatoshi = 200_000_000; // 2 BTC
-    uint public baseFeeSatoshi = 500;
-    uint public dynamicFee = 1;  // 0.0001 = 0.01 %
-    uint public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
+    // array of 256 fee structures
+    TransferFee[256] public feeStructures;
+
+    uint40 public minTransferSatoshi = 1000;
+    uint40 public maxTransferSatoshi = 200_000_000; // 2 BTC
+
+
+    // set in constructor
+    uint8  public currentFeeStructureIndex;
+    uint16 public dynamicFee;
+    uint32 public baseFeeSatoshi;
+
+    uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
 
     constructor(
-        FastBTCAccessControl _accessControl,
-        IBTCAddressValidator _btcAddressValidator
+        FastBTCAccessControl accessControl,
+        IBTCAddressValidator newBtcAddressValidator
     )
-    FastBTCAccessControllable(_accessControl)
+    FastBTCAccessControllable(accessControl)
     {
-        btcAddressValidator = _btcAddressValidator;
+        btcAddressValidator = newBtcAddressValidator;
+
+        _addFeeStructure({
+            feeStructureIndex: 0,
+            newBaseFeeSatoshi: 500,
+            newDynamicFee: 1 // 0.01 %
+        });
+
+        _setCurrentFeeStructure(0);
     }
 
     // PUBLIC USER API
     // ===============
 
     function transferToBtc(
-        string calldata _btcAddress,
-        uint _nonce
+        string calldata btcAddress
     )
     external
     payable
     {
-        require(isValidBtcAddress(_btcAddress), "Invalid BTC address");
+        require(isValidBtcAddress(btcAddress), "Invalid BTC address");
 
-        require(_nonce == getNextNonce(_btcAddress), "Invalid nonce");
-        require(_nonce <= MAX_DEPOSITS_PER_BTC_ADDRESS, "Maximum number of transfers for address exceeded");
+        uint256 nonce = getNextNonce(btcAddress);
 
-        require(msg.value >= minTransferSatoshi * SATOSHI_DIVISOR, "RBTC transfer smaller than minimum");
-        require(msg.value <= maxTransferSatoshi * SATOSHI_DIVISOR, "RBTC transfer greater than maximum");
+        // strictly less than 255!
+        require(nonce <= MAXIMUM_VALID_NONCE, "Maximum number of transfers to address reached");
+
         require(msg.value % SATOSHI_DIVISOR == 0, "RBTC amount must be evenly divisible to Satoshis");
 
-        uint amountSatoshi = msg.value / SATOSHI_DIVISOR;
-        uint feeSatoshi = calculateFeeSatoshi(amountSatoshi);
-        require(feeSatoshi < amountSatoshi, "Fee is greater than amount");
+        uint256 amountSatoshi = msg.value / SATOSHI_DIVISOR;
+        require(amountSatoshi >= minTransferSatoshi, "RBTC BitcoinTransfer smaller than minimum");
+        require(amountSatoshi <= maxTransferSatoshi, "RBTC BitcoinTransfer greater than maximum");
+
+        uint256 feeSatoshi = calculateCurrentFeeSatoshi(amountSatoshi);
+
+        bytes32 transferId = getTransferId(btcAddress, nonce);
+
+        require(transfers[transferId].status == BitcoinTransferStatus.NOT_APPLICABLE, "Transfer already exists");
+        // shouldn't happen ever
+
+        transfers[transferId] = BitcoinTransfer({
+            rskAddress: msg.sender,
+            status: BitcoinTransferStatus.NEW,
+            nonce: uint8(nonce), // within limits!
+            feeStructureIndex: currentFeeStructureIndex,
+            blockNumber: uint32(block.number), // ! 70 years with 1 second block time...
+            totalAmountSatoshi: uint40(amountSatoshi), // guarded, this is the total amount stored!
+            btcAddress: btcAddress
+        });
+
+        nextNonces[btcAddress]++;
+
+        // solidity 0.8.0 ensures that revert occurs if feeSatoshi > amountSatoshi
+        // here we shall emit only the amount deducted with fee
         amountSatoshi -= feeSatoshi;
 
-        bytes32 transferId = getTransferId(_btcAddress, _nonce);
-        require(transfers[transferId].status == 0, "Transfer already exists"); // shouldn't happen ever
-        transfers[transferId] = Transfer(
-            TRANSFER_STATUS_NEW,
-            _btcAddress,
-            _nonce,
-            amountSatoshi,
-            feeSatoshi,
-            msg.sender,
-            block.number
-        );
-        nextNonces[_btcAddress]++;
-
-        emit NewTransfer(
-            transferId,
-            _btcAddress,
-            _nonce,
-            amountSatoshi,
-            feeSatoshi,
-            msg.sender
-        );
+        emit NewBitcoinTransfer({
+            transferId: transferId,
+            btcAddress: btcAddress,
+            nonce: nonce,
+            amountSatoshi: amountSatoshi,
+            feeSatoshi: feeSatoshi,
+            rskAddress: msg.sender
+        });
     }
 
     function reclaimTransfer(
-        bytes32 _transferId
+        bytes32 transferId
     )
     external
     nonReentrant
     {
-        Transfer storage transfer = transfers[_transferId];
+        BitcoinTransfer storage transfer = transfers[transferId];
         // TODO: decide if it should be possible to also reclaim sent transfers
         require(
-            transfer.status == TRANSFER_STATUS_NEW,
-            "Invalid existing transfer status or transfer not found"
+            transfer.status == BitcoinTransferStatus.NEW,
+            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
         );
         require(
             transfer.rskAddress == msg.sender,
@@ -137,7 +184,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
             "Not enough blocks passed before reclaim"
         );
 
-        _updateTransferStatus(_transferId, transfer, TRANSFER_STATUS_RECLAIMED);
+        // ordering!
+        _updateTransferStatus(transferId, transfer, BitcoinTransferStatus.RECLAIMED);
         _refundTransferRbtc(transfer);
     }
 
@@ -145,44 +193,49 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     // ==============
 
     function markTransfersAsSent(
-        bytes32[] calldata _transferIds,
-        bytes[] memory _signatures
+        bytes32[] calldata transferIds,
+        bytes[] memory signatures
     )
     public
     onlyFederator
     {
         accessControl.checkFederatorSignatures(
-            getTransferBatchUpdateHash(_transferIds, TRANSFER_STATUS_SENT),
-            _signatures
+            getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.SENT),
+            signatures
         );
 
-        for (uint i = 0; i < _transferIds.length; i++) {
-            Transfer storage transfer = transfers[_transferIds[i]];
-            if (transfer.status == TRANSFER_STATUS_SENT) {
+        for (uint256 i = 0; i < transferIds.length; i++) {
+            BitcoinTransfer storage transfer = transfers[transferIds[i]];
+            if (transfer.status == BitcoinTransferStatus.SENT) {
                 continue;
             }
-            require(transfer.status == TRANSFER_STATUS_NEW, "Invalid existing transfer status or transfer not found");
-            _updateTransferStatus(_transferIds[i], transfer, TRANSFER_STATUS_SENT);
+
+            require(
+                transfer.status == BitcoinTransferStatus.NEW,
+                "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
+            );
+
+            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.SENT);
         }
     }
 
     function refundTransfers(
-        bytes32[] calldata _transferIds,
-        bytes[] memory _signatures
+        bytes32[] calldata transferIds,
+        bytes[] memory signatures
     )
     public
     onlyFederator
     {
         accessControl.checkFederatorSignatures(
-            getTransferBatchUpdateHash(_transferIds, TRANSFER_STATUS_REFUNDED),
-            _signatures
+            getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.REFUNDED),
+            signatures
         );
 
-        for (uint i = 0; i < _transferIds.length; i++) {
-            Transfer storage transfer = transfers[_transferIds[i]];
-            require(transfer.status == TRANSFER_STATUS_NEW, "Invalid existing transfer status or transfer not found");
+        for (uint256 i = 0; i < transferIds.length; i++) {
+            BitcoinTransfer storage transfer = transfers[transferIds[i]];
+            require(transfer.status == BitcoinTransferStatus.NEW, "Invalid existing transfer status or transfer not found");
 
-            _updateTransferStatus(_transferIds[i], transfer, TRANSFER_STATUS_REFUNDED);
+            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.REFUNDED);
             _refundTransferRbtc(transfer);
         }
     }
@@ -191,73 +244,113 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     // =========================
 
     function getTransferBatchUpdateHash(
-        bytes32[] calldata _transferIds,
-        int _newStatus
+        bytes32[] calldata transferIds,
+        BitcoinTransferStatus newStatus
     )
     public
     pure
     returns (bytes32)
     {
-        return keccak256(abi.encodePacked("batchUpdate:", _newStatus, ":", _transferIds));
+        return keccak256(abi.encodePacked("batchUpdate:", newStatus, ":", transferIds));
     }
 
     // FEDERATOR PRIVATE METHODS
     // =========================
 
     function _updateTransferStatus(
-        bytes32 _transferId,
-        Transfer storage _transfer,
-        int _newStatus
+        bytes32 transferId,
+        BitcoinTransfer storage transfer,
+        BitcoinTransferStatus newStatus
     )
     private
     {
-        _transfer.status = _newStatus;
-        emit TransferStatusUpdated(
-            _transferId,
-            _newStatus
+        transfer.status = newStatus;
+        emit BitcoinTransferStatusUpdated(
+            transferId,
+            newStatus
         );
     }
 
     function _refundTransferRbtc(
-        Transfer storage _transfer
+        BitcoinTransfer storage transfer
     )
     private
     {
-        uint refundSatoshi = _transfer.amountSatoshi + _transfer.feeSatoshi;
-        uint256 refundWei = refundSatoshi * SATOSHI_DIVISOR;
-        payable(_transfer.rskAddress).sendValue(refundWei);
+        uint256 refundWei = transfer.totalAmountSatoshi * SATOSHI_DIVISOR;
+        payable(transfer.rskAddress).sendValue(refundWei);
+    }
+
+    // INTERNAL FEE STRUCTURE API
+    // ==========================
+
+    function _addFeeStructure(
+        uint256 feeStructureIndex,
+        uint256 newBaseFeeSatoshi,
+        uint256 newDynamicFee
+    )
+    private
+    {
+        require(feeStructureIndex < feeStructures.length, "Too large fee structure index");
+        require(feeStructures[feeStructureIndex].baseFeeSatoshi == 0, "This slot has already been used");
+        require(newBaseFeeSatoshi > 0, "Base fee must be non-zero");
+        require(newBaseFeeSatoshi <= MAX_BASE_FEE_SATOSHI, "Base fee exceeds maximum");
+        require(newDynamicFee < DYNAMIC_FEE_DIVISOR, "Dynamic fee divisor too high");
+
+        // guarded
+        feeStructures[feeStructureIndex].baseFeeSatoshi = uint32(newBaseFeeSatoshi);
+
+        // guarded
+        feeStructures[feeStructureIndex].dynamicFee = uint16(newDynamicFee);
+    }
+
+    function _setCurrentFeeStructure(
+        uint256 feeStructureIndex
+    )
+    private
+    {
+        require(feeStructureIndex < feeStructures.length, "Fee structure index invalid");
+        require(feeStructures[feeStructureIndex].baseFeeSatoshi > 0, "Fee structure entry unset");
+
+        // guarded
+        currentFeeStructureIndex = uint8(feeStructureIndex);
+        baseFeeSatoshi = feeStructures[feeStructureIndex].baseFeeSatoshi;
+        dynamicFee = feeStructures[feeStructureIndex].dynamicFee;
+
+        emit BitcoinTransferFeeChanged({
+            baseFeeSatoshi: baseFeeSatoshi,
+            dynamicFee: dynamicFee
+        });
     }
 
     // PUBLIC UTILITY METHODS
     // ======================
-
     function getTransferId(
-        string calldata _btcAddress,
-        uint _nonce
+        string calldata btcAddress,
+        uint256 nonce
     )
     public
     pure
     returns (bytes32)
     {
-        return keccak256(abi.encodePacked("transfer:", _btcAddress, ":", _nonce));
+        return keccak256(abi.encodePacked("transfer:", btcAddress, ":", nonce));
     }
 
     function getNextNonce(
-        string calldata _btcAddress
+        string calldata btcAddress
     )
     public
     view
-    returns (uint)
+    returns (uint8)
     {
-        return nextNonces[_btcAddress];
+        return nextNonces[btcAddress];
     }
 
-    function calculateFeeSatoshi(
-        uint amountSatoshi
+    function calculateCurrentFeeSatoshi(
+        uint256 amountSatoshi
     )
     public
     view
-    returns (uint) {
+    returns (uint256) {
         return baseFeeSatoshi + (amountSatoshi * dynamicFee / DYNAMIC_FEE_DIVISOR);
     }
 
@@ -267,72 +360,69 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     )
     public
     view
-    returns (uint) {
-        uint amountSatoshi = amountWei / SATOSHI_DIVISOR;
-        return calculateFeeSatoshi(amountSatoshi) * SATOSHI_DIVISOR;
+    returns (uint256) {
+        uint256 amountSatoshi = amountWei / SATOSHI_DIVISOR;
+        return calculateCurrentFeeSatoshi(amountSatoshi) * SATOSHI_DIVISOR;
     }
 
     function getTransferByTransferId(
-        bytes32 _transferId
+        bytes32 transferId
     )
     public
     view
-    returns (Transfer memory) {
-        Transfer memory transfer = transfers[_transferId];
-        require(transfer.status != 0, "transfer doesn't exist");
-        return transfer;
+    returns (BitcoinTransfer memory transfer) {
+        transfer = transfers[transferId];
+        require(transfer.status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
     }
 
     function getTransfer(
-        string calldata _btcAddress,
-        uint _nonce
+        string calldata btcAddress,
+        uint8 nonce
     )
     public
     view
-    returns (Transfer memory) {
-        bytes32 transferId = getTransferId(_btcAddress, _nonce);
-        return getTransferByTransferId(transferId);
+    returns (BitcoinTransfer memory transfer) {
+        bytes32 transferId = getTransferId(btcAddress, nonce);
+        transfer = getTransferByTransferId(transferId);
     }
 
     function getTransfersByTransferId(
-        bytes32[] calldata _transferIds
+        bytes32[] calldata transferIds
     )
     public
     view
-    returns (Transfer[] memory) {
-        Transfer[] memory ret = new Transfer[](_transferIds.length);
-        for (uint i = 0; i < _transferIds.length; i++) {
-            ret[i] = transfers[_transferIds[i]];
-            require(ret[i].status != 0, "transfer doesn't exist");
+    returns (BitcoinTransfer[] memory ret) {
+        ret = new BitcoinTransfer[](transferIds.length);
+        for (uint256 i = 0; i < transferIds.length; i++) {
+            ret[i] = transfers[transferIds[i]];
+            require(ret[i].status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
         }
-        return ret;
     }
 
     function getTransfers(
-        string[] calldata _btcAddresses,
-        uint[] calldata _nonces
+        string[] calldata btcAddresses,
+        uint8[] calldata nonces
     )
     public
     view
-    returns (Transfer[] memory) {
-        require(_btcAddresses.length == _nonces.length, "same amount of btcAddresses and nonces must be given");
-        Transfer[] memory ret = new Transfer[](_btcAddresses.length);
-        for (uint i = 0; i < _btcAddresses.length; i++) {
-            ret[i] = transfers[getTransferId(_btcAddresses[i], _nonces[i])];
-            require(ret[i].status != 0, "transfer doesn't exist");
+    returns (BitcoinTransfer[] memory ret) {
+        require(btcAddresses.length == nonces.length, "same amount of btcAddresses and nonces must be given");
+        ret = new BitcoinTransfer[](btcAddresses.length);
+        for (uint256 i = 0; i < btcAddresses.length; i++) {
+            ret[i] = transfers[getTransferId(btcAddresses[i], nonces[i])];
+            require(ret[i].status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
         }
-        return ret;
     }
 
     // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
     function isValidBtcAddress(
-        string calldata _btcAddress
+        string calldata btcAddress
     )
     public
     view
     returns (bool)
     {
-        return btcAddressValidator.isValidBtcAddress(_btcAddress);
+        return btcAddressValidator.isValidBtcAddress(btcAddress);
     }
 
     // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
@@ -341,94 +431,99 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     view
     returns (address[] memory addresses)
     {
-        return accessControl.federators();
+        addresses = accessControl.federators();
     }
 
     // ADMIN API
     // =========
 
     function setBtcAddressValidator(
-        IBTCAddressValidator _btcAddressValidator
+        IBTCAddressValidator newBtcAddressValidator
     )
     external
     onlyAdmin
     {
-        btcAddressValidator = _btcAddressValidator;
+        btcAddressValidator = newBtcAddressValidator;
+    }
+
+    function addFeeStructure(
+        uint256 feeStructureIndex,
+        uint256 newBaseFeeSatoshi,
+        uint256 newDynamicFee
+    )
+    external
+    onlyAdmin
+    {
+        _addFeeStructure({
+            feeStructureIndex: feeStructureIndex,
+            newBaseFeeSatoshi: newBaseFeeSatoshi,
+            newDynamicFee: newDynamicFee
+        });
+    }
+
+    function setCurrentFeeStructure(
+        uint256 feeStructureIndex
+    )
+    external
+    onlyAdmin
+    {
+        _setCurrentFeeStructure(feeStructureIndex);
     }
 
     function setMinTransferSatoshi(
-        uint _minTransferSatoshi
+        uint256 newMinTransferSatoshi
     )
     external
     onlyAdmin
     {
-        minTransferSatoshi = _minTransferSatoshi;
+        require(newMinTransferSatoshi < (2 << 40), "Must fit in uint40");
+        minTransferSatoshi = uint40(newMinTransferSatoshi);
     }
 
     function setMaxTransferSatoshi(
-        uint _maxTransferSatoshi
+        uint256 newMaxTransferSatoshi
     )
     external
     onlyAdmin
     {
-        require(_maxTransferSatoshi <= 21_000_000 * 100_000_000, "Would allow transferring more than all Bitcoin ever");
-        maxTransferSatoshi = _maxTransferSatoshi;
-    }
-
-    function setBaseFeeSatoshi(
-        uint _baseFeeSatoshi
-    )
-    external
-    onlyAdmin
-    {
-        require(_baseFeeSatoshi <= 100_000_000, "Base fee too large");
-        baseFeeSatoshi = _baseFeeSatoshi;
-    }
-
-    function setDynamicFee(
-        uint _dynamicFee
-    )
-    external
-    onlyAdmin
-    {
-        require(_dynamicFee <= DYNAMIC_FEE_DIVISOR, "Dynamic fee too large");
-        dynamicFee = _dynamicFee;
+        require(newMaxTransferSatoshi < (2 << 40), "Must fit in uint40");
+        maxTransferSatoshi = uint40(newMaxTransferSatoshi);
     }
 
     function setRequiredBlocksBeforeReclaim(
-        uint256 _requiredBlocksBeforeReclaim
+        uint256 newRequiredBlocksBeforeReclaim
     )
     external
     onlyAdmin
     {
         require(
-            _requiredBlocksBeforeReclaim <= MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM,
+            newRequiredBlocksBeforeReclaim <= MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM,
             "Required blocks before reclaim too large"
         );
-        requiredBlocksBeforeReclaim = _requiredBlocksBeforeReclaim;
+        requiredBlocksBeforeReclaim = uint32(newRequiredBlocksBeforeReclaim);
     }
 
     // TODO: figure out if we want to lock this so that only fees can be retrieved
     /// @dev utility for withdrawing RBTC from the contract
     function withdrawRbtc(
-        uint256 _amount,
-        address payable _receiver
+        uint256 amount,
+        address payable receiver
     )
     external
     onlyAdmin
     {
-        _receiver.sendValue(_amount);
+        receiver.sendValue(amount);
     }
 
     /// @dev utility for withdrawing tokens accidentally sent to the contract
     function withdrawTokens(
-        IERC20 _token,
-        uint256 _amount,
-        address _receiver
+        IERC20 token,
+        uint256 amount,
+        address receiver
     )
     external
     onlyAdmin
     {
-        _token.safeTransfer(_receiver, _amount);
+        token.safeTransfer(receiver, amount);
     }
 }

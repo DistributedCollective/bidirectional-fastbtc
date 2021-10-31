@@ -1,0 +1,46 @@
+version: "3.7"
+
+services:
+  bitcoin-regtest:
+    image:
+      sovryn-bitcoind-regtest:latest
+    build:
+      context: ./integration_test/bitcoind-regtest/
+
+    environment:
+     - NODE1_HDSEED=cTj4tA23bVHAnA42bYGGPfv13G2dfuChxtenJKsZffkCVMvofcfC
+     - NODE2_HDSEED=cUroJKmyKxRJVaeKzprMZExtPoZqt9HPnfhhJvAqtprWCVsuzUBU
+     - NODE3_HDSEED=cSsv1YhxQqce8ywLiwhMjKcq9L1J7J2wm66zX7kfB1eLBBBaTt8N
+     - USER_HDSEED=cUrw2SDAMapEqZ2pQnh5angJHqzGWvPMPdJNJWTDFagHMcdcciu8
+     # sorted !!
+     - PUBKEYS=["02f2bfc7a7d86f04d675083c7157d95c5741e85ff69b0c1357059fe1ee52271218","0380d87958cc14e1178f55584ee437b05c155a5a7d9f1951beb927195abaa7a7ed","0397ff0a671bea40a8346d7487810f3a96be95732717e5c568a7c8090a73a6c88b"]
+     - MULTISIGADDRESS=bcrt1qtxysk2megp39dnpw9va32huk5fesrlvutl0zdpc29asar4hfkrlqs2kzv5
+
+  hardhat:
+    image:
+      fastbtc-bidi-hardhat:latest
+
+    build:
+      context: ./packages/fastbtc-contracts/
+      dockerfile: ../../integration_test/hardhat/Dockerfile
+
+    environment:
+     - NODE1_ADDRESS=0x4091663B0a7a14e35Ff1d6d9d0593cE15cE7710a
+     - NODE2_ADDRESS=0x09dcD91DF9300a81a4b9C85FDd04345C3De58F48
+     - NODE3_ADDRESS=0xA40013a058E70664367c515246F2560B82552ACb
+
+  node1:
+    environment:
+      - FASTBTC_RSK_RPC_URL=http://hardhat:8545
+    depends_on:
+      - bitcoin-regtest
+      - hardhat
+
+  node2:
+    environment:
+      - FASTBTC_RSK_RPC_URL=http://hardhat:8545
+    environment:
+      - FASTBTC_RSK_RPC_URL=http://hardhat:8545
+    depends_on:
+      - bitcoin-regtest
+      - hardhat
