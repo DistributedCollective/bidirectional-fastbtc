@@ -415,5 +415,90 @@ describe("FastBTCBridge", function() {
                 }
             }
         })
-    })
+    });
+
+    describe("#addFeeStructure", () => {
+        it("requires owner", async () => {
+            await expect(
+                fastBtcBridge.connect(federators[0]).addFeeStructure(1, 5000, 10)
+            ).to.be.reverted;
+
+            await expect(
+                fastBtcBridge.connect(ownerAccount).addFeeStructure(1, 5000, 10)
+            ).to.not.be.reverted;
+        });
+
+        it("fails for existing index", async () => {
+            await expect(
+                fastBtcBridge.connect(ownerAccount).addFeeStructure(0, 5000, 10)
+            ).to.be.reverted;
+        });
+
+        it("fails for invalid index", async () => {
+            await expect(
+                fastBtcBridge.connect(ownerAccount).addFeeStructure(255, 5000, 10)
+            ).to.not.be.reverted;
+
+            await expect(
+                fastBtcBridge.connect(ownerAccount).addFeeStructure(256, 5000, 10)
+            ).to.be.reverted;
+        });
+    });
+
+    describe("#setCurrentFeeStructure", () => {
+        it("requires owner", async () => {
+            await expect(
+                fastBtcBridge.connect(federators[0]).setCurrentFeeStructure(0)
+            ).to.be.reverted;
+
+            await expect(
+                fastBtcBridge.connect(ownerAccount).setCurrentFeeStructure(0)
+            ).to.not.be.reverted;
+        });
+
+        it("fails for nonexistent index", async () => {
+            await expect(
+                fastBtcBridge.connect(ownerAccount).setCurrentFeeStructure(1)
+            ).to.be.reverted;
+        });
+
+        it("emits the event and sets variables and changes actual fees", async () => {
+            await expect(
+                fastBtcBridge.connect(ownerAccount).addFeeStructure(1, 1000, 10)
+            ).to.not.be.reverted;
+
+            await expect(
+                fastBtcBridge.connect(ownerAccount).addFeeStructure(2, 2000, 20)
+            ).to.not.be.reverted;
+
+            let result = fastBtcBridge.connect(ownerAccount).setCurrentFeeStructure(1);
+            await expect(result).to.not.be.reverted;
+            await expect(result).to.emit(
+                fastBtcBridge, 'BitcoinTransferFeeChanged'
+            ).withArgs(1000, 10);
+
+            await expect(await fastBtcBridge.currentFeeStructureIndex()).to.equal(1);
+            await expect(await fastBtcBridge.baseFeeSatoshi()).to.equal(1000);
+            await expect(await fastBtcBridge.dynamicFee()).to.equal(10);
+
+            await expect(
+                await fastBtcBridge.connect(anotherAccount).calculateCurrentFeeSatoshi(100000)
+            ).to.equal(1100);
+
+
+            result = fastBtcBridge.connect(ownerAccount).setCurrentFeeStructure(2);
+            await expect(result).to.not.be.reverted;
+            await expect(result).to.emit(
+                fastBtcBridge, 'BitcoinTransferFeeChanged'
+            ).withArgs(2000, 20);
+
+            await expect(await fastBtcBridge.currentFeeStructureIndex()).to.equal(2);
+            await expect(await fastBtcBridge.baseFeeSatoshi()).to.equal(2000);
+            await expect(await fastBtcBridge.dynamicFee()).to.equal(20);
+
+            await expect(
+                await fastBtcBridge.connect(anotherAccount).calculateCurrentFeeSatoshi(100000)
+            ).to.equal(2200);
+        });
+    });
 });

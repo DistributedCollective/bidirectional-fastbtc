@@ -355,7 +355,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     }
 
     /// @dev pure utility function to be used in DApps
-    function calculateFeeWei(
+    function calculateCurrentFeeWei(
         uint256 amountWei
     )
     public
