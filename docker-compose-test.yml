@@ -4,6 +4,7 @@ services:
   bitcoin-regtest:
     image:
       sovryn-bitcoind-regtest:latest
+
     build:
       context: ./integration_test/bitcoind-regtest/
 
@@ -14,7 +15,10 @@ services:
      - USER_HDSEED=cUrw2SDAMapEqZ2pQnh5angJHqzGWvPMPdJNJWTDFagHMcdcciu8
      # sorted !!
      - PUBKEYS=["02f2bfc7a7d86f04d675083c7157d95c5741e85ff69b0c1357059fe1ee52271218","0380d87958cc14e1178f55584ee437b05c155a5a7d9f1951beb927195abaa7a7ed","0397ff0a671bea40a8346d7487810f3a96be95732717e5c568a7c8090a73a6c88b"]
-     - MULTISIGADDRESS=bcrt1qtxysk2megp39dnpw9va32huk5fesrlvutl0zdpc29asar4hfkrlqs2kzv5
+     - MULTISIG_ADDRESS=bcrt1qtxysk2megp39dnpw9va32huk5fesrlvutl0zdpc29asar4hfkrlqs2kzv5
+
+    ports:
+      - 18443:18443
 
   hardhat:
     image:
@@ -30,11 +34,12 @@ services:
      - NODE3_ADDRESS=0xA40013a058E70664367c515246F2560B82552ACb
 
     ports:
-        - 18545:8545
+      - 18545:8545
 
   node1:
     environment:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
+      - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
     depends_on:
       - bitcoin-regtest
       - hardhat
@@ -42,6 +47,7 @@ services:
   node2:
     environment:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
+      - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
     depends_on:
       - bitcoin-regtest
       - hardhat
