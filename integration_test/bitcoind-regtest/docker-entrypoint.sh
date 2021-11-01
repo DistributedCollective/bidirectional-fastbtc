@@ -37,8 +37,8 @@ bitcoin-cli -rpcwallet=multisig getbalance
 
 while true
 do
-    echo "Mine a block $(date '+%d/%m/%Y %H:%M:%S')"
-    bitcoin-cli generatetoaddress 1 "$MULTISIG_ADDRESS"
-    sleep 2
+    #echo "Mine a block $(date '+%d/%m/%Y %H:%M:%S')"
+    bitcoin-cli generatetoaddress 1 "$MULTISIG_ADDRESS" > /dev/null
+    sleep 5
 done
 
