@@ -29,6 +29,9 @@ services:
      - NODE2_ADDRESS=0x09dcD91DF9300a81a4b9C85FDd04345C3De58F48
      - NODE3_ADDRESS=0xA40013a058E70664367c515246F2560B82552ACb
 
+    ports:
+        - 18545:8545
+
   node1:
     environment:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
@@ -37,8 +40,6 @@ services:
       - hardhat
 
   node2:
-    environment:
-      - FASTBTC_RSK_RPC_URL=http://hardhat:8545
     environment:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
     depends_on:

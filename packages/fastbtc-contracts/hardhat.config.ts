@@ -89,7 +89,8 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
     .addPositionalParam("privateKey", "Private key of address to send free money from")
     .addPositionalParam("btcAddress", "BTC address to send")
     .addPositionalParam("rbtcAmount", "RBTC amount to send", "1.0")
-    .setAction(async ({ privateKey, btcAddress, rbtcAmount }, hre) => {
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ privateKey, btcAddress, rbtcAmount, bridgeAddress}, hre) => {
         if(!privateKey || !btcAddress) {
             throw new Error("Provide address as first argument");
         }
@@ -99,18 +100,20 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
         const rbtcAmountWei = hre.ethers.utils.parseEther(rbtcAmount);
         console.log(`Sending ${rbtcAmount} rBTC from ${wallet.address} to BTC address ${btcAddress}`)
 
-        const deployment = await hre.deployments.get('FastBTCBridge');
-        console.log('Bridge address', deployment.address);
+        if (!bridgeAddress) {
+            const deployment = await hre.deployments.get('FastBTCBridge');
+            bridgeAddress = deployment.address;
+        }
+        console.log('Bridge address', bridgeAddress);
         const fastBtcBridge = await hre.ethers.getContractAt(
             'FastBTCBridge',
-            deployment.address,
+            bridgeAddress,
             wallet,
         );
         const nonce = await fastBtcBridge.getNextNonce(btcAddress);
         console.log('Next BTC nonce', nonce, nonce.toString());
         const receipt = await fastBtcBridge.transferToBtc(
             btcAddress,
-            nonce,
             {value: rbtcAmountWei}
         );
         console.log('tx hash:', receipt.hash);
@@ -305,6 +308,10 @@ export default {
             url: "https://testnet.sovryn.app/rpc",
             network_id: 31,
             accounts: privateKeys,
+        },
+        "integration-test": {
+            url: "http://localhost:18545",
+            network_id: 31337,
         },
     },
     namedAccounts: {
