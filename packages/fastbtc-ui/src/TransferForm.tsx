@@ -118,7 +118,7 @@ const TransferForm: React.FC = () => {
         }
         setTransferInProgress(true);
         try {
-            await sendTransfer(btcAddress, nextNonce, { value: transferAmountWei });
+            await sendTransfer(btcAddress, { value: transferAmountWei });
         } finally {
             setTransferInProgress(false);
         }
