@@ -1,0 +1,4 @@
+services:
+    pg:
+        volumes:
+          - ./pgdata:/var/lib/postgresql/data

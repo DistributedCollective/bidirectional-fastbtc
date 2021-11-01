@@ -1,4 +1,13 @@
-import {Column, Entity, EntityRepository, PrimaryColumn, PrimaryGeneratedColumn, Repository, Unique} from 'typeorm';
+import {
+    BeforeUpdate,
+    Column,
+    Entity,
+    EntityRepository,
+    PrimaryColumn,
+    PrimaryGeneratedColumn,
+    Repository,
+    Unique
+} from 'typeorm';
 import {BigNumber} from 'ethers';
 import {BigNumberColumn} from './utils';
 
@@ -95,13 +104,41 @@ export class Transfer {
     @Column()
     btcTransactionHash!: string;
 
+    @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
+    createdAt!: Date;
+
+    @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
+    updatedAt!: Date;
+
+    @BeforeUpdate()
+    public setUpdatedAt() {
+        this.updatedAt = new Date();
+    }
+
     get totalAmountSatoshi(): BigNumber {
         return this.amountSatoshi.add(this.feeSatoshi);
     }
 }
 
+@Entity()
+export class LogItem {
+    @PrimaryGeneratedColumn({ name: 'id'})
+    dbId!: number;
+
+    @Column()
+    type!: string;
+
+    @Column('jsonb')
+    data!: {[foo: string]: any};
+
+    @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
+    createdAt!: Date;
+}
+
+
 // remember to keep this up-to-date
 export const ALL_MODELS = [
     KeyValuePair,
     Transfer,
+    LogItem,
 ];

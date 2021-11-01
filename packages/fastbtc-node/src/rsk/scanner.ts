@@ -136,7 +136,6 @@ export class EventScanner {
                         transfers.push(transfer);
                         transfersByTransferId[transfer.transferId] = transfer;
                     }
-
                 } else {
                     this.logger.error('Unknown event:', event);
                 }
@@ -255,7 +254,7 @@ export class EventScanner {
     }
 
     private getTransferIds(
-        transfers: Transfer[] | string[]
+        transfers: (Transfer | string)[]
     ): string[] {
         return transfers.map(t => (
             (typeof t === 'string') ? t : t.transferId
