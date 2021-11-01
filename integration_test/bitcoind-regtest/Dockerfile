@@ -75,7 +75,7 @@ RUN ./configure LDFLAGS=-L`ls -d /opt/db*`/lib/ CPPFLAGS=-I`ls -d /opt/db*`/incl
     --with-gui=no \
     --with-utils \
     --with-libs \
-    --with-daemon \
+    --with-daemon
 # TODO: for some reason, make -j4 causes g++ error on one specific Mac... who knows. without concurrency it works
 # but takes ~15min
 #RUN make -j4
