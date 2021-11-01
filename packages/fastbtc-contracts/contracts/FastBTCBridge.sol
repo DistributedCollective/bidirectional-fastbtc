@@ -291,7 +291,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     private
     {
         require(feeStructureIndex < feeStructures.length, "Too large fee structure index");
+        // TODO: prevents dynamic-fee only
         require(feeStructures[feeStructureIndex].baseFeeSatoshi == 0, "This slot has already been used");
+        // TODO: prevents dynamic-fee only
         require(newBaseFeeSatoshi > 0, "Base fee must be non-zero");
         require(newBaseFeeSatoshi <= MAX_BASE_FEE_SATOSHI, "Base fee exceeds maximum");
         require(newDynamicFee < DYNAMIC_FEE_DIVISOR, "Dynamic fee divisor too high");
@@ -309,6 +311,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     private
     {
         require(feeStructureIndex < feeStructures.length, "Fee structure index invalid");
+        // TODO: this prevents just setting the dynamic fee
         require(feeStructures[feeStructureIndex].baseFeeSatoshi > 0, "Fee structure entry unset");
 
         // guarded
