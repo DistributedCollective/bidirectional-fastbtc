@@ -1,5 +1,7 @@
-// https://github.com/makerdao/multicall/blob/master/src/Multicall2.sol
-// License: MIT
+// NOTE: this contract only exists here for testing. It's directly forked from
+// https://github.com/makerdao/multicall/blob/master/src/Multicall2.sol (License: MIT)
+// PLEASE IGNORE IN REVIEWS.
+
 pragma solidity >=0.5.0;
 pragma experimental ABIEncoderV2;
 
