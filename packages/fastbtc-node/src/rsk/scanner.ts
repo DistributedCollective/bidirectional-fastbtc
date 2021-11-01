@@ -5,7 +5,7 @@ import {KeyValuePairRepository, Transfer, TransferStatus} from '../db/models';
 import {EthersProvider, EthersSigner, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
 import {Connection} from 'typeorm';
-import {getEvents} from './utils';
+import {getEvents, toNumber} from './utils';
 import {Satoshis} from "../btc/types";
 
 export const Scanner = Symbol.for('Scanner');
@@ -13,12 +13,13 @@ export const Scanner = Symbol.for('Scanner');
 const LAST_PROCESSED_BLOCK_KEY = 'eventscanner-last-processed-block';
 
 interface RskTransferInfo {
-    btcAddress: string;
-    nonce: number;
-    amountSatoshi: Satoshis;
-    feeSatoshi: Satoshis;
     rskAddress: string;
     status: TransferStatus;
+    nonce: number;
+    feeStructureIndex: number;
+    blockNumber: number;
+    totalAmountSatoshi: Satoshis;
+    btcAddress: string;
 }
 
 export function getTransferId(btcAddress: string, nonce: number): string {
@@ -74,8 +75,8 @@ export class EventScanner {
         const events = await getEvents(
             this.fastBtcBridge,
             [
-                this.fastBtcBridge.filters.NewTransfer(),
-                this.fastBtcBridge.filters.TransferStatusUpdated(),
+                this.fastBtcBridge.filters.NewBitcoinTransfer(),
+                this.fastBtcBridge.filters.BitcoinTransferStatusUpdated(),
             ],
             fromBlock,
             toBlock,
@@ -95,18 +96,18 @@ export class EventScanner {
                     continue;
                 }
 
-                if (event.event === 'NewTransfer') {
-                    this.logger.debug('NewTransfer', args._transferId);
+                if (event.event === 'NewBitcoinTransfer') {
+                    this.logger.debug('NewBitcoinTransfer', args.transferId);
 
                     // TODO: validate that transfer is not already in DB
                     const transfer = transferRepository.create({
-                        transferId: args._transferId,
+                        transferId: args.transferId,
                         status: TransferStatus.New,
-                        btcAddress: args._btcAddress,
-                        nonce: args._nonce.toNumber(),
-                        amountSatoshi: args._amountSatoshi,
-                        feeSatoshi: args._feeSatoshi,
-                        rskAddress: args._rskAddress,
+                        btcAddress: args.btcAddress,
+                        nonce: toNumber(args.nonce),
+                        amountSatoshi: BigNumber.from(args.amountSatoshi),
+                        feeSatoshi: BigNumber.from(args.feeSatoshi),
+                        rskAddress: args.rskAddress,
                         rskTransactionHash: event.transactionHash,
                         rskTransactionIndex: event.transactionIndex,
                         rskLogIndex: event.logIndex,
@@ -115,10 +116,10 @@ export class EventScanner {
                     });
                     transfers.push(transfer);
                     transfersByTransferId[transfer.transferId] = transfer;
-                } else if (event.event === 'TransferStatusUpdated') {
-                    const transferId = args._transferId as string;
-                    const newStatus = (args._newStatus as BigNumber).toNumber();
-                    this.logger.debug('TransferStatusUpdated', transferId, newStatus, TransferStatus[newStatus]);
+                } else if (event.event === 'BitcoinTransferStatusUpdated') {
+                    const transferId = args.transferId as string;
+                    const newStatus = toNumber(args.newStatus);
+                    this.logger.debug('BitcoinTransferStatusUpdated', transferId, newStatus, TransferStatus[newStatus]);
 
                     // Transfer created just now
                     let transfer: Transfer = transfersByTransferId[transferId];
@@ -214,18 +215,28 @@ export class EventScanner {
         const currentBlock = await this.ethersProvider.getBlockNumber();
         const transferData = await this.fastBtcBridge.getTransfer(btcPaymentAddress, nonce);
         const nBlocksBeforeData = await this.fastBtcBridge.getTransfer(
-            btcPaymentAddress, nonce,
-            {blockTag: currentBlock - this.requiredConfirmations}
+            btcPaymentAddress,
+            nonce,
+            {
+                blockTag: currentBlock - this.requiredConfirmations
+            }
         );
 
-        const transfer: Transfer = {...transferData, nonce: transferData.nonce.toNumber(), status: transferData.status.toNumber()};
-        const nBlocksBefore: Transfer = {...nBlocksBeforeData, nonce: nBlocksBeforeData.nonce.toNumber()};
+        const transfer: RskTransferInfo = {
+            ...transferData,
+            nonce: toNumber(transferData.nonce),
+            status: toNumber(transferData.status),
+        };
+        const nBlocksBefore: RskTransferInfo = {
+            ...nBlocksBeforeData,
+            nonce: toNumber(nBlocksBeforeData.nonce),
+        };
 
         if (
             transfer.btcAddress !== nBlocksBefore.btcAddress ||
             transfer.nonce !== nBlocksBefore.nonce ||
-            !transfer.amountSatoshi.eq(nBlocksBefore.amountSatoshi) ||
-            !transfer.feeSatoshi.eq(nBlocksBefore.feeSatoshi) ||
+            transfer.totalAmountSatoshi !== nBlocksBefore.totalAmountSatoshi ||
+            transfer.feeStructureIndex !== nBlocksBefore.feeStructureIndex ||
             transfer.rskAddress !== nBlocksBefore.rskAddress
         ) {
             throw new Error(`The transaction data does not match the one ${this.requiredConfirmations} blocks before`);

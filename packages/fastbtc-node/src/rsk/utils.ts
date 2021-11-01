@@ -1,4 +1,4 @@
-import {ethers} from 'ethers';
+import {BigNumber, ethers} from 'ethers';
 import {sleep} from '../utils';
 
 export interface GetEventsOpts {
@@ -81,6 +81,20 @@ export async function getEvents(
     })
 
     return events;
+}
+
+/**
+ * Convert BigNumbers to numbers, leave numbers be
+ *
+ * Ethers returns uint8 as number but uint256 as BigNumber. So this way it always works.
+ *
+ * @param n
+ */
+export function toNumber(n: BigNumber | number): number {
+    if (BigNumber.isBigNumber(n)) {
+        return n.toNumber();
+    }
+    return n;
 }
 
 /**

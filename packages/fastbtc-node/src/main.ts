@@ -155,7 +155,7 @@ export class FastBTCNode {
             throw new Error('no successor, cannot handle the situation!')
         }
 
-        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending);
+        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sent); // TODO: check status
 
         await successor.send('propagate-transfer-batch', transferBatch);
     }
@@ -177,8 +177,9 @@ export class FastBTCNode {
 
             const depositId = `${transfer.btcAddress}/${transfer.nonce}`;
 
-            if (!transfer.amountSatoshi.eq(depositInfo.amountSatoshi)) {
-                throw new Error(`The deposit ${depositId} has ${depositInfo.amountSatoshi} in RSK but ${transfer.amountSatoshi} in proposed BTC batch`);
+            // TODO: maybe we should compare amount - fees and not whole amount
+            if (!transfer.totalAmountSatoshi.eq(depositInfo.totalAmountSatoshi)) {
+                throw new Error(`The deposit ${depositId} has ${depositInfo.totalAmountSatoshi} in RSK but ${transfer.totalAmountSatoshi} in proposed BTC batch`);
             }
 
             if (depositInfo.status != TransferStatus.New) {
@@ -202,9 +203,9 @@ export class FastBTCNode {
             nodeIds: [...transferBatch.nodeIds, this.id],
         }
 
-        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending);
+        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sent); // TODO: check status
         if (transferBatch.nodeIds.length >= this.numRequiredSigners) {
-            await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending);
+            await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sent); // TODO: check status
 
             // submit to blockchain
             this.logger.log(`node #${this.getNodeIndex()}: submitting transfer batch to blockchain:`, transferBatch);

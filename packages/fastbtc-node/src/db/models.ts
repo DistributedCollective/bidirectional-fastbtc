@@ -47,11 +47,10 @@ export class KeyValuePairRepository extends Repository<KeyValuePair> {
 export enum TransferStatus {
     Null = 0,
     New = 1, // New transfer in blockchain
-    Sending = 2, // Selected as the next batch for sending
-    Sent = 3, // Sent to RSK/BTC
-    Rejected = -1,
-    Refunded = -2,
-    Reclaimed = -3, // self-refund
+    Sent = 2, // Sent to RSK/BTC
+    Mined = 3,
+    Refunded = 4,
+    Reclaimed = 5,
 }
 
 @Entity()
@@ -95,6 +94,10 @@ export class Transfer {
 
     @Column()
     btcTransactionHash!: string;
+
+    get totalAmountSatoshi(): BigNumber {
+        return this.amountSatoshi.add(this.feeSatoshi);
+    }
 }
 
 // remember to keep this up-to-date
