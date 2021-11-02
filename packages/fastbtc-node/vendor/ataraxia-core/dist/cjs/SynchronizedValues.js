@@ -181,7 +181,6 @@ class SynchronizedValues {
                         return;
                     const lastVersion = message.data.lastVersion;
                     if (lastVersion < this.localVersion) {
-                        nodeState.knownLocalVersion = lastVersion;
                         this.sendStatePatch(message.source, lastVersion);
                     }
                     else {
@@ -210,6 +209,27 @@ class SynchronizedValues {
                     nodeState.value = value;
                     nodeState.version = patch.version;
                     this.updateEvent.emit(message.source, value);
+                    message.source.send('sync-value:patch-applied', {
+                        name: this.name,
+                        version: patch.version,
+                    }).catch(err => {
+                        this.debug.error(err, 'Failed to acknowledge patch application to', message.source.id);
+                    });
+                    break;
+                }
+            case 'sync-value:patch-applied':
+                {
+                    // Only handle messages intended for us
+                    if (message.data.name !== this.name)
+                        return;
+                    // If no node state we don't handle the message
+                    const nodeState = this.nodes.get(message.source.id);
+                    if (!nodeState)
+                        return;
+                    const version = message.data.version;
+                    if (nodeState.knownLocalVersion < version) {
+                        nodeState.knownLocalVersion = version;
+                    }
                     break;
                 }
         }
