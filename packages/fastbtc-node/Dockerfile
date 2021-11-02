@@ -16,6 +16,7 @@ FROM base AS builder
 WORKDIR /app
 
 COPY package.json yarn.lock tsconfig.json ./
+COPY vendor /app/vendor
 
 RUN node --version
 RUN yarn install --frozen-lockfile
