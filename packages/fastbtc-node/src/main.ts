@@ -121,7 +121,7 @@ export class FastBTCNode {
         this.logger.info('initiator id:    ', initiatorId);
         this.logger.info('is initiator?    ', isInitiator);
         this.logger.info('successor id:    ', successor?.id);
-        this.logger.info('nodes online:    ', network.nodes.length);
+        this.logger.info('nodes online:    ', this.getNumNodesOnline());
         this.logger.info('transfers total: ', numTransfers);
         this.logger.info('transfers queued:', nextBatchTransfers.length);
         this.logger.info('btc transfer due?', isBtcTransferDue);
@@ -219,8 +219,19 @@ export class FastBTCNode {
         }
     }
 
+    private async onTransferBatchComplete({data}: Message) {
+        let transferBatch: TransferBatch = data;
+        console.log(`Got batch: ${data}`);
+
+        // TODO: verify batch again
+        await this.eventScanner.updateLocalTransferStatus(
+            transferBatch.transferIds,
+            TransferStatus.Sent
+        )
+    }
+
     private isBtcTransferTrue(nextBatchTransfers: Transfer[], currentBlockNumber: number): boolean {
-        if (this.network.nodes.length < this.numRequiredSigners) {
+        if (this.getNumNodesOnline() < this.numRequiredSigners) {
             return false;
         }
         if (nextBatchTransfers.length === 0) {
@@ -235,54 +246,64 @@ export class FastBTCNode {
         return passedBlocks >= this.maxPassedBlocksInBatch;
     }
 
+    // Low level ataraxia boilerplate. Could be separated
+
     get id(): string {
         return this.network.networkId;
     }
 
     getInitiatorId(): string | null {
-        const nodes = this.getSortedNodes();
-        if (nodes.length === 0) {
+        const nodeIds = this.getSortedNodeIds();
+        if (nodeIds.length === 0) {
             return null;
         }
-        return nodes[0].id;
+        return nodeIds[0];
     }
 
     getSuccessor(): Node | null {
-        const nodes = this.getSortedNodes();
-        if (nodes.length === 0) {
+        const nodeIds = this.getSortedNodeIds();
+        if (nodeIds.length <= 1) {
             return null;
         }
-        const ids = nodes.map(n => n.id);
-        const thisNodeIndex = ids.indexOf(this.id);
+        const thisNodeIndex = nodeIds.indexOf(this.id);
         let successorIndex = thisNodeIndex + 1;
-        if (successorIndex >= nodes.length) {
+        if (successorIndex >= nodeIds.length) {
             successorIndex = 0;
         }
-        return nodes[successorIndex];
+        const successorId = nodeIds[successorIndex];
+        return this.getNodeById(successorId);
     }
 
     getNodeIndex(): number | null {
-        const ids = this.getSortedNodes().map(x => x.id);
+        const ids = this.getSortedNodeIds();
         if (ids.length === 0) {
             return null
         }
         return ids.indexOf(this.id);
     }
 
-    getSortedNodes(): Node[] {
-        const nodes = [...this.network.nodes];
-        nodes.sort((a, b) => a.id < b.id ? -1 : 1);
-        return nodes;
+    getSortedNodeIds(): string[] {
+        const nodeIds = this.getNodeIds();
+        nodeIds.sort();
+        return nodeIds;
     }
 
-    private async onTransferBatchComplete({data}: Message) {
-        let transferBatch: TransferBatch = data;
-        console.log(`Got batch: ${data}`);
+    getNodeIds(): string[] {
+        const nodeIds = this.network.nodes.map(n => n.id);
 
-        // TODO: verify batch again
-        await this.eventScanner.updateLocalTransferStatus(
-            transferBatch.transferIds,
-            TransferStatus.Sent
-        )
+        // Ataraxia > 0.11 doesn't include current node in this.network.nodes
+        if (nodeIds.indexOf(this.id) === -1) {
+            nodeIds.push(this.id);
+        }
+
+        return nodeIds;
+    }
+
+    getNumNodesOnline(): number {
+        return this.getNodeIds().length;
+    }
+
+    getNodeById(id: string): Node | null {
+        return this.network.nodes.find(n => n.id === id) ?? null;
     }
 }
