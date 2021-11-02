@@ -36,7 +36,7 @@ RUN ls node_modules
 FROM alpine:3.14
 
 RUN apk update
-RUN apk add nodejs --no-cache
+RUN apk add nodejs curl --no-cache
 RUN node --version
 
 COPY --from=builder /app /app
