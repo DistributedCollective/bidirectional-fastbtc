@@ -11,8 +11,9 @@ export interface ConsensusValueOpts<V> {
 }
 
 export class ConsensusValue<V> {
+    public localValue?: V;
+
     private synchronizedValue: SynchronizedValues<V>;
-    private localValue?: V;
     private numRequired: number;
     private group: GroupWithNetworkId;
     private normalizeValue: (value: V) => any;
@@ -46,8 +47,15 @@ export class ConsensusValue<V> {
      * Set local vote to `value` and propagate to other nodes.
      */
     public set(value: V): void {
-        this.localValue = value;
-        this.synchronizedValue.setLocal(value);
+        // don't needlessly propagate no-op upgrades
+        let shouldUpdate = (
+            typeof this.localValue === 'undefined' ||
+            this.normalizeValue(value) !== this.normalizeValue(this.localValue)
+        );
+        if (shouldUpdate) {
+            this.localValue = value;
+            this.synchronizedValue.setLocal(value);
+        }
     }
 
     /**
@@ -77,7 +85,11 @@ export class ConsensusValue<V> {
 
         const ret = [...normalizedValuesAndVotes.values()];
         ret.sort(
-            (a, b) => a[1] >= b[1] ? -1 : 1
+            (a, b) => (
+                a[1] == b[1] ?
+                    ((a[0] > b[0]) ? -1 : 1) :
+                    (a[1] >= b[1] ? -1 : 1)
+            )
         )
         return ret;
     }
