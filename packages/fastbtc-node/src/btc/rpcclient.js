@@ -1,4 +1,5 @@
-// This is forked from the built version of rpc-client npm package (https://www.npmjs.com/package/rpc-client, MIT)
+// This is forked from the built version of rpc-client npm package (https://www.npmjs.com/package/rpc-client, MIT),
+// But altered slightly to allow for better error messages
 
 const BasicAuth = (function() {
     function BasicAuthentication(username, password) {
@@ -52,6 +53,8 @@ const RPCClient = (function() {
         options.headers['Content-Length'] = query.length;
         options.headers["Content-Type"] = "application/json";
 
+        const requestDebugInfo = { request, options };
+
         request = this.transport.request(options);
         request.on("error", function(err) {
             return callback(err);
@@ -65,24 +68,23 @@ const RPCClient = (function() {
             return response.on('end', function() {
                 var e, err, json, msg;
                 err = msg = null;
-                if (response.statusCode === 200) {
-                    try {
-                        json = JSON.parse(buffer);
-                        if (json.error != null) {
-                            err = json.err;
-                        }
-                        if (json.result) {
-                            msg = json.result;
-                        }
-                    } catch (error) {
-                        e = error;
-                        err = e;
+                try {
+                    json = JSON.parse(buffer);
+                    if (json.error != null) {
+                        err = json.err;
                     }
-                } else {
-                    err = "Server replied with : " + response.statusCode;
+                    if (json.result) {
+                        msg = json.result;
+                    }
+                } catch (error) {
+                    e = error;
+                    err = e;
+                }
+                if (response.statusCode !== 200) {
+                    err = "Server replied with : " + response.statusCode + ' ' + JSON.stringify(json);
                 }
                 if (err) {
-                    console.error('RPC request caused error:', err);
+                    console.error('RPC request:', requestDebugInfo, 'caused error:', err);
                 }
                 return callback(err, msg);
             });
