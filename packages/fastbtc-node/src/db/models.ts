@@ -16,7 +16,9 @@ export class KeyValuePair {
     @PrimaryColumn()
     key!: string;
 
-    @Column("simple-json")
+    @Column({
+        type: 'jsonb'
+    })
     value!: any;
 }
 
