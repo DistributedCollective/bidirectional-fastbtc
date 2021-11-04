@@ -1,38 +1,62 @@
 // This is forked from the built version of rpc-client npm package (https://www.npmjs.com/package/rpc-client, MIT),
-// But altered slightly to allow for better error messages
+// But altered slightly to allow for better error messages. And (very lazily) converted to typescript
+import http, {ClientRequest} from 'http';
+import https from 'https';
 
-const BasicAuth = (function() {
-    function BasicAuthentication(username, password) {
-        this.username = username;
-        this.password = password;
+export interface Options {
+    host: string;
+    port: string;
+    method: string;
+    path: string;
+    headers: any;
+    auth?: string;
+}
+
+export interface Auth {
+    sign(options: Options, request: any): string|undefined;
+}
+
+export class BasicAuth {
+    constructor(public username?: string, public password?: string) {
     }
 
-    BasicAuthentication.prototype.sign = function(options, request) {
-        return options.auth = this.username + ":" + this.password;
+    sign(options: Options, request: any): string|undefined {
+        return options.auth = (this.username ?? '') + ":" + (this.password ?? '');
     };
+}
 
-    return BasicAuthentication;
+export interface RPCClientOpts {
+    protocol: string|null;
+    host: string;
+    port: string;
+    path: string;
+}
+export class RPCClient {
+    auth: Auth | null = null;
+    transport: typeof http | typeof https;
+    host: string;
+    port: string;
+    path: string;
 
-})();
-
-const RPCClient = (function() {
-    function Client(url) {
-        this.transport = (url.protocol != null) && url.protocol === "https" ? require("https") : require("http");
+    constructor(url: RPCClientOpts) {
+        this.transport = (url.protocol != null) && url.protocol === "https" ? https : http;
         this.host = url.host;
         this.port = url.port;
         this.path = url.path;
     }
 
-    Client.prototype.setAuth = function(auth) {
+    setAuth(auth: Auth) {
         this.auth = auth;
-    };
+    }
 
-    Client.prototype.setBasicAuth = function(username, password) {
+    setBasicAuth(username?: string, password?: string) {
         return this.setAuth(new BasicAuth(username, password));
-    };
+    }
 
-    Client.prototype.call = function(method, params, callback) {
-        var options, query, request;
+    call(method: string, params: any, callback: any) {
+        let options: Options;
+        let query;
+        let request;
         request = {
             method: method,
             params: params
@@ -56,17 +80,17 @@ const RPCClient = (function() {
         const requestDebugInfo = { request, options };
 
         request = this.transport.request(options);
-        request.on("error", function(err) {
+        request.on("error", function(err: any) {
             return callback(err);
         });
-        request.on("response", function(response) {
-            var buffer;
+        request.on("response", function(response: any) {
+            let buffer: any;
             buffer = '';
-            response.on('data', function(chunk) {
+            response.on('data', function(chunk: any) {
                 return buffer += chunk;
             });
             return response.on('end', function() {
-                var e, err, json, msg;
+                let e, err, json, msg;
                 err = msg = null;
                 try {
                     json = JSON.parse(buffer);
@@ -90,10 +114,7 @@ const RPCClient = (function() {
             });
         });
         return request.end(query);
-    };
+    }
+}
 
-    return Client;
-
-})();
-
-module.exports = RPCClient;
+export default RPCClient;

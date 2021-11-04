@@ -1,7 +1,7 @@
 import {URL} from 'url';
 import {injectable} from 'inversify';
 import {Network, networks} from 'bitcoinjs-lib';
-const RPCClient = require('./rpcclient');
+import RPCClient from './rpcclient';
 
 
 export interface BitcoinNodeWrapperOpts {
@@ -19,7 +19,7 @@ export interface IBitcoinNodeWrapper {
 
 @injectable()
 export default class BitcoinNodeWrapper implements IBitcoinNodeWrapper {
-    private client: typeof RPCClient;
+    private client: RPCClient;
     public readonly network: Network;
     constructor({url, user, password, btcNetwork}: BitcoinNodeWrapperOpts) {
         this.network = networks[btcNetwork === 'mainnet' ? 'bitcoin' : btcNetwork];
