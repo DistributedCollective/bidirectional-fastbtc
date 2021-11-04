@@ -1,24 +1,20 @@
 import debug from 'debug';
 
-const rootNamespace = 'fastbtc';
-
-const foo = typeof console;
-
-type ConsoleMethod = (message?: any, ...optionalParams: any[]) => void;
-
-type LogLevel =  'debug' | 'info' | 'error';
-const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'error'];
+type LogLevel =  'debug' | 'info' | 'warning' | 'error';
+const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warning', 'error'];
 
 export default class Logger {
     private debuggers: {
         debug: debug.Debugger,
         info: debug.Debugger,
+        warning: debug.Debugger,
         error: debug.Debugger,
     };
 
     private levelNamespaces: {
         debug: string,
         info: string,
+        warning: string,
         error: string,
     }
 
@@ -29,11 +25,13 @@ export default class Logger {
         this.levelNamespaces = {
             debug: `${this.rootNamespace}:debug${ns}`,
             info: `${this.rootNamespace}:info${ns}`,
+            warning: `${this.rootNamespace}:warning${ns}`,
             error: `${this.rootNamespace}:error${ns}`,
         };
         this.debuggers = {
             debug: debug(this.levelNamespaces.debug),
             info: debug(this.levelNamespaces.info),
+            warning: debug(this.levelNamespaces.warning),
             error: debug(this.levelNamespaces.error),
         };
     }
@@ -60,7 +58,18 @@ export default class Logger {
         this.debuggers.debug(message, ...optionalParams);
     }
 
+    warning(message?: any, ...optionalParams: any[]) {
+        this.debuggers.warning(message, ...optionalParams);
+    }
+
     error(message?: any, ...optionalParams: any[]) {
         this.debuggers.error(message, ...optionalParams);
+    }
+
+    exception(err: Error, message?: any, ...optionalParams: any[]) {
+        if (message || optionalParams.length) {
+            this.debuggers.error(message, ...optionalParams);
+        }
+        this.debuggers.error(err);
     }
 }
