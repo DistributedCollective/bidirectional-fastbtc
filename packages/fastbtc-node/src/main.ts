@@ -142,7 +142,7 @@ export class FastBTCNode {
             TransferStatus.Sent
         );
 
-        const bitcoinTx = await this.btcMultisig.createPartiallySignedTransaction(transfers);
+        const bitcoinTx = await this.btcMultisig.createPartiallySignedTransaction(transfers, true);
         const transferBatch: TransferBatch = {
             transferIds,
             signedBtcTransaction: bitcoinTx,

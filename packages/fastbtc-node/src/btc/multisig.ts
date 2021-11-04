@@ -75,7 +75,7 @@ export class BitcoinMultisig {
         return childPublic;
     }
 
-    async createPartiallySignedTransaction(transfers: BtcTransfer[]): Promise<PartiallySignedBitcoinTransaction> {
+    async createPartiallySignedTransaction(transfers: BtcTransfer[], signSelf: boolean = false): Promise<PartiallySignedBitcoinTransaction> {
         if (transfers.length > this.maximumBatchSize) {
             throw new Error(`The number of transfers ${transfers.length} exceeds the maximum batch size ${this.maximumBatchSize}`);
         }
@@ -165,11 +165,15 @@ export class BitcoinMultisig {
             value: totalSum.sub(fee).sub(amountSatoshi).toNumber(),
         });
 
-        return this.signTransaction({
+        let ret: PartiallySignedBitcoinTransaction = {
             serializedTransaction: psbt.toBase64(),
             signedPublicKeys: [],
             requiredSignatures: this.cosigners,
-        });
+        };
+        if (signSelf) {
+            ret = this.signTransaction(ret);
+        }
+        return ret;
     }
 
     getTransactionTransfers(tx: PartiallySignedBitcoinTransaction): BtcTransfer[] {
