@@ -1,14 +1,19 @@
+import Logger from './logger';
 import bootstrap from "./inversify.config";
 import {Config, getCensoredConfig} from './config';
 import {FastBTCNode} from './main';
 import {ConnectionProvider} from './db/connection';
 
+const rootLogger = new Logger();
+
 async function main() {
-    console.log(`Hello, fastbtc-node here.`);
+    rootLogger.enable();
+
+    rootLogger.log(`Hello, fastbtc-node here.`);
     let container = bootstrap();
 
     const config = container.get<Config>(Config);
-    console.log('My config is', getCensoredConfig(config));
+    rootLogger.log('My config is', getCensoredConfig(config));
 
     // TODO: this is silly, but we have to init the connection. Architect this thing better
     const dbConnection = await container.get<ConnectionProvider>(ConnectionProvider)();
@@ -25,7 +30,7 @@ export default main;
 
 if (require.main == module) {
     main().then(() => {
-        console.log('All done');
+        rootLogger.log('All done');
         process.exit(0);
     }).catch(e => {
         console.error(e);
