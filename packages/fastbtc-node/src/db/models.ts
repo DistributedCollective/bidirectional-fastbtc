@@ -16,9 +16,7 @@ export class KeyValuePair {
     @PrimaryColumn()
     key!: string;
 
-    @Column({
-        type: 'jsonb'
-    })
+    @Column('jsonb')
     value!: any;
 }
 
@@ -55,6 +53,7 @@ export class KeyValuePairRepository extends Repository<KeyValuePair> {
     }
 }
 
+// NOTE: this must match the status enum in the FastBTCBridge smart contract
 export enum TransferStatus {
     Null = 0,
     New = 1, // New transfer in blockchain
@@ -131,16 +130,39 @@ export class LogItem {
     type!: string;
 
     @Column('jsonb')
-    data!: {[foo: string]: any};
+    data!: {[key: string]: any};
 
     @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
     createdAt!: Date;
 }
 
 
+export enum BitcoinTransferBatchStatus {
+    Pending = 0,
+    SentToRSK = 1,
+    SentToBitcoin = 2,
+    BitcoinTransactionConfirmed = 3,
+}
+
+@Entity()
+export class StoredBitcoinTransferBatch {
+    @PrimaryGeneratedColumn({ name: 'id'})
+    dbId!: number;
+
+    @Column('int')
+    status!: BitcoinTransferBatchStatus;
+
+    @Column('jsonb')
+    data!: {[key: string]: any};
+
+    @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
+    createdAt!: Date;
+}
+
 // remember to keep this up-to-date
 export const ALL_MODELS = [
     KeyValuePair,
     Transfer,
     LogItem,
+    StoredBitcoinTransferBatch,
 ];

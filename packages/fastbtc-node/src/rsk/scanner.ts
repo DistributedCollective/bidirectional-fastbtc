@@ -47,6 +47,7 @@ export class EventScanner {
         this.requiredConfirmations = config.rskRequiredConfirmations;
     }
 
+    // TODO: should be removed from here
     async getCurrentBlockNumber(): Promise<number> {
         return await this.ethersProvider.getBlockNumber();
     }
@@ -150,6 +151,7 @@ export class EventScanner {
         });
     }
 
+    // TODO: should be removed here
     async getNextBatchTransfers(maxBatchSize: number): Promise<Transfer[]> {
         const transferRepository = this.dbConnection.getRepository(Transfer);
         return transferRepository.find({
