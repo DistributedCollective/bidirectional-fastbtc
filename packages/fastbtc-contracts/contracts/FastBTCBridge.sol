@@ -206,9 +206,6 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
 
         for (uint256 i = 0; i < transferIds.length; i++) {
             BitcoinTransfer storage transfer = transfers[transferIds[i]];
-            if (transfer.status == BitcoinTransferStatus.SENT) {
-                continue;
-            }
 
             require(
                 transfer.status == BitcoinTransferStatus.NEW,

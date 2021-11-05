@@ -239,12 +239,10 @@ describe("FastBTCBridge", function() {
                 transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
                 expect(transfer.status).to.equal(TRANSFER_STATUS_SENT);
 
-                // test idempodency
+                // test that it's no longer idempotent
                 await expect(
                     fastBtcBridgeFromFederator.markTransfersAsSent([transferId], signatures)
-                ).to.not.emit(fastBtcBridgeFromFederator, 'BitcoinTransferStatusUpdated');
-                transfer = await fastBtcBridgeFromFederator.getTransfer(transferBtcAddress, transferNonce);
-                expect(transfer.status).to.equal(TRANSFER_STATUS_SENT);
+                ).to.be.reverted;
             });
 
             it('does not mark transfers as sent if signed by too few federators', async () => {
