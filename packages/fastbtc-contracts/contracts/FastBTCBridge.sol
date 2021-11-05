@@ -18,7 +18,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     enum BitcoinTransferStatus {
         NOT_APPLICABLE,
         NEW,
-        SENT,
+        SENDING,
         MINED,
         REFUNDED,
         RECLAIMED
@@ -51,6 +51,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
         address indexed rskAddress
     );
 
+    event BitcoinTransferBatchSending(
+        bytes32 bitcoinTxHash,
+        uint8   transferBatchSize
+    );
+
     event BitcoinTransferFeeChanged(
         uint256 baseFeeSatoshi,
         uint256 dynamicFee
@@ -70,7 +75,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     uint256 public constant DYNAMIC_FEE_DIVISOR = 10_000;
 
     uint256 public constant MAXIMUM_VALID_NONCE = 254;
-    uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
+    // uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
 
     mapping(bytes32 => BitcoinTransfer) public transfers;
     mapping(string => uint8) public nextNonces;
@@ -89,7 +94,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     uint16 public dynamicFee;
     uint32 public baseFeeSatoshi;
 
-    uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
+//    uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
 
     constructor(
         FastBTCAccessControl accessControl,
@@ -163,44 +168,49 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
         });
     }
 
-    function reclaimTransfer(
-        bytes32 transferId
-    )
-    external
-    nonReentrant
-    {
-        BitcoinTransfer storage transfer = transfers[transferId];
-        // TODO: decide if it should be possible to also reclaim sent transfers
-        require(
-            transfer.status == BitcoinTransferStatus.NEW,
-            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
-        );
-        require(
-            transfer.rskAddress == msg.sender,
-            "Can only reclaim own transfers"
-        );
-        require(
-            block.number - transfer.blockNumber >= requiredBlocksBeforeReclaim,
-            "Not enough blocks passed before reclaim"
-        );
-
-        // ordering!
-        _updateTransferStatus(transferId, transfer, BitcoinTransferStatus.RECLAIMED);
-        _refundTransferRbtc(transfer);
-    }
+// Reclamations are not yet supported!
+//
+//    function reclaimTransfer(
+//        bytes32 transferId
+//    )
+//    external
+//    nonReentrant
+//    {
+//        BitcoinTransfer storage transfer = transfers[transferId];
+//        // TODO: decide if it should be possible to also reclaim sent transfers
+//        require(
+//            transfer.status == BitcoinTransferStatus.NEW,
+//            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
+//        );
+//        require(
+//            transfer.rskAddress == msg.sender,
+//            "Can only reclaim own transfers"
+//        );
+//        require(
+//            block.number - transfer.blockNumber >= requiredBlocksBeforeReclaim,
+//            "Not enough blocks passed before reclaim"
+//        );
+//
+//        // ordering!
+//        _updateTransferStatus(transferId, transfer, BitcoinTransferStatus.RECLAIMED);
+//        _refundTransferRbtc(transfer);
+//    }
 
     // FEDERATOR API
     // ==============
 
-    function markTransfersAsSent(
+    function markTransfersAsSending(
+        bytes32 bitcoinTxHash,
         bytes32[] calldata transferIds,
         bytes[] memory signatures
     )
-    public
+    external
     onlyFederator
     {
+        emit BitcoinTransferBatchSending(bitcoinTxHash, uint8(transferIds.length));
+
         accessControl.checkFederatorSignatures(
-            getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.SENT),
+            getTransferBatchUpdateHashWithTxHash(bitcoinTxHash, transferIds, BitcoinTransferStatus.SENDING),
             signatures
         );
 
@@ -212,7 +222,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
                 "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
             );
 
-            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.SENT);
+            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.SENDING);
         }
     }
 
@@ -220,7 +230,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
         bytes32[] calldata transferIds,
         bytes[] memory signatures
     )
-    public
+    external
     onlyFederator
     {
         accessControl.checkFederatorSignatures(
@@ -250,6 +260,19 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     {
         return keccak256(abi.encodePacked("batchUpdate:", newStatus, ":", transferIds));
     }
+
+    function getTransferBatchUpdateHashWithTxHash(
+        bytes32 bitcoinTxHash,
+        bytes32[] calldata transferIds,
+        BitcoinTransferStatus newStatus
+    )
+    public
+    pure
+    returns (bytes32)
+    {
+        return keccak256(abi.encodePacked("batchUpdateWithTxHash:", newStatus, ":", bitcoinTxHash, ":", transferIds));
+    }
+
 
     // FEDERATOR PRIVATE METHODS
     // =========================
@@ -490,18 +513,18 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
         maxTransferSatoshi = uint40(newMaxTransferSatoshi);
     }
 
-    function setRequiredBlocksBeforeReclaim(
-        uint256 newRequiredBlocksBeforeReclaim
-    )
-    external
-    onlyAdmin
-    {
-        require(
-            newRequiredBlocksBeforeReclaim <= MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM,
-            "Required blocks before reclaim too large"
-        );
-        requiredBlocksBeforeReclaim = uint32(newRequiredBlocksBeforeReclaim);
-    }
+//    function setRequiredBlocksBeforeReclaim(
+//        uint256 newRequiredBlocksBeforeReclaim
+//    )
+//    external
+//    onlyAdmin
+//    {
+//        require(
+//            newRequiredBlocksBeforeReclaim <= MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM,
+//            "Required blocks before reclaim too large"
+//        );
+//        requiredBlocksBeforeReclaim = uint32(newRequiredBlocksBeforeReclaim);
+//    }
 
     // TODO: figure out if we want to lock this so that only fees can be retrieved
     /// @dev utility for withdrawing RBTC from the contract
