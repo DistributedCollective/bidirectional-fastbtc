@@ -6,7 +6,7 @@ import {
     PrimaryColumn,
     PrimaryGeneratedColumn,
     Repository,
-    Unique
+    Unique,
 } from 'typeorm';
 import {BigNumber} from 'ethers';
 import {BigNumberColumn} from './utils';
@@ -147,6 +147,28 @@ export class StoredBitcoinTransferBatch {
 
     @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
     createdAt!: Date;
+}
+
+
+@EntityRepository(StoredBitcoinTransferBatch)
+export class StoredBitcoinTransferBatchRepository extends Repository<StoredBitcoinTransferBatch> {
+    async createOrUpdateFromTransferBatch(transferBatch: unknown & {transferIds: string[]}): Promise<void> {
+        let stored = await this.findByTransferIds(transferBatch.transferIds);
+        if (!stored) {
+            stored = new StoredBitcoinTransferBatch();
+        }
+        stored.data = transferBatch;
+        await this.save(stored);
+    }
+
+    async findByTransferIds(transferIds: string[]): Promise<StoredBitcoinTransferBatch|undefined> {
+        // TODO: there must be a better way to compare array unordered
+        return await this
+            .createQueryBuilder('batch')
+            .where(`batch->'data'->'transferIds' @> :transferIds AND batch->'data'->'transferIds' <@ :transferIds`)
+            .setParameters({transferIds})
+            .getOne();
+    }
 }
 
 // remember to keep this up-to-date
