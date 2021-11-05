@@ -7,8 +7,12 @@ import {BitcoinMultisig} from '../btc/multisig';
 import {Config} from '../config';
 import Logger from '../logger';
 import NetworkUtil from './networkutil';
-import {BitcoinTransferBatch, BitcoinTransferService} from './transfers';
-import {Table} from 'typeorm';
+import {
+    BitcoinTransferBatch,
+    BitcoinTransferBatchStatus,
+    BitcoinTransferService,
+    SerializedBitcoinTransferBatch,
+} from './transfers';
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -20,16 +24,15 @@ interface PropagateTransferBatchMessage {
 }
 
 interface RequestRSKUpdateSignatureMessage {
-    transferIds: string[];
-    newStatus: TransferStatus;
+    transferBatch: SerializedBitcoinTransferBatch;
 }
 
 interface RequestBitcoinSignatureMessage {
-    transferBatch: BitcoinTransferBatch;
+    transferBatch: SerializedBitcoinTransferBatch;
 }
 
 interface TransferBatchCompleteMessage {
-    transferBatch: BitcoinTransferBatch;
+    transferBatch: SerializedBitcoinTransferBatch;
 }
 
 interface FastBTCMessage {
@@ -94,20 +97,25 @@ export class FastBTCNode {
         }
 
         const transferBatch = await this.bitcoinTransferService.getNextTransferBatch();
-        if (!await this.bitcoinTransferService.isTransferBatchDue(transferBatch)) {
+
+        // TODO: all nodes just blindly trust the initiator when updating transfer batchs
+        // TODO: not sure if the DB sync protocol is gooood
+
+        if (transferBatch.status === BitcoinTransferBatchStatus.GatheringTransfers) {
             this.logger.debug('Bitcoin transfer not due yet');
             return;
         }
 
-        if (transferBatch.rskUpdateSignatures.length < this.config.numRequiredSigners) {
-            await this.network.broadcast(
-                'fastbtc:request-rsk-update-signature',
-                {
-                    transferIds: transferBatch.transferIds,
-                    newStatus: TransferStatus.Sent,
-                }
-            );
-            return;
+        if (transferBatch.status === BitcoinTransferBatchStatus.Ready) {
+            if (transferBatch.rskUpdateSignatures.length < this.config.numRequiredSigners) {
+                await this.network.broadcast(
+                    'fastbtc:request-rsk-update-signature',
+                    {
+                        transferBatch: transferBatch.serialize(),
+                    }
+                );
+                return;
+            }
         }
     }
 

@@ -137,20 +137,10 @@ export class LogItem {
 }
 
 
-export enum BitcoinTransferBatchStatus {
-    Pending = 0,
-    SentToRSK = 1,
-    SentToBitcoin = 2,
-    BitcoinTransactionConfirmed = 3,
-}
-
 @Entity()
 export class StoredBitcoinTransferBatch {
     @PrimaryGeneratedColumn({ name: 'id'})
     dbId!: number;
-
-    @Column('int')
-    status!: BitcoinTransferBatchStatus;
 
     @Column('jsonb')
     data!: {[key: string]: any};
