@@ -352,6 +352,7 @@ export class BitcoinMultisig {
     }
 
     async combine(txs: PartiallySignedBitcoinTransaction[]): Promise<PartiallySignedBitcoinTransaction> {
+        console.log("combining", txs);
         if (! txs.length) {
             throw new Error('Cannot combine zero transactions');
         }

@@ -8,6 +8,7 @@ import {Config} from '../config';
 import {StoredBitcoinTransferBatch, StoredBitcoinTransferBatchRepository, Transfer, TransferStatus} from '../db/models';
 import {EventScanner, Scanner} from '../rsk/scanner';
 import Logger from '../logger';
+import {setExtend, setIntersection} from "../utils/sets";
 
 
 // NOTE: if the TransferBatchDTO interface is changed in a backwards-incompatible way,
@@ -302,26 +303,25 @@ export class BitcoinTransferService {
         const numRequired = transferBatchPsbt.requiredSignatures - transferBatchPsbt.signedPublicKeys.length;
 
         const validPsbts: PartiallySignedBitcoinTransaction[] = [];
-        const seenPublicKeys = new Map<string, boolean>();
-        for (const publicKey of transferBatchPsbt.signedPublicKeys) {
-            seenPublicKeys.set(publicKey, true);
-        }
+        const seenPublicKeys = new Set<string>(transferBatchPsbt.signedPublicKeys);
 
         for (const psbt of psbts) {
             if (psbt.signedPublicKeys.length === 0) {
                 this.logger.info('empty psbt, skipping');
                 continue;
             }
-            for (const publicKey of psbt.signedPublicKeys) {
-                if (seenPublicKeys.get(publicKey)) {
-                    this.logger.info(`public key ${publicKey} has already signed`);
-                    continue;
-                }
-                seenPublicKeys.set(publicKey, true);
+
+            const seenIntersection = setIntersection(seenPublicKeys, new Set(psbt.signedPublicKeys));
+            if (seenIntersection.size) {
+                this.logger.info(`public keys ${[...seenPublicKeys]} have already signed`);
+                continue;
             }
+
+            setExtend(seenPublicKeys, psbt.signedPublicKeys);
+
             // TODO: validate key/signature
             validPsbts.push(psbt);
-            if (validPsbts.length === numRequired) {
+            if (seenPublicKeys.size === numRequired) {
                 break
             }
         }
