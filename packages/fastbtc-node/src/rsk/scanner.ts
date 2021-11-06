@@ -246,6 +246,7 @@ export class EventScanner {
         return transfer;
     }
 
+    // TODO: get rid of me
     async signTransferStatusUpdate(
         transfers: Transfer[] | string[],
         newStatus: TransferStatus
@@ -253,6 +254,10 @@ export class EventScanner {
         const transferIds = this.getTransferIds(transfers);
         const updateHash = await this.fastBtcBridge.getTransferBatchUpdateHash(transferIds, newStatus);
         return await this.ethersSigner.signMessage(ethers.utils.arrayify(updateHash));
+    }
+
+    async getSignerAddress() {
+        return await this.ethersSigner.getAddress();
     }
 
     private getTransferIds(

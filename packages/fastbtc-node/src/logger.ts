@@ -4,12 +4,13 @@ type LogLevel =  'debug' | 'info' | 'warning' | 'error';
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warning', 'error'];
 
 export default class Logger {
-    private debuggers: {
-        debug: debug.Debugger,
-        info: debug.Debugger,
-        warning: debug.Debugger,
-        error: debug.Debugger,
-    };
+    //private debuggers: {
+    //    debug: debug.Debugger,
+    //    info: debug.Debugger,
+    //    warning: debug.Debugger,
+    //    error: debug.Debugger,
+    //};
+    private debuggers = console;
 
     private levelNamespaces: {
         debug: string,
@@ -28,12 +29,13 @@ export default class Logger {
             warning: `${this.rootNamespace}:warning${ns}`,
             error: `${this.rootNamespace}:error${ns}`,
         };
-        this.debuggers = {
-            debug: debug(this.levelNamespaces.debug),
-            info: debug(this.levelNamespaces.info),
-            warning: debug(this.levelNamespaces.warning),
-            error: debug(this.levelNamespaces.error),
-        };
+        // TODO: asdfs
+        //this.debuggers = {
+        //    debug: debug(this.levelNamespaces.debug),
+        //    info: debug(this.levelNamespaces.info),
+        //    warning: debug(this.levelNamespaces.warning),
+        //    error: debug(this.levelNamespaces.error),
+        //};
     }
 
     enable(level: LogLevel = 'debug') {
@@ -59,7 +61,8 @@ export default class Logger {
     }
 
     warning(message?: any, ...optionalParams: any[]) {
-        this.debuggers.warning(message, ...optionalParams);
+        //this.debuggers.warning(message, ...optionalParams);
+        this.debuggers.warn(message, ...optionalParams);
     }
 
     error(message?: any, ...optionalParams: any[]) {

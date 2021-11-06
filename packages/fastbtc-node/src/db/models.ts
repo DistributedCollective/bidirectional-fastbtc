@@ -57,7 +57,7 @@ export class KeyValuePairRepository extends Repository<KeyValuePair> {
 export enum TransferStatus {
     Null = 0,
     New = 1, // New transfer in blockchain
-    Sent = 2, // Sent to RSK/BTC
+    Sending = 2, // Sending to BTC
     Mined = 3,
     Refunded = 4,
     Reclaimed = 5,
@@ -165,8 +165,10 @@ export class StoredBitcoinTransferBatchRepository extends Repository<StoredBitco
         // TODO: there must be a better way to compare array unordered
         return await this
             .createQueryBuilder('batch')
-            .where(`batch->'data'->'transferIds' @> :transferIds AND batch->'data'->'transferIds' <@ :transferIds`)
-            .setParameters({transferIds})
+            .where(`batch."data"->'transferIds' @> :transferIds AND batch."data"->'transferIds' <@ :transferIds`)
+            .setParameters({
+                transferIds: JSON.stringify(transferIds),
+            })
             .getOne();
     }
 }

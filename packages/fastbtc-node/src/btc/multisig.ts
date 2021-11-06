@@ -68,6 +68,13 @@ export class BitcoinMultisig {
         });
     }
 
+    getBitcoinTransactionHash(signedBitcoinTransaction: PartiallySignedBitcoinTransaction): string {
+        const psbtUnserialized = Psbt.fromBase64(
+            signedBitcoinTransaction.serializedTransaction, {network: this.network}
+        );
+        return this.getPsbtEarlyTxHash(psbtUnserialized);
+    }
+
     /**
      * Return the TX hash for the transaction that would be formed from the psbt.
      * Since the legacy inputs are *changed* by signatures this can only work for
@@ -320,6 +327,10 @@ export class BitcoinMultisig {
                 nonce: nonce,
             };
         });
+    }
+
+    getThisNodePublicKey(): string {
+        return this.masterPublicKey;
     }
 
     signTransaction(tx: PartiallySignedBitcoinTransaction): PartiallySignedBitcoinTransaction {

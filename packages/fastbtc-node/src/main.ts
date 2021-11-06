@@ -139,7 +139,7 @@ export class FastBTCNode {
 
         const rskSignature = await this.eventScanner.signTransferStatusUpdate(
             transferIds,
-            TransferStatus.Sent
+            TransferStatus.Sending
         );
 
         const bitcoinTx = await this.btcMultisig.createPartiallySignedTransaction(transfers, true);
@@ -155,7 +155,7 @@ export class FastBTCNode {
             throw new Error('no successor, cannot handle the situation!')
         }
 
-        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sent); // TODO: check status
+        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending); // TODO: check status
 
         await successor.send('propagate-transfer-batch', transferBatch);
     }
@@ -191,7 +191,7 @@ export class FastBTCNode {
 
         const rskSignature = await this.eventScanner.signTransferStatusUpdate(
             transferBatch.transferIds,
-            TransferStatus.Sent
+            TransferStatus.Sending
         );
 
         const signedTransaction = this.btcMultisig.signTransaction(transferBatch.signedBtcTransaction);
@@ -203,9 +203,9 @@ export class FastBTCNode {
             nodeIds: [...transferBatch.nodeIds, this.id],
         }
 
-        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sent); // TODO: check status
+        await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending); // TODO: check status
         if (transferBatch.nodeIds.length >= this.numRequiredSigners) {
-            await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sent); // TODO: check status
+            await this.eventScanner.updateLocalTransferStatus(transfers, TransferStatus.Sending); // TODO: check status
 
             // submit to blockchain
             this.logger.log(`node #${this.getNodeIndex()}: submitting transfer batch to blockchain:`, transferBatch);
@@ -226,7 +226,7 @@ export class FastBTCNode {
         // TODO: verify batch again
         await this.eventScanner.updateLocalTransferStatus(
             transferBatch.transferIds,
-            TransferStatus.Sent
+            TransferStatus.Sending
         )
     }
 

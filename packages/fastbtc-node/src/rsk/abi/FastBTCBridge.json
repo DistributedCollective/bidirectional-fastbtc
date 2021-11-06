@@ -20,6 +20,25 @@
         "inputs": [
             {
                 "indexed": false,
+                "internalType": "bytes32",
+                "name": "bitcoinTxHash",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint8",
+                "name": "transferBatchSize",
+                "type": "uint8"
+            }
+        ],
+        "name": "BitcoinTransferBatchSending",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
                 "internalType": "uint256",
                 "name": "baseFeeSatoshi",
                 "type": "uint256"
@@ -125,19 +144,6 @@
     {
         "inputs": [],
         "name": "MAX_BASE_FEE_SATOSHI",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM",
         "outputs": [
             {
                 "internalType": "uint256",
@@ -432,6 +438,35 @@
         "inputs": [
             {
                 "internalType": "bytes32",
+                "name": "bitcoinTxHash",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "bytes32[]",
+                "name": "transferIds",
+                "type": "bytes32[]"
+            },
+            {
+                "internalType": "enum FastBTCBridge.BitcoinTransferStatus",
+                "name": "newStatus",
+                "type": "uint8"
+            }
+        ],
+        "name": "getTransferBatchUpdateHashWithTxHash",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
                 "name": "transferId",
                 "type": "bytes32"
             }
@@ -647,6 +682,11 @@
     {
         "inputs": [
             {
+                "internalType": "bytes32",
+                "name": "bitcoinTxHash",
+                "type": "bytes32"
+            },
+            {
                 "internalType": "bytes32[]",
                 "name": "transferIds",
                 "type": "bytes32[]"
@@ -657,7 +697,7 @@
                 "type": "bytes[]"
             }
         ],
-        "name": "markTransfersAsSent",
+        "name": "markTransfersAsSending",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -710,19 +750,6 @@
     {
         "inputs": [
             {
-                "internalType": "bytes32",
-                "name": "transferId",
-                "type": "bytes32"
-            }
-        ],
-        "name": "reclaimTransfer",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
                 "internalType": "bytes32[]",
                 "name": "transferIds",
                 "type": "bytes32[]"
@@ -736,19 +763,6 @@
         "name": "refundTransfers",
         "outputs": [],
         "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [],
-        "name": "requiredBlocksBeforeReclaim",
-        "outputs": [
-            {
-                "internalType": "uint32",
-                "name": "",
-                "type": "uint32"
-            }
-        ],
-        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -799,19 +813,6 @@
             }
         ],
         "name": "setMinTransferSatoshi",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "uint256",
-                "name": "newRequiredBlocksBeforeReclaim",
-                "type": "uint256"
-            }
-        ],
-        "name": "setRequiredBlocksBeforeReclaim",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"

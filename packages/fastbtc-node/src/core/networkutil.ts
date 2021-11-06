@@ -48,6 +48,10 @@ export default class NetworkUtil<MessageTypes extends object = any> {
 
     // Successor / etc stuff
 
+    public isThisNodeInitiator() {
+        return this.id === this.getPreferredInitiatorId();
+    }
+
     public get id(): string {
         return this.network.networkId;
     }

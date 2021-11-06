@@ -1,7 +1,8 @@
 import Logger from './logger';
 import bootstrap from "./inversify.config";
 import {Config, getCensoredConfig} from './config';
-import {FastBTCNode} from './main';
+//import {FastBTCNode} from './main';
+import {FastBTCNode} from './core/node';
 import {ConnectionProvider} from './db/connection';
 
 const rootLogger = new Logger();
