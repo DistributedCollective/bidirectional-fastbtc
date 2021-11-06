@@ -16,6 +16,7 @@ export default class NetworkUtil<MessageTypes extends object = any> {
 
     // XXX: should maybe be elsewhere
     async enterMainLoop(runIteration: () => Promise<void>) {
+        const sleepTimeSeconds = 10;
         this.running = true;
         await this.network.join();
 
@@ -34,7 +35,7 @@ export default class NetworkUtil<MessageTypes extends object = any> {
                 }
 
                 // sleeping in loop is more graceful for ctrl-c
-                for (let i = 0; i < 30 && this.running; i++) {
+                for (let i = 0; i < sleepTimeSeconds && this.running; i++) {
                     await sleep(1_000);
                 }
             }
