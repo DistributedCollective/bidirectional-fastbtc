@@ -1,5 +1,5 @@
 import {inject, injectable} from 'inversify';
-import {bip32, ECPair, Network, Payment, payments, Psbt} from "bitcoinjs-lib";
+import {bip32, ECPair, Network, networks, Payment, payments, Psbt} from "bitcoinjs-lib";
 import {normalizeKey, xprvToPublic} from './utils';
 import getByteCount from './bytecount';
 import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
@@ -36,12 +36,16 @@ export class BitcoinMultisig {
     private readonly keyDerivationPath: string;
     private readonly maximumBatchSize = 40;
     public readonly payoutScript: Payment;
-    private cosigners: number;
+    private readonly cosigners: number;
 
     constructor(
         @inject(Config) config: BitcoinMultisigConfig,
         @inject(BitcoinNodeWrapper) nodeWrapper: IBitcoinNodeWrapper,
     ) {
+        // ensure that we don't even construct an instance if we
+        // cannot calculate the transaction hashes from unsigned PSBTs
+        this._testGetPsbtEarlyTxHash();
+
         this.network = nodeWrapper.network;
 
         this.nodeWrapper = nodeWrapper;
@@ -62,7 +66,79 @@ export class BitcoinMultisig {
                 network: this.network,
             }),
         });
+    }
 
+    /**
+     * Return the TX hash for the transaction that would be formed from the psbt.
+     * Since the legacy inputs are *changed* by signatures this can only work for
+     * segwit inputs, and therefore this method will throw if given a transaction
+     * that has any non-segwit input (and for that matter any non-multisig).
+     *
+     * This is an ugly hack but so is bitcoinjs-lib in its entirety.
+     *
+     * @param psbt
+     */
+    getPsbtEarlyTxHash(psbt: Psbt) {
+        for (let i = 0; i < psbt.inputCount; i++) {
+            const type = psbt.getInputType(i);
+            if (type !== 'p2wsh-multisig') {
+                throw new Error(`getPsbtEarlyTxHash works only with witness inputs, got one of type ${type}`)
+            }
+        }
+
+        return (psbt.clone() as any).__CACHE.__TX.getHash().reverse().toString('hex');
+    }
+
+    /**
+     * ensure that we still can calculate the TX hash with the current bitcoinjs-lib
+     *
+     * @private
+     */
+    private _testGetPsbtEarlyTxHash() {
+        const keys = [
+            'ab05a54fed20a4282667cbddd2f4bca832cb7936b82136023a65f05c76cd9561',
+            '26563a46b59b2467d0b05d6c404663525f1cea35565141e03285d4b516d1df09',
+            '148e0aa582a994f7c7246496f51b1aa96fa8e99dcd77fd78502425c579edd896',
+        ].map((s) => ECPair.fromPrivateKey(
+            Buffer.from(s, 'hex'),
+            {network: networks.testnet})
+        );
+
+        // a testnet PSBT with segwit multisig 2 of 3 having the keys above for the
+        // only input and paying to a testnet Bech32 address
+        const psbt = Psbt.fromHex(
+            '70736274ff0100520200000001a40c99cc64b4cd223709f1aa3d0dd2199ab672' +
+            'cf6054a9d2e5a9199eee18dd0e0100000000ffffffff01393000000000000016' +
+            '00144479be354b516ada29b9ebffbb131046007d74d500000000000100ea0200' +
+            '00000001018ff776782cea7e1883d91042f58a4e7523f3f4b8329e89f3c9528b' +
+            'b324c28a8f0000000000feffffff0275fe9f000000000016001470efd2ab8f4d' +
+            '8a4dc0baac4e31a1f58090c9eb17a086010000000000220020f69c88c8cc0e10' +
+            '16a40ce854868286d9f2973724a64f1f6dc6feb2a9ed7df8ca0247304402205c' +
+            'c657bd68f54afca4d7bb8b7f0fc412b28a08264f8f368920eaa513dfb5656c02' +
+            '205d7b4a5088e43a990cc2357e9fbd466796b680c9e8317c0f112e2cea8f3bb4' +
+            'b2012102bf84edc467a70101ee612f9fcf15b1f92e3e1389d514602a0a7c9f18' +
+            '01815385f815200001056952210334b537c76f634a18104a85a76f4e9a3a6ad7' +
+            '1d68ea0ee072ffce8bd00098ec5b21031cac5e2d753770da3e621760480250e1' +
+            '8ca829dd2e2db2c2a68f6c0e30e6a74c2102c8ce8ee4901a26ba3f31294b03d0' +
+            '3aefc3970a88ac576bc2f8f2f4160635697653ae0000',
+            {
+                network: networks.testnet
+            }
+        );
+
+        const earlyTxHash = this.getPsbtEarlyTxHash(psbt);
+
+        psbt.signAllInputs(keys[2]);
+        psbt.signAllInputs(keys[0]);
+
+        psbt.validateSignaturesOfAllInputs();
+        psbt.finalizeAllInputs();
+
+        const finalTxHash = psbt.extractTransaction().getHash().reverse().toString('hex');
+
+        if (earlyTxHash !== finalTxHash) {
+            throw new Error("Bitcoinjs lib does not work properly for deriving tx hash for witness PSBT early!");
+        }
     }
 
     deriveChildPublicKeys(path: string): Buffer[] {
@@ -262,6 +338,41 @@ export class BitcoinMultisig {
             signedPublicKeys: [...tx.signedPublicKeys, this.masterPublicKey],
             requiredSignatures: tx.requiredSignatures,
         }
+    }
+
+    async combine(txs: PartiallySignedBitcoinTransaction[]): Promise<PartiallySignedBitcoinTransaction> {
+        if (! txs.length) {
+            throw new Error('Cannot combine zero transactions');
+        }
+
+        let result: PartiallySignedBitcoinTransaction = txs[0];
+        for (const tx of txs.slice(1)) {
+            if (result.signedPublicKeys.length == result.requiredSignatures) {
+                return result;
+            }
+
+            if (result.signedPublicKeys.length > result.requiredSignatures) {
+                throw new Error('Oof the combined psbt has too many signatures already');
+            }
+
+            const resultUnserialized = Psbt.fromBase64(
+                result.serializedTransaction,
+                {network: this.network}
+            );
+
+            const txUnserialized = Psbt.fromBase64(
+                tx.serializedTransaction,
+                {network: this.network}
+            );
+
+            const combined = resultUnserialized.combine(txUnserialized);
+            result = {
+                serializedTransaction: combined.toBase64(),
+                signedPublicKeys: [...result.signedPublicKeys, ...tx.signedPublicKeys],
+                requiredSignatures: tx.requiredSignatures,
+            }
+        }
+        return result;
     }
 
     async submitTransaction(tx: PartiallySignedBitcoinTransaction) {
