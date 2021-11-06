@@ -165,8 +165,6 @@ export class BitcoinTransferService {
         @inject(FastBtcBridgeContract) private fastBtcBridge: ethers.Contract,
         @inject(EthersSigner) private ethersSigner: ethers.Signer,
         @inject(Config) private config: BitcoinTransferServiceConfig,
-        // TODO: factor the code better.. this should not require EventScanner
-        @inject(Scanner) private eventScanner: EventScanner,
     ) {
     }
 
