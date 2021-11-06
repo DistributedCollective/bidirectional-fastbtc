@@ -175,12 +175,15 @@ export class FastBTCNode {
             this.transientInitiatorData = getEmptyTransientInitiatorData(transferBatch);
             return transferBatch;
         }
+
+        let updated = false;
         if (this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses.length > 0) {
             transferBatch = await this.bitcoinTransferService.addRskSendingSignatures(
                 transferBatch,
                 this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses
             );
             this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses = [];
+            updated = true;
         }
         if (this.transientInitiatorData.gatheredBitcoinSignatures.length > 0) {
             transferBatch = await this.bitcoinTransferService.addBitcoinSignatures(
@@ -188,6 +191,11 @@ export class FastBTCNode {
                 this.transientInitiatorData.gatheredBitcoinSignatures
             );
             this.transientInitiatorData.gatheredBitcoinSignatures = [];
+            updated = true;
+        }
+
+        if (updated) {
+            await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
         }
         return transferBatch;
     }
