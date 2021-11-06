@@ -351,7 +351,7 @@ export class BitcoinTransferService {
         }
         await this.validator.validateForSigningRskSentUpdate(transferBatch);
         const updateHash = await this.fastBtcBridge.getTransferBatchUpdateHashWithTxHash(
-            transferBatch.bitcoinTransactionHash,
+            `0x${transferBatch.bitcoinTransactionHash}`,
             transferBatch.getTransferIds(),
             TransferStatus.Sending
         );
