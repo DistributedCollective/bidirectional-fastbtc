@@ -75,10 +75,23 @@ export class TransferBatch {
         if (!this.hasMatchingTransferIds(dto.transferIds)) {
             throw new Error('TransferBatch transferIds and DTO transferIds do not match');
         }
-        if (JSON.stringify(this.initialBtcTransaction) !== JSON.stringify(dto.initialBtcTransaction)) {
+        if (this.bitcoinTransactionHash !== dto.bitcoinTransactionHash) {
+            throw new Error('TransferBatch bitcoinTransactionHash and DTO bitcoinTransactionHash do not match');
+        }
+        if (
+            this.initialBtcTransaction.requiredSignatures !== dto.initialBtcTransaction.requiredSignatures ||
+            this.initialBtcTransaction.serializedTransaction !== dto.initialBtcTransaction.serializedTransaction
+        ) {
             throw new Error('TransferBatch initialBtcTransaction and DTO initialBtcTransaction do not match');
         }
-        // TODO: validate signedBtcTransaction too
+        if (this.signedBtcTransaction && dto.signedBtcTransaction) {
+            // It's possible that this has some mismatches. because of different number of signatures
+            if (
+                this.signedBtcTransaction.requiredSignatures !== dto.signedBtcTransaction.requiredSignatures
+            ) {
+                throw new Error('TransferBatch signedBtcTransaction and DTO signedBtcTransaction do not match');
+            }
+        }
     }
 
     hasMatchingTransferIds(transferIds: string[]): boolean {
@@ -119,7 +132,7 @@ export class TransferBatch {
 
     isMarkedAsSendingInRsk(): boolean {
         for (const transfer of this.transfers) {
-            if(transfer.status === TransferStatus.New) {
+            if (transfer.status !== TransferStatus.Sending && transfer.status !== TransferStatus.Mined) {
                 return false;
             }
         }
@@ -137,11 +150,16 @@ export class TransferBatch {
 
     isMarkedAsMinedInRsk(): boolean {
         for (const transfer of this.transfers) {
-            if(transfer.status === TransferStatus.Mined) {
+            if(transfer.status !== TransferStatus.Mined) {
                 return false;
             }
         }
         return true;
+    }
+
+    isPending(): boolean {
+        // TODO: should handle refunded and reclaimed
+        return !this.isMarkedAsMinedInRsk();
     }
 }
 
@@ -184,10 +202,12 @@ export class BitcoinTransferService {
             const bitcoinTxHash = this.btcMultisig.getBitcoinTransactionHash(
                 initialSignedBtcTransaction
             );
-            const ret = new TransferBatch(
+            return new TransferBatch(
                 {
                     currentBlockNumber,
-                    ...this.config,
+                    numRequiredSigners: this.config.numRequiredSigners,
+                    maxPassedBlocksInBatch: this.config.maxPassedBlocksInBatch,
+                    maxTransfersInBatch: this.config.maxTransfersInBatch,
                 },
                 transfers,
                 rskUpdateSignatures,
@@ -195,11 +215,6 @@ export class BitcoinTransferService {
                 bitcoinTxHash,
                 initialSignedBtcTransaction,
             );
-
-            if (ret.isDue()) {
-                await this.updateStoredTransferBatch(ret);
-            }
-            return ret;
         });
     }
 
@@ -224,7 +239,9 @@ export class BitcoinTransferService {
             return new TransferBatch(
                 {
                     currentBlockNumber,
-                    ...this.config,
+                    numRequiredSigners: this.config.numRequiredSigners,
+                    maxPassedBlocksInBatch: this.config.maxPassedBlocksInBatch,
+                    maxTransfersInBatch: this.config.maxTransfersInBatch,
                 },
                 transfers,
                 dto.rskUpdateSignatures,
@@ -238,9 +255,13 @@ export class BitcoinTransferService {
 
     async updateStoredTransferBatch(transferBatch: TransferBatch): Promise<void> {
         await this.dbConnection.transaction(async transaction => {
-            const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
-            await transferBatchRepository.createOrUpdateFromTransferBatch(transferBatch.getDto());
+            await this.storeTransferBatch(transferBatch, transaction);
         });
+    }
+
+    private async storeTransferBatch(transferBatch: TransferBatch, entityManager: EntityManager): Promise<void> {
+        const transferBatchRepository = entityManager.getCustomRepository(StoredBitcoinTransferBatchRepository);
+        await transferBatchRepository.createOrUpdateFromTransferBatch(transferBatch.getDto());
     }
 
     async addRskSendingSignatures(transferBatch: TransferBatch, signaturesAndAddresses: {signature: string, address: string}[]): Promise<TransferBatch> {
@@ -321,6 +342,7 @@ export class BitcoinTransferService {
         await this.dbConnection.transaction(async transaction => {
             const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
             const transferRepository = transaction.getRepository(Transfer);
+            this.logger.info('marking transfer batch', transferBatch, 'as sending in RSK');
             const result = await this.fastBtcBridge.markTransfersAsSending(
                 `0x${transferBatch.bitcoinTransactionHash}`,
                 transferBatch.getTransferIds(),
@@ -387,9 +409,11 @@ export class BitcoinTransferService {
                 createdAt: 'ASC'
             }
         });
+        this.logger.debug('Found', storedBatches.length, 'stored batches in total');
         for (let storedBatch of storedBatches) {
             const transferBatch = await this.loadFromDto(storedBatch.data as TransferBatchDTO);
-            if (!transferBatch?.isMarkedAsMinedInRsk()) {
+            if (transferBatch!.isPending()) {
+                //this.logger.debug('Pending:', transferBatch);
                 return transferBatch;
             }
         }
@@ -454,7 +478,7 @@ export class TransferBatchValidator {
         if (!transferBatch.hasEnoughRskSendingSignatures()) {
             throw new TransferBatchValidationError('Refusing to sign a batch without enough RSK signatures');
         }
-        await this.validateTransfers(transferBatch, TransferStatus.New);
+        await this.validateTransfers(transferBatch, TransferStatus.Sending);
         await this.validatePsbt(transferBatch, transferBatch.initialBtcTransaction);
         if (transferBatch.signedBtcTransaction) {
             await this.validatePsbt(transferBatch, transferBatch.signedBtcTransaction);

@@ -93,8 +93,6 @@ export class FastBTCNode {
             this.logger.info(`scanned ${newEvents.length} new events`);
         }
         const numTransfers = await this.eventScanner.getNumTransfers();
-        const nextBatchTransfers = await this.eventScanner.getNextBatchTransfers(this.config.maxTransfersInBatch);
-
         const numNodesOnline = this.networkUtil.getNumNodesOnline();
 
         // TODO: vote for initiator
@@ -106,7 +104,6 @@ export class FastBTCNode {
         this.logger.info('is initiator?    ', isInitiator);
         this.logger.info('nodes online:    ', numNodesOnline);
         this.logger.info('transfers total: ', numTransfers);
-        this.logger.info('transfers queued:', nextBatchTransfers.length);
 
         if (!isInitiator) {
             this.logger.info('not initiator, not doing anything');
@@ -124,6 +121,7 @@ export class FastBTCNode {
 
         let transferBatch = await this.bitcoinTransferService.getCurrentTransferBatch();
         transferBatch = await this.updateTransferBatchFromTransientInitiatorData(transferBatch);
+        this.logger.info('transfers queued:', transferBatch.transfers.length);
 
         this.logger.info('TransferBatch:', transferBatch.getDto());
 

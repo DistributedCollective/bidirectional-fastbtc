@@ -46,4 +46,4 @@ WORKDIR /app
 
 EXPOSE 7777
 
-CMD [ "node", "--enable-source-maps", "./startup.js" ]
+CMD [ "node", "--enable-source-maps", "--trace-warnings", "./startup.js" ]
