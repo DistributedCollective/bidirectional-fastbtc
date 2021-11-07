@@ -237,7 +237,7 @@ export class FastBTCNode {
             this.logger.debug('received message:');
             this.logger.debug('type  ', message.type);
             this.logger.debug('source', message.source);
-            this.logger.debug('data  ', JSON.stringify(message.data));
+            this.logger.debug('data  ', JSON.stringify(message.data, null, 2));
 
             promise.catch(err => this.logger.exception(err, 'error processing message:', message));
         }
