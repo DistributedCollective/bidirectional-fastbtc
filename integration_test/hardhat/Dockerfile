@@ -18,12 +18,16 @@ FROM fastbtc-hardhat-base AS fastbtc-hardhat-builder
 
 WORKDIR /app
 
-COPY . .
+COPY contracts/ ./contracts
+COPY deploy/ ./deploy
+COPY scripts/ ./scripts
+COPY test/ ./test
+COPY package.json hardhat.config.ts tsconfig.json yarn.lock ./
 
 RUN git --version
 RUN yarn
 RUN yarn build
-
+RUN ls
 
 ###################
 # the final image #
@@ -34,8 +38,9 @@ RUN apk update && apk add nodejs npm --no-cache
 RUN node --version
 
 COPY --from=fastbtc-hardhat-builder /app /app
-
 WORKDIR /app
+RUN ls
+
 
 EXPOSE 7777
 
