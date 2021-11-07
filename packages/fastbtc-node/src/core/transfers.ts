@@ -18,11 +18,13 @@ type TransactionResponse = ethers.providers.TransactionResponse;
 
 export interface TransferBatchDTO {
     transferIds: string[];
-    rskUpdateSignatures: string[];
-    rskSigners: string[];
+    rskSendingSignatures: string[];
+    rskSendingSigners: string[];
     bitcoinTransactionHash: string;
     initialBtcTransaction: PartiallySignedBitcoinTransaction;
     signedBtcTransaction?: PartiallySignedBitcoinTransaction;
+    rskMinedSignatures: string[];
+    rskMinedSigners: string[];
 }
 
 export interface TransferBatchEnvironment {
@@ -36,11 +38,13 @@ export class TransferBatch {
     constructor(
         private environment: TransferBatchEnvironment,
         public transfers: Transfer[],
-        public rskUpdateSignatures: string[],
-        public rskSigners: string[],
+        public rskSendingSignatures: string[],
+        public rskSendingSigners: string[],
         public bitcoinTransactionHash: string,
         public initialBtcTransaction: PartiallySignedBitcoinTransaction,
-        public signedBtcTransaction?: PartiallySignedBitcoinTransaction,
+        public signedBtcTransaction: PartiallySignedBitcoinTransaction|undefined,
+        public rskMinedSignatures: string[],
+        public rskMinedSigners: string[],
     ) {
     }
 
@@ -55,11 +59,13 @@ export class TransferBatch {
     getDto(): TransferBatchDTO {
         return {
             transferIds: this.getTransferIds(),
-            rskUpdateSignatures: this.rskUpdateSignatures,
-            rskSigners: this.rskSigners,
+            rskSendingSignatures: this.rskSendingSignatures,
+            rskSendingSigners: this.rskSendingSigners,
             bitcoinTransactionHash: this.bitcoinTransactionHash,
             initialBtcTransaction: this.initialBtcTransaction,
             signedBtcTransaction: this.signedBtcTransaction,
+            rskMinedSignatures: this.rskMinedSignatures,
+            rskMinedSigners: this.rskMinedSigners,
         }
     }
 
@@ -67,11 +73,13 @@ export class TransferBatch {
         return new TransferBatch(
             deepcopy(this.environment),
             [...this.transfers],
-            [...this.rskUpdateSignatures],
-            [...this.rskSigners],
+            [...this.rskSendingSignatures],
+            [...this.rskSendingSigners],
             this.bitcoinTransactionHash,
             deepcopy(this.initialBtcTransaction),
             this.signedBtcTransaction ? deepcopy(this.signedBtcTransaction) : undefined,
+            [...this.rskMinedSignatures],
+            [...this.rskMinedSigners],
         );
     }
 
@@ -131,7 +139,7 @@ export class TransferBatch {
     }
 
     hasEnoughRskSendingSignatures(): boolean {
-        return this.rskUpdateSignatures.length >= this.environment.numRequiredSigners;
+        return this.rskSendingSignatures.length >= this.environment.numRequiredSigners;
     }
 
     isMarkedAsSendingInRsk(): boolean {
@@ -158,6 +166,10 @@ export class TransferBatch {
         return chainTx.confirmations >= requiredConfirmations;
     }
 
+    hasEnoughRskMinedSignatures(): boolean {
+        return this.rskMinedSignatures.length >= this.environment.numRequiredSigners;
+    }
+
     isMarkedAsMinedInRsk(): boolean {
         for (const transfer of this.transfers) {
             if(transfer.status !== TransferStatus.Mined) {
@@ -171,6 +183,8 @@ export class TransferBatch {
         // TODO: should handle refunded and reclaimed
         return !this.isMarkedAsMinedInRsk();
     }
+
+    // TODO: something to validate that the state of all transfers is the same, and that it is New, Sending or Mined
 }
 
 export class TransferBatchValidationError extends Error {
@@ -206,19 +220,19 @@ export class BitcoinTransferService {
             const transfers = await this.getNextBatchTransfers(transaction);
             // TODO: we don't really need to create the PSBT every time...
             const initialSignedBtcTransaction = await this.btcMultisig.createPartiallySignedTransaction(transfers);
-            const rskUpdateSignatures: string[] = [];
-            const rskSigners: string[] = [];
-            const currentBlockNumber = await this.ethersProvider.getBlockNumber();
             const bitcoinTxHash = this.btcMultisig.getBitcoinTransactionHash(
                 initialSignedBtcTransaction
             );
             return new TransferBatch(
                 await this.getTransferBatchEnvironment(bitcoinTxHash),  // TODO: could pass null here since it is not in blockchain
                 transfers,
-                rskUpdateSignatures,
-                rskSigners,
+                [],
+                [],
                 bitcoinTxHash,
                 initialSignedBtcTransaction,
+                undefined,
+                [],
+                [],
             );
         });
     }
@@ -243,11 +257,13 @@ export class BitcoinTransferService {
             return new TransferBatch(
                 await this.getTransferBatchEnvironment(dto.bitcoinTransactionHash),
                 transfers,
-                dto.rskUpdateSignatures,
-                dto.rskSigners,
+                dto.rskSendingSignatures,
+                dto.rskSendingSigners,
                 dto.bitcoinTransactionHash,
                 dto.initialBtcTransaction,
-                dto.signedBtcTransaction
+                dto.signedBtcTransaction,
+                dto.rskMinedSignatures,
+                dto.rskMinedSigners,
             );
         });
     }
@@ -266,9 +282,10 @@ export class BitcoinTransferService {
     async addRskSendingSignatures(transferBatch: TransferBatch, signaturesAndAddresses: {signature: string, address: string}[]): Promise<TransferBatch> {
         // TODO: validate transfer batch status, maybe
         transferBatch  = transferBatch.copy();
+        let updated = false;
         for(const {address, signature} of signaturesAndAddresses) {
             // TODO: validate that signature matches address and that address is a valid federator
-            if (transferBatch.rskSigners.indexOf(address) !== -1) {
+            if (transferBatch.rskSendingSigners.indexOf(address) !== -1) {
                 this.logger.info(`address ${address} has already signed`);
                 continue;
             }
@@ -276,15 +293,49 @@ export class BitcoinTransferService {
                 this.logger.info(`transfer batch has enough rsk sent signatures`);
                 continue;
             }
-            transferBatch.rskUpdateSignatures = [...transferBatch.rskUpdateSignatures, signature];
-            transferBatch.rskSigners = [...transferBatch.rskSigners, address];
+            updated = true;
+            transferBatch.rskSendingSignatures = [...transferBatch.rskSendingSignatures, signature];
+            transferBatch.rskSendingSigners = [...transferBatch.rskSendingSigners, address];
         }
-        if (transferBatch.rskSigners.length === this.config.numRequiredSigners - 1) {
+        if (transferBatch.rskSendingSigners.length === this.config.numRequiredSigners - 1) {
+            updated = true;
             const {signature, address} = await this.signRskSendingUpdate(transferBatch);
-            transferBatch.rskUpdateSignatures = [...transferBatch.rskUpdateSignatures, signature];
-            transferBatch.rskSigners = [...transferBatch.rskSigners, address];
+            transferBatch.rskSendingSignatures = [...transferBatch.rskSendingSignatures, signature];
+            transferBatch.rskSendingSigners = [...transferBatch.rskSendingSigners, address];
         }
-        await this.updateStoredTransferBatch(transferBatch);
+        if (updated) {
+            await this.updateStoredTransferBatch(transferBatch);
+        }
+        return transferBatch;
+    }
+
+    async addRskMinedSignatures(transferBatch: TransferBatch, signaturesAndAddresses: {signature: string, address: string}[]): Promise<TransferBatch> {
+        // TODO: validate transfer batch status, maybe
+        transferBatch  = transferBatch.copy();
+        let updated = false;
+        for(const {address, signature} of signaturesAndAddresses) {
+            // TODO: validate that signature matches address and that address is a valid federator
+            if (transferBatch.rskMinedSigners.indexOf(address) !== -1) {
+                this.logger.info(`address ${address} has already signed`);
+                continue;
+            }
+            if (transferBatch.hasEnoughRskMinedSignatures()) {
+                this.logger.info(`transfer batch has enough rsk sent signatures`);
+                continue;
+            }
+            updated = true;
+            transferBatch.rskMinedSignatures = [...transferBatch.rskMinedSignatures, signature];
+            transferBatch.rskMinedSigners = [...transferBatch.rskMinedSigners, address];
+        }
+        if (transferBatch.rskMinedSigners.length === this.config.numRequiredSigners - 1) {
+            updated = true;
+            const {signature, address} = await this.signRskMinedUpdate(transferBatch);
+            transferBatch.rskMinedSignatures = [...transferBatch.rskMinedSignatures, signature];
+            transferBatch.rskMinedSigners = [...transferBatch.rskMinedSigners, address];
+        }
+        if (updated) {
+            await this.updateStoredTransferBatch(transferBatch);
+        }
         return transferBatch;
     }
 
@@ -342,18 +393,22 @@ export class BitcoinTransferService {
         if (!transferBatch.hasEnoughRskSendingSignatures()) {
             throw new Error('TransferBatch does not have enough signatures to be marked as sending');
         }
+        if (transferBatch.isMarkedAsSendingInRsk()) {
+            throw new Error('TransferBatch is already marked as sending in rsk');
+        }
         await this.dbConnection.transaction(async transaction => {
             const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
             const transferRepository = transaction.getRepository(Transfer);
-            this.logger.info('marking transfer batch', transferBatch, 'as sending in RSK');
+            this.logger.info('marking transfer batch as sending in RSK');
             const result = await this.sendRskTransaction(
                 () => this.fastBtcBridge.markTransfersAsSending(
                     `0x${transferBatch.bitcoinTransactionHash}`,
                     transferBatch.getTransferIds(),
-                    transferBatch.rskUpdateSignatures
+                    transferBatch.rskSendingSignatures
                 )
             );
             this.logger.info('transfers successfully marked as sending in tx hash:', result.hash);
+            // TODO: decide if we should just skip local updates
             const transfers = await Promise.all(
                 transferBatch.getTransferIds().map(
                     transferId => transferRepository.findOneOrFail({
@@ -369,11 +424,45 @@ export class BitcoinTransferService {
         });
     }
 
+    async markAsMinedInRsk(transferBatch: TransferBatch): Promise<void> {
+        if (!transferBatch.hasEnoughRskMinedSignatures()) {
+            throw new Error('TransferBatch does not have enough signatures to be marked as mined');
+        }
+        if (transferBatch.isMarkedAsMinedInRsk()) {
+            throw new Error('TransferBatch is already marked as mined in rsk');
+        }
+        await this.dbConnection.transaction(async transaction => {
+            const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
+            const transferRepository = transaction.getRepository(Transfer);
+            this.logger.info('marking transfer batch as mined in RSK');
+            const result = await this.sendRskTransaction(
+                () => this.fastBtcBridge.markTransfersAsMined(
+                    transferBatch.getTransferIds(),
+                    transferBatch.rskMinedSignatures
+                )
+            );
+            this.logger.info('transfers successfully marked as mined in tx hash:', result.hash);
+            // TODO: decide if we should just skip local updates
+            const transfers = await Promise.all(
+                transferBatch.getTransferIds().map(
+                    transferId => transferRepository.findOneOrFail({
+                        where: {transferId},
+                    })
+                )
+            );
+            for (const transfer of transfers) {
+                transfer.status = TransferStatus.Mined;
+            }
+            await transferRepository.save(transfers);
+            await transferBatchRepository.createOrUpdateFromTransferBatch(transferBatch.getDto());
+        });
+    }
+
     async signRskSendingUpdate(transferBatch: TransferBatch): Promise<{signature: string, address: string}> {
         if (transferBatch.transfers.length === 0) {
             throw new Error("Refusing to sign empty transfer batch");
         }
-        await this.validator.validateForSigningRskSentUpdate(transferBatch);
+        await this.validator.validateForSigningRskSendingUpdate(transferBatch);
         const updateHash = await this.fastBtcBridge.getTransferBatchUpdateHashWithTxHash(
             `0x${transferBatch.bitcoinTransactionHash}`,
             transferBatch.getTransferIds(),
@@ -386,12 +475,31 @@ export class BitcoinTransferService {
 
     async sendToBitcoin(transferBatch: TransferBatch): Promise<void> {
         this.logger.info("Sending TransferBatch to bitcoin");
+        await this.validator.validateForSendingToBitcoin(transferBatch);
+        if (transferBatch.isSentToBitcoin()) {
+            this.logger.info("TransferBatch is already sent to bitcoin");
+            return;
+        }
         if (!transferBatch.signedBtcTransaction) {
             throw new Error("TransferBatch doesn't have signedBtcTransaction");
         }
         await this.btcMultisig.submitTransaction(transferBatch.signedBtcTransaction);
         this.logger.info("TransferBatch successfully sent to bitcoin");
     }
+
+    async signRskMinedUpdate(transferBatch: TransferBatch): Promise<{signature: string, address: string}> {
+        if (transferBatch.transfers.length === 0) {
+            throw new Error("Refusing to sign empty transfer batch");
+        }
+        await this.validator.validateForSigningRskMinedUpdate(transferBatch);
+        const updateHash = await this.fastBtcBridge.getTransferBatchUpdateHash(
+            transferBatch.getTransferIds(),
+            TransferStatus.Mined
+        );
+        const signature = await this.ethersSigner.signMessage(ethers.utils.arrayify(updateHash));
+        const address = await this.ethersSigner.getAddress();
+        return {signature, address};
+    };
 
     private async getTransferBatchEnvironment(bitcoinTransactionHash: string|null): Promise<TransferBatchEnvironment> {
         const currentBlockNumber = await this.ethersProvider.getBlockNumber();
@@ -457,35 +565,6 @@ export class BitcoinTransferService {
         }
         return result;
     }
-
-    //private async getPendingStoredTransferBatches(entityManager: EntityManager): Promise<StoredBitcoinTransferBatch[]> {
-    //    const transferBatchRepository = entityManager.getRepository(StoredBitcoinTransferBatch);
-    //    const storedTransferBatches = await transferBatchRepository
-    //        .createQueryBuilder('batch')
-    //        .where(`batch->'data'->'status' < :statuses`)
-    //        .setParameters({
-    //            statuses: [
-    //                TransferBatchStatus.Ready,
-    //                TransferBatchStatus.SentStatusUpdatedToRSK
-    //            ],
-    //        })
-    //        .getMany();
-    //    if (storedTransferBatches.length === 0) {
-    //        return [];
-    //    }
-    //    this.logger.info(`Found ${storedTransferBatches.length} stored transfer batches`)
-    //    function compareByStatus(a: StoredBitcoinTransferBatch, b: StoredBitcoinTransferBatch) {
-    //        if (a.data.status === b.data.status) {
-    //            return 0;
-    //        }
-    //        if (a.data.status === b.data.status) {
-    //            return -1;
-    //        }
-    //        return 1;
-    //    }
-    //    storedTransferBatches.sort(compareByStatus);
-    //    return storedTransferBatches;
-    //}
 }
 
 @injectable()
@@ -498,11 +577,19 @@ export class TransferBatchValidator {
     ) {
     }
 
-    async validateForSigningRskSentUpdate(transferBatch: TransferBatch): Promise<void> {
-        if (transferBatch.transfers.length === 0) {
-            throw new TransferBatchValidationError('Refusing to sign a batch without transfers');
+    async validateForSigningRskSendingUpdate(transferBatch: TransferBatch): Promise<void> {
+        await this.validateRskStatusUpdate(transferBatch, TransferStatus.New);
+    }
+
+    async validateForSigningRskMinedUpdate(transferBatch: TransferBatch): Promise<void> {
+        if (!transferBatch.isSentToBitcoin()) {
+            throw new TransferBatchValidationError('Refusing to sign a batch that has not been sent to bitcoin yet');
         }
-        await this.validateTransfers(transferBatch, TransferStatus.New);
+        await this.validateRskStatusUpdate(transferBatch, TransferStatus.Sending);
+    }
+
+    private async validateRskStatusUpdate(transferBatch: TransferBatch, expectedCurrentStatus: TransferStatus): Promise<void> {
+        await this.validateTransfers(transferBatch, expectedCurrentStatus);
         await this.validatePsbt(transferBatch, transferBatch.initialBtcTransaction);
         if (transferBatch.signedBtcTransaction) {
             await this.validatePsbt(transferBatch, transferBatch.signedBtcTransaction);
@@ -523,11 +610,31 @@ export class TransferBatchValidator {
         }
     }
 
+    async validateForSendingToBitcoin(transferBatch: TransferBatch): Promise<void> {
+        if (
+            transferBatch.transfers.length == 0 ||
+            !transferBatch.hasEnoughRskSendingSignatures() ||
+            !transferBatch.hasEnoughBitcoinSignatures() ||
+            !transferBatch.isMarkedAsSendingInRsk() ||
+            !transferBatch.signedBtcTransaction
+        ) {
+            throw new TransferBatchValidationError('TransferBatch is not sendable to bitcoin');
+        }
+        await this.validateTransfers(transferBatch, null);
+        await this.validatePsbt(transferBatch, transferBatch.initialBtcTransaction);
+        await this.validatePsbt(transferBatch, transferBatch.signedBtcTransaction);
+    }
+
     async validateCompleteTransferBatch(transferBatch: TransferBatch): Promise<void> {
         if (
             transferBatch.transfers.length == 0 ||
             !transferBatch.hasEnoughRskSendingSignatures() ||
             !transferBatch.hasEnoughBitcoinSignatures() ||
+            !transferBatch.hasEnoughRskMinedSignatures() ||
+            // We should probably validate that all transfers are mined instead of just sending, but it's possible
+            // that that state is not yet reflected in the transfers. So let's just roll with this now.
+            !transferBatch.isMarkedAsSendingInRsk() ||
+            !transferBatch.isSentToBitcoin() ||
             !transferBatch.signedBtcTransaction
         ) {
             throw new TransferBatchValidationError('TransferBatch is not complete');

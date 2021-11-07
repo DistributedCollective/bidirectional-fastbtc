@@ -25,6 +25,8 @@ export class BasicAuth {
     };
 }
 
+export type ErrorLogger = (error: any, requestDebugInfo: {request: any, options: any}) => void;
+
 export interface RPCClientOpts {
     protocol: string|null;
     host: string;
@@ -53,7 +55,7 @@ export class RPCClient {
         return this.setAuth(new BasicAuth(username, password));
     }
 
-    call(method: string, params: any, callback: any) {
+    call(method: string, params: any, callback: any, errorLogger?: ErrorLogger) {
         let options: Options;
         let query;
         let request;
@@ -107,9 +109,9 @@ export class RPCClient {
                 if (response.statusCode !== 200 && !err) {
                     err = {"message": "Server replied with : " + response.statusCode + ' ' + JSON.stringify(json)};
                 }
-                // TODO: We might not want to log this, because sometimes bitcoin rpc expectedly responds with an error
-                if (err) {
-                    console.warn('RPC request:', requestDebugInfo, 'caused error:', err);
+                // Logging here spams too much. Save it for later.
+                if (err && errorLogger) {
+                    errorLogger(err, requestDebugInfo);
                 }
                 return callback(err, msg);
             });

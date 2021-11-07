@@ -162,7 +162,7 @@ export class StoredBitcoinTransferBatchRepository extends Repository<StoredBitco
     }
 
     async findByTransferIds(transferIds: string[]): Promise<StoredBitcoinTransferBatch|undefined> {
-        // TODO: there must be a better way to compare array unordered
+        // TODO: this should compare the order too
         return await this
             .createQueryBuilder('batch')
             .where(`batch."data"->'transferIds' @> :transferIds AND batch."data"->'transferIds' <@ :transferIds`)

@@ -2,7 +2,6 @@ import {inject, injectable} from 'inversify';
 import {EventScanner, Scanner} from '../rsk/scanner';
 import {P2PNetwork} from '../p2p/network';
 import {MessageUnion, Network, Node} from 'ataraxia';
-import {TransferStatus} from '../db/models';
 import {BitcoinMultisig, PartiallySignedBitcoinTransaction} from '../btc/multisig';
 import {Config} from '../config';
 import Logger from '../logger';
@@ -14,15 +13,15 @@ type FastBTCNodeConfig = Pick<
     'maxTransfersInBatch' | 'maxPassedBlocksInBatch' | 'numRequiredSigners'
 >
 
-// TODO: get rid of this
-interface PropagateTransferBatchMessage {
-}
-
 interface RequestRSKSendingSignatureMessage {
     transferBatchDto: TransferBatchDTO;
 }
 
 interface RequestBitcoinSignatureMessage {
+    transferBatchDto: TransferBatchDTO;
+}
+
+interface RequestRSKMinedSignatureMessage {
     transferBatchDto: TransferBatchDTO;
 }
 
@@ -41,25 +40,44 @@ interface BitcoinSignatureResponseMessage {
     signedBtcTransaction: PartiallySignedBitcoinTransaction;
 }
 
+interface RSKMinedSignatureResponseMessage {
+    transferBatchDto: TransferBatchDTO;
+    signature: string;
+    address: string;
+}
+
 interface FastBTCMessage {
-    'fastbtc:propagate-transfer-batch': PropagateTransferBatchMessage,
     'fastbtc:request-rsk-sending-signature': RequestRSKSendingSignatureMessage,
     'fastbtc:request-bitcoin-signature': RequestBitcoinSignatureMessage,
+    'fastbtc:request-rsk-mined-signature': RequestRSKSendingSignatureMessage,
     'fastbtc:transfer-batch-complete': TransferBatchCompleteMessage,
     'fastbtc:rsk-sending-signature-response': RSKSendingSignatureResponseMessage,
     'fastbtc:bitcoin-signature-response': BitcoinSignatureResponseMessage,
+    'fastbtc:rsk-mined-signature-response': RSKMinedSignatureResponseMessage,
 }
 
 interface TransientInitiatorData {
     currentTransferBatch: TransferBatch|null;
-    gatheredRskSentSignaturesAndAddresses: {signature: string; address: string}[];
+    gatheredRskSendingSignaturesAndAddresses: {signature: string; address: string}[];
     gatheredBitcoinSignatures: PartiallySignedBitcoinTransaction[];
+    gatheredRskMinedSignaturesAndAddresses: {signature: string; address: string}[];
 }
+
 function getEmptyTransientInitiatorData(currentTransferBatch: TransferBatch|null): TransientInitiatorData {
     return {
         currentTransferBatch,
-        gatheredRskSentSignaturesAndAddresses: [],
+        gatheredRskSendingSignaturesAndAddresses: [],
         gatheredBitcoinSignatures: [],
+        gatheredRskMinedSignaturesAndAddresses: [],
+    }
+}
+
+function copyTransientInitiatorData(data: TransientInitiatorData): TransientInitiatorData {
+    return {
+        currentTransferBatch: data.currentTransferBatch ? data.currentTransferBatch.copy() : null,
+        gatheredRskSendingSignaturesAndAddresses: [...data.gatheredRskSendingSignaturesAndAddresses],
+        gatheredBitcoinSignatures: [...data.gatheredBitcoinSignatures],
+        gatheredRskMinedSignaturesAndAddresses: [...data.gatheredRskMinedSignaturesAndAddresses],
     }
 }
 
@@ -131,7 +149,7 @@ export class FastBTCNode {
         }
 
         if(!transferBatch.hasEnoughRskSendingSignatures()) {
-            this.logger.info('TransferBatch does not have enough RSK Sent signatures');
+            this.logger.info('TransferBatch does not have enough RSK sending signatures');
             await this.network.broadcast(
                 'fastbtc:request-rsk-sending-signature',
                 {
@@ -164,44 +182,78 @@ export class FastBTCNode {
             return;
         }
 
+        if(!transferBatch.hasEnoughRskMinedSignatures()) {
+            this.logger.info('TransferBatch does not have enough RSK mined signatures');
+            await this.network.broadcast(
+                'fastbtc:request-rsk-mined-signature',
+                {
+                    transferBatchDto: transferBatch.getDto(),
+                }
+            );
+            return;
+        }
+
         if(!transferBatch.isMarkedAsMinedInRsk()) {
-            // TODO: ask for signatures here
             this.logger.info('TransferBatch is not marked as mined in RSK');
+            await this.bitcoinTransferService.markAsMinedInRsk(transferBatch);
+            await this.network.broadcast(
+                'fastbtc:transfer-batch-complete',
+                {
+                    transferBatchDto: transferBatch.getDto(),
+                }
+            );
             return;
         }
     }
 
     private async updateTransferBatchFromTransientInitiatorData(transferBatch: TransferBatch): Promise<TransferBatch> {
+        // make copies so it doesn't get mutated in between, and reset the transient data
+        const {
+            currentTransferBatch: transferBatchDuringGathering,
+            gatheredRskSendingSignaturesAndAddresses,
+            gatheredBitcoinSignatures,
+            gatheredRskMinedSignaturesAndAddresses,
+        } = copyTransientInitiatorData(this.transientInitiatorData);
+        this.transientInitiatorData = getEmptyTransientInitiatorData(transferBatch);
+
         if (
-            !this.transientInitiatorData.currentTransferBatch ||
-            !this.transientInitiatorData.currentTransferBatch.hasMatchingTransferIds(transferBatch.getTransferIds())
+            !transferBatchDuringGathering ||
+            !transferBatchDuringGathering.hasMatchingTransferIds(transferBatch.getTransferIds())
         ) {
-            this.transientInitiatorData = getEmptyTransientInitiatorData(transferBatch);
+            // we received signatures for another transfer batch -- cannot do anything with them
             return transferBatch;
         }
 
         let updated = false;
-        if (this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses.length > 0) {
+        if (gatheredRskSendingSignaturesAndAddresses.length > 0) {
+            this.logger.info('Gathered', gatheredRskSendingSignaturesAndAddresses.length, 'RSK mined signatures');
             transferBatch = await this.bitcoinTransferService.addRskSendingSignatures(
                 transferBatch,
-                this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses
+                gatheredRskSendingSignaturesAndAddresses
             );
-            this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses = [];
-            this.transientInitiatorData.currentTransferBatch = transferBatch;
             updated = true;
         }
 
-        if (this.transientInitiatorData.gatheredBitcoinSignatures.length > 0) {
+        if (gatheredBitcoinSignatures.length > 0) {
+            this.logger.info('Gathered', gatheredBitcoinSignatures.length, 'bitcoin signatures');
             transferBatch = await this.bitcoinTransferService.addBitcoinSignatures(
                 transferBatch,
-                this.transientInitiatorData.gatheredBitcoinSignatures
+                gatheredBitcoinSignatures
             );
-            this.transientInitiatorData.gatheredBitcoinSignatures = [];
-            this.transientInitiatorData.currentTransferBatch = transferBatch;
+            updated = true;
+        }
+
+        if (gatheredRskMinedSignaturesAndAddresses.length > 0) {
+            this.logger.info('Gathered', gatheredRskMinedSignaturesAndAddresses.length, 'RSK mined signatures');
+            transferBatch = await this.bitcoinTransferService.addRskMinedSignatures(
+                transferBatch,
+                gatheredRskMinedSignaturesAndAddresses
+            );
             updated = true;
         }
 
         if (updated) {
+            this.transientInitiatorData.currentTransferBatch = transferBatch;
             await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
         }
         return transferBatch;
@@ -226,6 +278,10 @@ export class FastBTCNode {
                 promise = this.onRequestBitcoinSignature(message.data, message.source);
                 break
             }
+            case 'fastbtc:request-rsk-mined-signature': {
+                promise = this.onRequestRskMinedSignature(message.data, message.source);
+                break
+            }
             case 'fastbtc:transfer-batch-complete': {
                 promise = this.onTransferBatchComplete(message.data, message.source);
                 break
@@ -236,6 +292,10 @@ export class FastBTCNode {
             }
             case 'fastbtc:bitcoin-signature-response': {
                 promise = this.onBitcoinSignatureResponse(message.data, message.source);
+                break;
+            }
+            case 'fastbtc:rsk-mined-signature-response': {
+                promise = this.onRskMinedSignatureResponse(message.data, message.source);
                 break;
             }
         }
@@ -261,7 +321,7 @@ export class FastBTCNode {
             return;
         }
 
-        await this.transferBatchValidator.validateForSigningRskSentUpdate(transferBatch);
+        await this.transferBatchValidator.validateForSigningRskSendingUpdate(transferBatch);
 
         await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
 
@@ -290,10 +350,36 @@ export class FastBTCNode {
 
         await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
 
+        // TODO: maybe this should go through BitcoinTransferService
         const signedBtcTransaction = await this.btcMultisig.signTransaction(transferBatch.initialBtcTransaction);
         await source.send('fastbtc:bitcoin-signature-response', {
             transferBatchDto: transferBatch.getDto(),
             signedBtcTransaction,
+        });
+    }
+
+    onRequestRskMinedSignature = async (data: RequestRSKMinedSignatureMessage, source: Node<FastBTCMessage>) => {
+        if (source.id !== this.networkUtil.getPreferredInitiatorId()) {
+            this.logger.warning('Rejecting RSK update signature request from node', source, 'since it is not initiator');
+            return;
+        }
+
+        let transferBatch = await this.bitcoinTransferService.loadFromDto(data.transferBatchDto);
+        if (!transferBatch) {
+            this.logger.warning("TransferBatch cannot be loaded because one or more transfers haven't been synchronized");
+            return;
+        }
+
+        await this.transferBatchValidator.validateForSigningRskMinedUpdate(transferBatch);
+
+        await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
+
+        // TODO: this validates again
+        const {address, signature} =  await this.bitcoinTransferService.signRskMinedUpdate(transferBatch);
+        await source.send('fastbtc:rsk-mined-signature-response', {
+            transferBatchDto: transferBatch.getDto(),
+            address,
+            signature
         });
     }
 
@@ -302,6 +388,16 @@ export class FastBTCNode {
             this.logger.warning('Rejecting transfer batch complete message from node', source, 'since it is not initiator');
             return;
         }
+
+        let transferBatch = await this.bitcoinTransferService.loadFromDto(data.transferBatchDto);
+        if (!transferBatch) {
+            this.logger.warning("TransferBatch cannot be loaded because one or more transfers haven't been synchronized");
+            return;
+        }
+
+        await this.transferBatchValidator.validateCompleteTransferBatch(transferBatch);
+
+        await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
     }
 
     onRskSendingSignatureResponse = async (data: RSKSendingSignatureResponseMessage, source: Node<FastBTCMessage>) => {
@@ -315,7 +411,7 @@ export class FastBTCNode {
         }
         const {transferBatchDto, address, signature} = data;
         this.transientInitiatorData.currentTransferBatch.validateMatchesDto(transferBatchDto);
-        this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses.push({ signature, address});
+        this.transientInitiatorData.gatheredRskSendingSignaturesAndAddresses.push({ signature, address});
     }
 
     onBitcoinSignatureResponse = async (data: BitcoinSignatureResponseMessage, source: Node<FastBTCMessage>) => {
@@ -331,5 +427,19 @@ export class FastBTCNode {
         const {transferBatchDto, signedBtcTransaction} = data;
         this.transientInitiatorData.currentTransferBatch.validateMatchesDto(transferBatchDto);
         this.transientInitiatorData.gatheredBitcoinSignatures.push(signedBtcTransaction);
+    }
+
+    onRskMinedSignatureResponse = async (data: RSKMinedSignatureResponseMessage, source: Node<FastBTCMessage>) => {
+        if (!this.networkUtil.isThisNodeInitiator()) {
+            this.logger.warning('Received rsk mined signature response even though I am not the initiator');
+            return;
+        }
+        if (!this.transientInitiatorData.currentTransferBatch) {
+            this.logger.warning('Cannot deal with received rsk mined signature response because I don\'t know the current transfer batch');
+            return;
+        }
+        const {transferBatchDto, address, signature} = data;
+        this.transientInitiatorData.currentTransferBatch.validateMatchesDto(transferBatchDto);
+        this.transientInitiatorData.gatheredRskMinedSignaturesAndAddresses.push({ signature, address});
     }
 }
