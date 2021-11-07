@@ -305,6 +305,11 @@ export class BitcoinTransferService {
         const validPsbts: PartiallySignedBitcoinTransaction[] = [];
         const seenPublicKeys = new Set<string>(transferBatchPsbt.signedPublicKeys);
 
+        if (!seenPublicKeys.has(this.btcMultisig.getThisNodePublicKey())) {
+            const thisNodePsbt = await this.btcMultisig.signTransaction(transferBatch.initialBtcTransaction);
+            psbts.push(thisNodePsbt);
+        }
+
         for (const psbt of psbts) {
             if (psbt.signedPublicKeys.length === 0) {
                 this.logger.info('empty psbt, skipping');
@@ -337,7 +342,7 @@ export class BitcoinTransferService {
 
     async markAsSendingInRsk(transferBatch: TransferBatch): Promise<void> {
         if (!transferBatch.hasEnoughRskSendingSignatures()) {
-            throw new Error('TransferBatch does not have enough signaturse to be marked as sending');
+            throw new Error('TransferBatch does not have enough signatures to be marked as sending');
         }
         await this.dbConnection.transaction(async transaction => {
             const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
@@ -348,8 +353,12 @@ export class BitcoinTransferService {
                 transferBatch.getTransferIds(),
                 transferBatch.rskUpdateSignatures
             );
-            this.logger.info('result', result);
-            await result.wait();
+            this.logger.info('tx hash:', result.hash, 'waiting...');
+            const receipt = await result.wait();
+            this.logger.info('receipt:', receipt);
+            if (!receipt.status) {
+                throw new Error('RSK transaction did not go through');
+            }
             const transfers = await Promise.all(
                 transferBatch.getTransferIds().map(
                     transferId => transferRepository.findOneOrFail({

@@ -181,6 +181,7 @@ export class FastBTCNode {
                 this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses
             );
             this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses = [];
+            this.transientInitiatorData.currentTransferBatch = transferBatch;
             updated = true;
         }
 
@@ -190,6 +191,7 @@ export class FastBTCNode {
                 this.transientInitiatorData.gatheredBitcoinSignatures
             );
             this.transientInitiatorData.gatheredBitcoinSignatures = [];
+            this.transientInitiatorData.currentTransferBatch = transferBatch;
             updated = true;
         }
 
@@ -232,7 +234,11 @@ export class FastBTCNode {
             }
         }
         if(promise) {
-            this.logger.debug('received message', message);
+            this.logger.debug('received message:');
+            this.logger.debug('type  ', message.type);
+            this.logger.debug('source', message.source);
+            this.logger.debug('data  ', JSON.stringify(message.data));
+
             promise.catch(err => this.logger.exception(err, 'error processing message:', message));
         }
     }
