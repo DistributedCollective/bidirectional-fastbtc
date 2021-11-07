@@ -354,7 +354,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
                 && feeStructures[feeStructureIndex].dynamicFee == 0, "This slot has already been used");
 
         require(newBaseFeeSatoshi <= MAX_BASE_FEE_SATOSHI, "Base fee exceeds maximum");
-        require(newDynamicFee < DYNAMIC_FEE_DIVISOR, "Dynamic fee divisor too high");
+        require(newDynamicFee < DYNAMIC_FEE_DIVISOR, "Dynamic fee too high");
 
         // guarded
         feeStructures[feeStructureIndex].baseFeeSatoshi = uint32(newBaseFeeSatoshi);
@@ -538,7 +538,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     external
     onlyAdmin
     {
-        require(newMinTransferSatoshi < (2 << 40), "Must fit in uint40");
+        require(newMinTransferSatoshi <= type(uint40).max, "Must fit in uint40");
         minTransferSatoshi = uint40(newMinTransferSatoshi);
     }
 
@@ -548,7 +548,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     external
     onlyAdmin
     {
-        require(newMaxTransferSatoshi < (2 << 40), "Must fit in uint40");
+        require(newMaxTransferSatoshi <= type(uint40).max, "Must fit in uint40");
         maxTransferSatoshi = uint40(newMaxTransferSatoshi);
     }
 

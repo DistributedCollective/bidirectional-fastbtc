@@ -58,8 +58,8 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     returns (bool)
     {
         // TODO:
-        // - do the checksum validation if feasible with gas costs in mind
-        // - could see if someone has already done this in a library
+        // - could see if someone has already done this in a library,
+        // this does not validate the actual address
 
         bytes memory _btcAddressBytes = bytes(_btcAddress);
         if (_btcAddressBytes.length < bech32MinLength || _btcAddressBytes.length > bech32MaxLength) {
@@ -67,14 +67,14 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         }
 
         uint256 bitmask = 0;
+        // for each character set the corresponding bit in the bitmask
         for (uint256 i = bytes(bech32Prefix).length; i < _btcAddressBytes.length; i++) {
             bitmask |= uint256(1) << uint8(_btcAddressBytes[i]);
         }
 
-        if (bitmask & invalidBech32 > 0) {
-            return false;
-        }
-        return true;
+        // if any bit in the bitmask thus set corresponds to a character considered invalid
+        // in bech32, raise an error here.
+        return (bitmask & invalidBech32) == 0;
     }
 
     function validateNonBech32Address(
