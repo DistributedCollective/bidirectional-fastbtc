@@ -226,6 +226,30 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
         }
     }
 
+    function markTransfersAsMined(
+        bytes32[] calldata transferIds,
+        bytes[] memory signatures
+    )
+    external
+    onlyFederator
+    {
+        accessControl.checkFederatorSignatures(
+            getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.MINED),
+            signatures
+        );
+
+        for (uint256 i = 0; i < transferIds.length; i++) {
+            BitcoinTransfer storage transfer = transfers[transferIds[i]];
+
+            require(
+                transfer.status == BitcoinTransferStatus.SENDING,
+                "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
+            );
+
+            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.MINED);
+        }
+    }
+
     function refundTransfers(
         bytes32[] calldata transferIds,
         bytes[] memory signatures
