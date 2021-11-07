@@ -375,10 +375,6 @@ export class FastBTCNode {
 
     onPurgeTransferBatch = async (data: TransferBatchCompleteMessage, source: Node<FastBTCMessage>) => {
         await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
-            if (transferBatch.hasValidTransferState()) {
-                this.logger.warning('refusing to purge valid transfer batch');
-                return;
-            }
             await this.bitcoinTransferService.purgeTransferBatch(transferBatch);
         });
     }

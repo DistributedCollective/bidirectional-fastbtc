@@ -181,7 +181,11 @@ export class TransferBatch {
     }
 
     isPending(): boolean {
-        return !this.isMarkedAsMinedInRsk();
+        return !this.isFinalized();
+    }
+
+    isFinalized(): boolean {
+        return this.isMarkedAsMinedInRsk();
     }
 
     hasValidTransferState(): boolean {
@@ -288,6 +292,9 @@ export class BitcoinTransferService {
     }
 
     async purgeTransferBatch(transferBatch: TransferBatch): Promise<void> {
+        if (transferBatch.hasValidTransferState()) {
+            throw new Error('refusing to purge a valid transfer batch');
+        }
         await this.dbConnection.transaction(async transaction => {
             const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
             const storedBatch = await transferBatchRepository.findByTransferIds(transferBatch.getTransferIds());
@@ -299,7 +306,12 @@ export class BitcoinTransferService {
 
     private async storeTransferBatch(transferBatch: TransferBatch, entityManager: EntityManager): Promise<void> {
         const transferBatchRepository = entityManager.getCustomRepository(StoredBitcoinTransferBatchRepository);
-        await transferBatchRepository.createOrUpdateFromTransferBatch(transferBatch.getDto());
+        await transferBatchRepository.createOrUpdateFromTransferBatch(
+            transferBatch.getDto(),
+            {
+                markFinalized: transferBatch.isFinalized(),
+            }
+        );
     }
 
     async addRskSendingSignatures(transferBatch: TransferBatch, signaturesAndAddresses: {signature: string, address: string}[]): Promise<TransferBatch> {
@@ -572,9 +584,11 @@ export class BitcoinTransferService {
     }
 
     private async getPendingTransferBatch(entityManager: EntityManager): Promise<TransferBatch|undefined> {
-        const transferBatchRepository = entityManager.getRepository(StoredBitcoinTransferBatch);
-        // TODO: optimize this a great deal -- don't want to go through every stored batch every tiem
+        const transferBatchRepository = entityManager.getCustomRepository(StoredBitcoinTransferBatchRepository);
         const storedBatches = await transferBatchRepository.find({
+            where:{
+                finalized: false,
+            },
             order: {
                 createdAt: 'ASC'
             }
@@ -582,7 +596,15 @@ export class BitcoinTransferService {
         this.logger.debug('Found', storedBatches.length, 'stored batches in total');
         for (let storedBatch of storedBatches) {
             const transferBatch = await this.loadFromDto(storedBatch.data as TransferBatchDTO);
-            if (transferBatch!.isPending()) {
+            if (transferBatch!.isFinalized()) {
+                this.logger.info("marking transfer batch as finalized");
+                await transferBatchRepository.createOrUpdateFromTransferBatch(
+                    transferBatch!.getDto(),
+                    {
+                        markFinalized: true,
+                    }
+                );
+            } else if (transferBatch!.isPending()) {
                 //this.logger.debug('Pending:', transferBatch);
                 return transferBatch;
             }
