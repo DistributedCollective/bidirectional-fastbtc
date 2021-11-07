@@ -6,9 +6,10 @@ import {DBConnection} from '../db/connection';
 import {Connection, EntityManager} from 'typeorm';
 import {Config} from '../config';
 import {StoredBitcoinTransferBatch, StoredBitcoinTransferBatchRepository, Transfer, TransferStatus} from '../db/models';
-import {EventScanner, Scanner} from '../rsk/scanner';
 import Logger from '../logger';
 import {setExtend, setIntersection} from "../utils/sets";
+import {toNumber} from '../rsk/utils';
+import {Satoshis} from '../btc/types';
 
 type TransactionResponse = ethers.providers.TransactionResponse;
 
@@ -187,9 +188,6 @@ export class TransferBatch {
     // TODO: something to validate that the state of all transfers is the same, and that it is New, Sending or Mined
 }
 
-export class TransferBatchValidationError extends Error {
-    isValidationError = true;
-}
 export type BitcoinTransferServiceConfig = Pick<
     Config,
     'numRequiredSigners' | 'maxPassedBlocksInBatch' | 'maxTransfersInBatch' | 'rskRequiredConfirmations'
@@ -567,13 +565,34 @@ export class BitcoinTransferService {
     }
 }
 
+export class TransferBatchValidationError extends Error {
+    isValidationError = true;
+}
+
+interface RskTransferInfo {
+    rskAddress: string;
+    status: TransferStatus;
+    nonce: number;
+    feeStructureIndex: number;
+    blockNumber: number;
+    totalAmountSatoshi: Satoshis;
+    btcAddress: string;
+}
+
+export type TransferBatchValidatorConfig = Pick<
+    Config,
+    'rskRequiredConfirmations'
+>
+
 @injectable()
 export class TransferBatchValidator {
     private logger = new Logger('transfer-batch-validator');
 
     constructor(
         @inject(BitcoinMultisig) private btcMultisig: BitcoinMultisig,
-        @inject(Scanner) private eventScanner: EventScanner,
+        @inject(EthersProvider) private ethersProvider: ethers.providers.Provider,
+        @inject(FastBtcBridgeContract) private fastBtcBridge: ethers.Contract,
+        @inject(Config) private config: TransferBatchValidatorConfig,
     ) {
     }
 
@@ -693,7 +712,7 @@ export class TransferBatchValidator {
             }
             seenTransferIds.add(transfer.transferId);
 
-            const depositInfo = await this.eventScanner.fetchDepositInfo(transfer.btcAddress, transfer.nonce);
+            const depositInfo = await this.fetchRskTransferInfo(transfer.btcAddress, transfer.nonce);
 
             // TODO: maybe we should compare amount - fees and not whole amount
             if (!transfer.totalAmountSatoshi.eq(depositInfo.totalAmountSatoshi)) {
@@ -709,8 +728,44 @@ export class TransferBatchValidator {
             }
         }
     }
-}
 
+    private async fetchRskTransferInfo(btcPaymentAddress: string, nonce: number): Promise<RskTransferInfo> {
+        const currentBlock = await this.ethersProvider.getBlockNumber();
+        const transferData = await this.fastBtcBridge.getTransfer(btcPaymentAddress, nonce);
+        const nBlocksBeforeData = await this.fastBtcBridge.getTransfer(
+            btcPaymentAddress,
+            nonce,
+            {
+                blockTag: currentBlock - this.config.rskRequiredConfirmations
+            }
+        );
+
+        const transfer: RskTransferInfo = {
+            ...transferData,
+            nonce: toNumber(transferData.nonce),
+            status: toNumber(transferData.status),
+        };
+        const nBlocksBefore: RskTransferInfo = {
+            ...nBlocksBeforeData,
+            nonce: toNumber(nBlocksBeforeData.nonce),
+        };
+
+        if (
+            transfer.btcAddress !== nBlocksBefore.btcAddress ||
+            transfer.nonce !== nBlocksBefore.nonce ||
+            transfer.totalAmountSatoshi !== nBlocksBefore.totalAmountSatoshi ||
+            transfer.feeStructureIndex !== nBlocksBefore.feeStructureIndex ||
+            transfer.rskAddress !== nBlocksBefore.rskAddress
+        ) {
+            throw new TransferBatchValidationError(
+                `The transaction data ${JSON.stringify(transferData, null, 2)} does not match the one ` +
+                `${this.config.rskRequiredConfirmations} blocks before ${JSON.stringify(nBlocksBeforeData, null, 2)} `
+            );
+        }
+
+        return transfer;
+    }
+}
 
 function deepcopy<T = any>(thing: T): T {
     return JSON.parse(JSON.stringify(thing));

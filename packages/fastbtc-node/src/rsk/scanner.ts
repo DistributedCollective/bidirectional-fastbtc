@@ -6,22 +6,11 @@ import {EthersProvider, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
 import {Connection} from 'typeorm';
 import {getEvents, toNumber} from './utils';
-import {Satoshis} from "../btc/types";
 import Logger from '../logger';
 
 export const Scanner = Symbol.for('Scanner');
 
 const LAST_PROCESSED_BLOCK_KEY = 'eventscanner-last-processed-block';
-
-interface RskTransferInfo {
-    rskAddress: string;
-    status: TransferStatus;
-    nonce: number;
-    feeStructureIndex: number;
-    blockNumber: number;
-    totalAmountSatoshi: Satoshis;
-    btcAddress: string;
-}
 
 export function getTransferId(btcAddress: string, nonce: number): string {
     return ethers.utils.solidityKeccak256(
@@ -148,40 +137,6 @@ export class EventScanner {
     async getNumTransfers(): Promise<number> {
         const transferRepository = this.dbConnection.getRepository(Transfer);
         return transferRepository.count();
-    }
-
-    async fetchDepositInfo(btcPaymentAddress: string, nonce: number): Promise<RskTransferInfo> {
-        const currentBlock = await this.ethersProvider.getBlockNumber();
-        const transferData = await this.fastBtcBridge.getTransfer(btcPaymentAddress, nonce);
-        const nBlocksBeforeData = await this.fastBtcBridge.getTransfer(
-            btcPaymentAddress,
-            nonce,
-            {
-                blockTag: currentBlock - this.requiredConfirmations
-            }
-        );
-
-        const transfer: RskTransferInfo = {
-            ...transferData,
-            nonce: toNumber(transferData.nonce),
-            status: toNumber(transferData.status),
-        };
-        const nBlocksBefore: RskTransferInfo = {
-            ...nBlocksBeforeData,
-            nonce: toNumber(nBlocksBeforeData.nonce),
-        };
-
-        if (
-            transfer.btcAddress !== nBlocksBefore.btcAddress ||
-            transfer.nonce !== nBlocksBefore.nonce ||
-            transfer.totalAmountSatoshi !== nBlocksBefore.totalAmountSatoshi ||
-            transfer.feeStructureIndex !== nBlocksBefore.feeStructureIndex ||
-            transfer.rskAddress !== nBlocksBefore.rskAddress
-        ) {
-            throw new Error(`The transaction data does not match the one ${this.requiredConfirmations} blocks before`);
-        }
-
-        return transfer;
     }
 
     async getTransferById(transferId: string): Promise<Transfer> {
