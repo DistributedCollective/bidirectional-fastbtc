@@ -95,7 +95,7 @@ export class RPCClient {
                 try {
                     json = JSON.parse(buffer);
                     if (json.error != null) {
-                        err = json.err;
+                        err = json.error;
                     }
                     if (json.result) {
                         msg = json.result;
@@ -104,11 +104,12 @@ export class RPCClient {
                     e = error;
                     err = e;
                 }
-                if (response.statusCode !== 200) {
-                    err = "Server replied with : " + response.statusCode + ' ' + JSON.stringify(json);
+                if (response.statusCode !== 200 && !err) {
+                    err = {"message": "Server replied with : " + response.statusCode + ' ' + JSON.stringify(json)};
                 }
+                // TODO: We might not want to log this, because sometimes bitcoin rpc expectedly responds with an error
                 if (err) {
-                    console.error('RPC request:', requestDebugInfo, 'caused error:', err);
+                    console.warn('RPC request:', requestDebugInfo, 'caused error:', err);
                 }
                 return callback(err, msg);
             });

@@ -1,5 +1,5 @@
 import {inject, injectable, LazyServiceIdentifer} from 'inversify';
-import {BitcoinMultisig, PartiallySignedBitcoinTransaction} from '../btc/multisig';
+import {BitcoinMultisig, BitcoinRPCGetTransactionResponse, PartiallySignedBitcoinTransaction} from '../btc/multisig';
 import {EthersProvider, EthersSigner, FastBtcBridgeContract} from '../rsk/base';
 import {ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
@@ -30,6 +30,7 @@ export interface TransferBatchEnvironment {
     maxPassedBlocksInBatch: number;
     maxTransfersInBatch: number;
     currentBlockNumber: number;
+    bitcoinOnChainTransaction?: BitcoinRPCGetTransactionResponse;
 }
 export class TransferBatch {
     constructor(
@@ -148,7 +149,13 @@ export class TransferBatch {
     }
 
     isSentToBitcoin(): boolean {
-        return false;
+        const chainTx = this.environment.bitcoinOnChainTransaction;
+        if (!chainTx) {
+            return false;
+        }
+        // TODO: this should be configurable
+        const requiredConfirmations = 1;
+        return chainTx.confirmations >= requiredConfirmations;
     }
 
     isMarkedAsMinedInRsk(): boolean {
@@ -206,12 +213,7 @@ export class BitcoinTransferService {
                 initialSignedBtcTransaction
             );
             return new TransferBatch(
-                {
-                    currentBlockNumber,
-                    numRequiredSigners: this.config.numRequiredSigners,
-                    maxPassedBlocksInBatch: this.config.maxPassedBlocksInBatch,
-                    maxTransfersInBatch: this.config.maxTransfersInBatch,
-                },
+                await this.getTransferBatchEnvironment(bitcoinTxHash),  // TODO: could pass null here since it is not in blockchain
                 transfers,
                 rskUpdateSignatures,
                 rskSigners,
@@ -223,7 +225,6 @@ export class BitcoinTransferService {
 
     async loadFromDto(dto: TransferBatchDTO): Promise<TransferBatch|undefined> {
         // TODO: validation
-        const currentBlockNumber = await this.ethersProvider.getBlockNumber();
         return this.dbConnection.transaction(async transaction => {
             const transferRepository = transaction.getRepository(Transfer);
             const transfers: Transfer[] = [];
@@ -240,12 +241,7 @@ export class BitcoinTransferService {
             }
 
             return new TransferBatch(
-                {
-                    currentBlockNumber,
-                    numRequiredSigners: this.config.numRequiredSigners,
-                    maxPassedBlocksInBatch: this.config.maxPassedBlocksInBatch,
-                    maxTransfersInBatch: this.config.maxTransfersInBatch,
-                },
+                await this.getTransferBatchEnvironment(dto.bitcoinTransactionHash),
                 transfers,
                 dto.rskUpdateSignatures,
                 dto.rskSigners,
@@ -389,10 +385,27 @@ export class BitcoinTransferService {
     };
 
     async sendToBitcoin(transferBatch: TransferBatch): Promise<void> {
+        this.logger.info("Sending TransferBatch to bitcoin");
         if (!transferBatch.signedBtcTransaction) {
             throw new Error("TransferBatch doesn't have signedBtcTransaction");
         }
         await this.btcMultisig.submitTransaction(transferBatch.signedBtcTransaction);
+        this.logger.info("TransferBatch successfully sent to bitcoin");
+    }
+
+    private async getTransferBatchEnvironment(bitcoinTransactionHash: string|null): Promise<TransferBatchEnvironment> {
+        const currentBlockNumber = await this.ethersProvider.getBlockNumber();
+        let bitcoinOnChainTransaction = undefined;
+        if (bitcoinTransactionHash) {
+            bitcoinOnChainTransaction = await this.btcMultisig.getTransaction(bitcoinTransactionHash);
+        }
+        return {
+            currentBlockNumber,
+            bitcoinOnChainTransaction,
+            numRequiredSigners: this.config.numRequiredSigners,
+            maxPassedBlocksInBatch: this.config.maxPassedBlocksInBatch,
+            maxTransfersInBatch: this.config.maxTransfersInBatch,
+        };
     }
 
     private async getNextBatchTransfers(entityManager: EntityManager): Promise<Transfer[]> {

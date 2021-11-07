@@ -1,3 +1,4 @@
+// TODO: This file must be removed, it's no longer used
 import {inject, injectable} from 'inversify';
 import {EventScanner, getTransferId, Scanner} from './rsk/scanner';
 import {P2PNetwork} from './p2p/network';

@@ -123,7 +123,7 @@ export class FastBTCNode {
         transferBatch = await this.updateTransferBatchFromTransientInitiatorData(transferBatch);
         this.logger.info('transfers queued:', transferBatch.transfers.length);
 
-        this.logger.info('TransferBatch:', transferBatch.getDto());
+        this.logger.info('TransferBatch:', transferBatch);
 
         if (!transferBatch.isDue()) {
             this.logger.info('TransferBatch not due')
@@ -161,6 +161,12 @@ export class FastBTCNode {
         if(!transferBatch.isSentToBitcoin()) {
             this.logger.info('TransferBatch is not sent to bitcoin');
             await this.bitcoinTransferService.sendToBitcoin(transferBatch);
+            return;
+        }
+
+        if(!transferBatch.isMarkedAsMinedInRsk()) {
+            // TODO: ask for signatures here
+            this.logger.info('TransferBatch is not marked as mined in RSK');
             return;
         }
     }

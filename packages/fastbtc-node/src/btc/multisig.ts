@@ -6,6 +6,7 @@ import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
 import {BigNumber} from 'ethers';
 import {Config} from '../config';
 import {script} from "bitcoinjs-lib";
+import Logger from '../logger';
 
 
 export interface PartiallySignedBitcoinTransaction {
@@ -20,6 +21,12 @@ export interface BtcTransfer {
     nonce: number;
 }
 
+// https://developer.bitcoin.org/reference/rpc/gettransaction.html
+// this is only partially reflected here because we don't need everything
+export interface BitcoinRPCGetTransactionResponse {
+    confirmations: number;
+}
+
 export type BitcoinMultisigConfig = Pick<Config,
     'btcRpcUrl' | 'btcRpcUsername' | 'btcRpcPassword' | 'btcNetwork' | 'btcMasterPrivateKey' |
     'btcMasterPublicKeys' | 'btcKeyDerivationPath' | 'numRequiredSigners'
@@ -27,6 +34,8 @@ export type BitcoinMultisigConfig = Pick<Config,
 
 @injectable()
 export class BitcoinMultisig {
+    private logger = new Logger('btc-multisig');
+
     private readonly network: Network;
     private gasSatoshi = 10; // TODO: make variable/configurable
     private nodeWrapper: IBitcoinNodeWrapper;
@@ -352,7 +361,7 @@ export class BitcoinMultisig {
     }
 
     async combine(txs: PartiallySignedBitcoinTransaction[]): Promise<PartiallySignedBitcoinTransaction> {
-        console.log("combining", txs);
+        this.logger.debug("combining", txs);
         if (! txs.length) {
             throw new Error('Cannot combine zero transactions');
         }
@@ -395,6 +404,17 @@ export class BitcoinMultisig {
 
         const rawTx = psbtFinal.extractTransaction().toHex();
         await this.nodeWrapper.call('sendrawtransaction', [rawTx]);
+    }
+
+    async getTransaction(transactionHash: string): Promise<BitcoinRPCGetTransactionResponse|undefined> {
+        try {
+            return await this.nodeWrapper.call('gettransaction', [transactionHash]);
+        } catch (e: any) {
+            if (e.code === -5 && e.message == "Invalid or non-wallet transaction id") {
+                return undefined;
+            }
+            throw e;
+        }
     }
 
     private async getRawTx(txId: string): Promise<any> {
