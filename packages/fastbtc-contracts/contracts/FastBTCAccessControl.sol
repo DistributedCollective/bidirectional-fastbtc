@@ -19,7 +19,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function checkAdmin(
         address addressToCheck
     )
-    public
+    external
     view
     {
         _checkRole(ROLE_ADMIN, addressToCheck);
@@ -28,7 +28,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function checkPauser(
         address addressToCheck
     )
-    public
+    external
     view
     {
        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
@@ -39,7 +39,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function checkGuard(
         address addressToCheck
     )
-    public
+    external
     view
     {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
@@ -60,7 +60,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         bytes32 _messageHash,
         bytes[] memory _signatures
     )
-    public
+    external
     view
     {
         _messageHash = ECDSA.toEthSignedMessageHash(_messageHash);
@@ -97,7 +97,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     }
 
     function federators()
-    public
+    external
     view
     returns (address[] memory addresses)
     {
@@ -111,7 +111,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function addFederator(
         address account
     )
-    public
+    external
     {
         grantRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
     }
@@ -119,7 +119,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function removeFederator(
         address account
     )
-    public
+    external
     {
         revokeRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
     }
@@ -127,7 +127,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function addPauser(
         address account
     )
-    public
+    external
     {
         grantRole(ROLE_PAUSER, account); // enforces onlyAdmin
     }
@@ -135,7 +135,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function removePauser(
         address account
     )
-    public
+    external
     {
         revokeRole(ROLE_PAUSER, account); // enforces onlyAdmin
     }
@@ -143,7 +143,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function addGuard(
         address account
     )
-    public
+    external
     {
         grantRole(ROLE_GUARD, account); // enforces onlyAdmin
     }
@@ -151,7 +151,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function removeGuard(
         address account
     )
-    public
+    external
     {
         revokeRole(ROLE_GUARD, account); // enforces onlyAdmin
     }

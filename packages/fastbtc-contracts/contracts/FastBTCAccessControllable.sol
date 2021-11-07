@@ -32,6 +32,4 @@ abstract contract FastBTCAccessControllable {
         accessControl.checkGuard(msg.sender);
         _;
     }
-
-    
 }

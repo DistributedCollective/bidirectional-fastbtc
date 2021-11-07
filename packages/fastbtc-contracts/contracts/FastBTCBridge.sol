@@ -10,7 +10,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
 import "./interfaces/IBTCAddressValidator.sol";
-//import "./FastBTCAccessControl.sol";
 import "./FastBTCAccessControllable.sol";
 
 contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, Freezable {
@@ -447,7 +446,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     function calculateCurrentFeeWei(
         uint256 amountWei
     )
-    public
+    external
     view
     returns (uint256) {
         uint256 amountSatoshi = amountWei / SATOSHI_DIVISOR;
@@ -468,7 +467,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         string calldata btcAddress,
         uint8 nonce
     )
-    public
+    external
     view
     returns (BitcoinTransfer memory transfer) {
         bytes32 transferId = getTransferId(btcAddress, nonce);
@@ -478,7 +477,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     function getTransfersByTransferId(
         bytes32[] calldata transferIds
     )
-    public
+    external
     view
     returns (BitcoinTransfer[] memory ret) {
         ret = new BitcoinTransfer[](transferIds.length);
@@ -492,7 +491,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         string[] calldata btcAddresses,
         uint8[] calldata nonces
     )
-    public
+    external
     view
     returns (BitcoinTransfer[] memory ret) {
         require(btcAddresses.length == nonces.length, "same amount of btcAddresses and nonces must be given");
@@ -507,7 +506,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     function isValidBtcAddress(
         string calldata btcAddress
     )
-    public
+    internal
     view
     returns (bool)
     {
@@ -516,7 +515,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
     function federators()
-    public
+    external
     view
     returns (address[] memory addresses)
     {

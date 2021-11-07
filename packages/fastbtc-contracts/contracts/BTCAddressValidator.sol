@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import "./interfaces/IBTCAddressValidator.sol";
-//import "./IFastBTCAccessControl.sol";
 import "./FastBTCAccessControllable.sol";
 
 contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable {
