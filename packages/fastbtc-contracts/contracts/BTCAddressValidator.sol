@@ -13,7 +13,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     // The wiki gives these numbers as valid values for address length
     // (https://en.bitcoin.it/wiki/Invoice_address)
     uint256 public bech32MinLength = 42; // 44 for regtest
-    uint256 public bech32MaxLength = 60;
+    uint256 public bech32MaxLength = 64; // 62 for others, 64 for regtest
     uint256 public nonBech32MinLength = 26;
     uint256 public nonBech32MaxLength = 35;
 

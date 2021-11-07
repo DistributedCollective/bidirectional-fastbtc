@@ -3,7 +3,7 @@ import {DeployFunction} from 'hardhat-deploy/types';
 
 const validatorConfigs = {
     regtest: {
-        bech32Prefix: "bcrt1",
+        bech32Prefix: "bcrt1q",
         nonBech32Prefixes: [
             //"m", // pubkey hash
             //"n", // pubkey hash
@@ -11,7 +11,7 @@ const validatorConfigs = {
         ],
     },
     testnet: {
-        bech32Prefix: "tb1",
+        bech32Prefix: "tb1q",
         nonBech32Prefixes: [
             //"m", // pubkey hash
             //"n", // pubkey hash
@@ -19,7 +19,7 @@ const validatorConfigs = {
         ],
     },
     mainnet: {
-        bech32Prefix: "bc1",
+        bech32Prefix: "bc1q",
         nonBech32Prefixes: [
             //"1", // pubkey hash
             //"3", // script hash
