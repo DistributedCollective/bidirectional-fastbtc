@@ -5,24 +5,24 @@ const validatorConfigs = {
     regtest: {
         bech32Prefix: "bcrt1",
         nonBech32Prefixes: [
-            "m", // pubkey hash
-            "n", // pubkey hash
-            "2", // script hash
+            //"m", // pubkey hash
+            //"n", // pubkey hash
+            //"2", // script hash
         ],
     },
     testnet: {
         bech32Prefix: "tb1",
         nonBech32Prefixes: [
-            "m", // pubkey hash
-            "n", // pubkey hash
-            "2", // script hash
+            //"m", // pubkey hash
+            //"n", // pubkey hash
+            //"2", // script hash
         ],
     },
     mainnet: {
         bech32Prefix: "bc1",
         nonBech32Prefixes: [
-            "1", // pubkey hash
-            "3", // script hash
+            //"1", // pubkey hash
+            //"3", // script hash
         ],
     },
 }
