@@ -506,7 +506,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     function isValidBtcAddress(
         string calldata btcAddress
     )
-    internal
+    public
     view
     returns (bool)
     {
