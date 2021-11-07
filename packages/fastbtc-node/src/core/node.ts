@@ -25,6 +25,8 @@ type RequestRSKMinedSignatureMessage = TransferBatchMessage;
 
 type TransferBatchCompleteMessage = TransferBatchMessage
 
+type PurgeTransferBatchMessage = TransferBatchMessage
+
 type RSKSendingSignatureResponseMessage = TransferBatchMessage & {
     signature: string;
     address: string;
@@ -44,6 +46,7 @@ interface FastBTCMessage {
     'fastbtc:request-bitcoin-signature': RequestBitcoinSignatureMessage,
     'fastbtc:request-rsk-mined-signature': RequestRSKSendingSignatureMessage,
     'fastbtc:transfer-batch-complete': TransferBatchCompleteMessage,
+    'fastbtc:purge-transfer-batch': PurgeTransferBatchMessage,
     'fastbtc:rsk-sending-signature-response': RSKSendingSignatureResponseMessage,
     'fastbtc:bitcoin-signature-response': BitcoinSignatureResponseMessage,
     'fastbtc:rsk-mined-signature-response': RSKMinedSignatureResponseMessage,
@@ -135,6 +138,20 @@ export class FastBTCNode {
         this.logger.info('transfers queued:', transferBatch.transfers.length);
 
         this.logger.info('TransferBatch:', transferBatch);
+
+        if (!transferBatch.hasValidTransferState()) {
+            this.logger.warning(
+                'TransferBatch has invalid transfer state -- purging it and starting with a fresh one!'
+            );
+            await this.bitcoinTransferService.purgeTransferBatch(transferBatch);
+            await this.network.broadcast(
+                'fastbtc:purge-transfer-batch',
+                {
+                    transferBatchDto: transferBatch.getDto(),
+                }
+            );
+            return;
+        }
 
         if (!transferBatch.isDue()) {
             this.logger.info('TransferBatch not due')
@@ -279,6 +296,10 @@ export class FastBTCNode {
                 promise = this.onTransferBatchComplete(message.data, message.source);
                 break
             }
+            case 'fastbtc:purge-transfer-batch': {
+                promise = this.onPurgeTransferBatch(message.data, message.source);
+                break
+            }
             case 'fastbtc:rsk-sending-signature-response': {
                 promise = this.onRskSendingSignatureResponse(message.data, message.source);
                 break;
@@ -349,6 +370,16 @@ export class FastBTCNode {
         await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
             await this.transferBatchValidator.validateCompleteTransferBatch(transferBatch);
             await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
+        });
+    }
+
+    onPurgeTransferBatch = async (data: TransferBatchCompleteMessage, source: Node<FastBTCMessage>) => {
+        await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
+            if (transferBatch.hasValidTransferState()) {
+                this.logger.warning('refusing to purge valid transfer batch');
+                return;
+            }
+            await this.bitcoinTransferService.purgeTransferBatch(transferBatch);
         });
     }
 

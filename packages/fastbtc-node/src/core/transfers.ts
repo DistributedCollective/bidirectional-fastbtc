@@ -181,11 +181,26 @@ export class TransferBatch {
     }
 
     isPending(): boolean {
-        // TODO: should handle refunded and reclaimed
         return !this.isMarkedAsMinedInRsk();
     }
 
-    // TODO: something to validate that the state of all transfers is the same, and that it is New, Sending or Mined
+    hasValidTransferState(): boolean {
+        // Transfer batches should only contain transfers that all have the same status,
+        // and that status should be New, Sending or Mined (not refunded)
+        if (this.transfers.length === 0) {
+            return true; // technically
+        }
+        const validStatuses = [TransferStatus.New, TransferStatus.Sending, TransferStatus.Mined];
+        const seenStatuses = new Set<TransferStatus>();
+        for (const transfer of this.transfers) {
+            if (validStatuses.indexOf(transfer.status) === -1) {
+                return false;
+            }
+            seenStatuses.add(transfer.status);
+        }
+
+        return seenStatuses.size === 1;
+    }
 }
 
 export type BitcoinTransferServiceConfig = Pick<
@@ -269,6 +284,16 @@ export class BitcoinTransferService {
     async updateStoredTransferBatch(transferBatch: TransferBatch): Promise<void> {
         await this.dbConnection.transaction(async transaction => {
             await this.storeTransferBatch(transferBatch, transaction);
+        });
+    }
+
+    async purgeTransferBatch(transferBatch: TransferBatch): Promise<void> {
+        await this.dbConnection.transaction(async transaction => {
+            const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
+            const storedBatch = await transferBatchRepository.findByTransferIds(transferBatch.getTransferIds());
+            if (storedBatch) {
+                await transferBatchRepository.remove(storedBatch);
+            }
         });
     }
 
@@ -696,6 +721,11 @@ export class TransferBatchValidator {
         expectedStatus: TransferStatus|null,
         requireSignedBtcTransaction: boolean
     ): Promise<void> {
+        if (!transferBatch.hasValidTransferState()) {
+            throw new TransferBatchValidationError(
+                'TransferBatch has an invalid transfer state'
+            );
+        }
         await this.validateTransfers(transferBatch, expectedStatus);
         await this.validateRskSignatures(transferBatch);
         await this.validatePsbt(transferBatch, transferBatch.initialBtcTransaction);
