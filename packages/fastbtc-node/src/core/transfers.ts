@@ -516,16 +516,16 @@ export class BitcoinTransferService {
 
     private async getNextBatchTransfers(entityManager: EntityManager): Promise<Transfer[]> {
         const transferRepository = entityManager.getRepository(Transfer);
-        return transferRepository.find({
-            where: {
+        return await transferRepository
+            .createQueryBuilder("transfer")
+            .where({
                 status: TransferStatus.New,
-            },
-            order: {
-                // TODO: order by (blockNumber, transactionIndex, logIndex) !!
-                dbId: 'ASC',
-            },
-            take: this.config.maxTransfersInBatch,
-        })
+            })
+            .orderBy('rsk_block_number', 'ASC')
+            .addOrderBy('rsk_transaction_index', 'ASC')
+            .addOrderBy('rsk_log_index', 'ASC')
+            .take(this.config.maxTransfersInBatch)
+            .getMany();
     }
 
     private async getPendingTransferBatch(entityManager: EntityManager): Promise<TransferBatch|undefined> {
@@ -548,8 +548,9 @@ export class BitcoinTransferService {
     }
 
     private async sendRskTransaction(sendTransaction: () => Promise<TransactionResponse>): Promise<TransactionResponse> {
-        // TODO: Could do retrying etc here, but the logic in full is built to handle this situation
-        // TODO: also this method doesn't belong in this class really
+        // We could do retrying etc here, but the logic in full is built to handle this situation
+        // This method doesn't also really belong in this class (there should be another service), but it's good
+        // enough for now
         const result = await sendTransaction();
         const numRequiredConfirmations = Math.max(
             1,
