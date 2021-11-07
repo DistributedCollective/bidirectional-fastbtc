@@ -26,7 +26,7 @@ describe("BTCAddressValidator", function() {
         // add mainnet-compatible config here at first
         btcAddressValidator = await BTCAddressValidator.deploy(
             accessControl.address,
-            "bc1",  // bech32 prefix
+            "bc1q",  // bech32 prefix, segwit version 0
             ["1", "3"],  // non-bech32 prefixes
         );
     });
@@ -57,6 +57,17 @@ describe("BTCAddressValidator", function() {
 
         it("validates bech32 addresses", async () => {
             expect(await btcAddressValidator.isValidBtcAddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4")).to.be.true;
+            // bech32 must not contain 1, b, i, o
+            expect(await btcAddressValidator.isValidBtcAddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t1")).to.be.false;
+            expect(await btcAddressValidator.isValidBtcAddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3tb")).to.be.false;
+            expect(await btcAddressValidator.isValidBtcAddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3ti")).to.be.false;
+            expect(await btcAddressValidator.isValidBtcAddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3to")).to.be.false;
+
+            // wrong character w.r.t. prefix
+            expect(await btcAddressValidator.isValidBtcAddress("bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3to")).to.be.false;
+
+            // we don't allow upper case
+            expect(await btcAddressValidator.isValidBtcAddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4".toUpperCase())).to.be.false;
         })
     })
 

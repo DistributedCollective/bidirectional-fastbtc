@@ -6,7 +6,7 @@ import "./FastBTCAccessControllable.sol";
 
 contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable {
     string public bech32Prefix;
-    bool supportsBech32;
+    bool supportsLegacy;
     string[] public nonBech32Prefixes;
 
     // The wiki gives these numbers as valid values for address length
@@ -15,6 +15,10 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     uint256 public bech32MaxLength = 64; // 62 for others, 64 for regtest
     uint256 public nonBech32MinLength = 26;
     uint256 public nonBech32MaxLength = 35;
+    uint256 public bech32PrefixLength;
+
+    // bech32 allowed characters are ascii lowercase less 1, b, i, o
+    uint256 public invalidBech32 = 0xfffffffffffffffffffffffffffffffff8008205fffffffffc02ffffffffffff;
 
     constructor(
         address _accessControl,
@@ -24,8 +28,9 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     FastBTCAccessControllable(_accessControl)
     {
         bech32Prefix = _bech32Prefix;
-        supportsBech32 = bytes(bech32Prefix).length > 0;
+        supportsLegacy = _nonBech32Prefixes.length > 0;
         nonBech32Prefixes = _nonBech32Prefixes;
+        bech32PrefixLength = bytes(_bech32Prefix).length;
     }
 
     function isValidBtcAddress(
@@ -36,11 +41,12 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     override
     returns (bool)
     {
-        if (supportsBech32 && startsWith(_btcAddress, bech32Prefix)) {
+        if (startsWith(_btcAddress, bech32Prefix)) {
             return validateBech32Address(_btcAddress);
-        } else {
+        } else if (supportsLegacy) {
             return validateNonBech32Address(_btcAddress);
         }
+        else return false;
     }
 
     function validateBech32Address(
@@ -51,35 +57,23 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     returns (bool)
     {
         // TODO:
-        // - do the checksum validation if feasible with gas costs in mind
-        // - could see if someone has already done this in a library
+        // - could see if someone has already done this in a library,
+        // this does not validate the actual address
 
         bytes memory _btcAddressBytes = bytes(_btcAddress);
         if (_btcAddressBytes.length < bech32MinLength || _btcAddressBytes.length > bech32MaxLength) {
             return false;
         }
 
-        for (uint i = bytes(bech32Prefix).length; i < _btcAddressBytes.length; i++) {
-            if(
-                _btcAddressBytes[i] == bytes1("1") ||
-                _btcAddressBytes[i] == bytes1("b") ||
-                _btcAddressBytes[i] == bytes1("i") ||
-                _btcAddressBytes[i] == bytes1("o")
-            ) {
-                return false;
-            }
-
-            uint8 c = uint8(_btcAddressBytes[i]);
-            bool isValidCharacter = (
-                (c >= 0x30 && c <= 0x39) // between "0" and "9"
-                ||
-                (c >= 0x61 && c <= 0x7a) // between "a" and "z" (lowercase)
-            );
-            if (!isValidCharacter) {
-                return false;
-            }
+        uint256 bitmask = 0;
+        // for each character set the corresponding bit in the bitmask
+        for (uint256 i = bytes(bech32Prefix).length; i < _btcAddressBytes.length; i++) {
+            bitmask |= uint256(1) << uint8(_btcAddressBytes[i]);
         }
-        return true;
+
+        // if any bit in the bitmask thus set corresponds to a character considered invalid
+        // in bech32, raise an error here.
+        return (bitmask & invalidBech32) == 0;
     }
 
     function validateNonBech32Address(
@@ -160,7 +154,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     onlyAdmin
     {
         bech32Prefix = _prefix;
-        supportsBech32 = bytes(bech32Prefix).length > 0;
+        bech32PrefixLength = bytes(_prefix).length;
     }
 
     function setNonBech32Prefixes(
@@ -170,6 +164,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     onlyAdmin
     {
         nonBech32Prefixes = _prefixes;
+        supportsLegacy = nonBech32Prefixes.length > 0;
     }
 
     function setBech32MinAndMaxLengths(

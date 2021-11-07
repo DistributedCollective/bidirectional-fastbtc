@@ -81,14 +81,14 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
 
     // The fee must fit in an uint32
-    uint256 public constant MAX_BASE_FEE_SATOSHI = (1 << 32) - 1;
+    uint256 public constant MAX_BASE_FEE_SATOSHI = type(uint32).max;
 
     // uint16; 0.01 % granularity
     uint256 public constant DYNAMIC_FEE_DIVISOR = 10_000;
 
     // After the 255th transfer, with nonce 254, the nextNonces slot will be set to 255;
     // that is unusable because after that nextNonces would roll over
-    uint256 public constant MAXIMUM_VALID_NONCE = 254;
+    uint8 public constant MAXIMUM_VALID_NONCE = 254;
 
     // uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
     mapping(bytes32 => BitcoinTransfer) public transfers;
@@ -162,7 +162,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     {
         require(isValidBtcAddress(btcAddress), "Invalid BTC address");
 
-        uint256 nonce = getNextNonce(btcAddress);
+        uint8 nonce = nextNonces[btcAddress];
 
         // strictly less than 255!
         require(nonce <= MAXIMUM_VALID_NONCE, "Maximum number of transfers to address reached");
@@ -380,7 +380,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
                 && feeStructures[feeStructureIndex].dynamicFee == 0, "This slot has already been used");
 
         require(newBaseFeeSatoshi <= MAX_BASE_FEE_SATOSHI, "Base fee exceeds maximum");
-        require(newDynamicFee < DYNAMIC_FEE_DIVISOR, "Dynamic fee divisor too high");
+        require(newDynamicFee < DYNAMIC_FEE_DIVISOR, "Dynamic fee too high");
 
         // guarded
         feeStructures[feeStructureIndex].baseFeeSatoshi = uint32(newBaseFeeSatoshi);
@@ -564,7 +564,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     onlyAdmin
     {
-        require(newMinTransferSatoshi < (2 << 40), "Must fit in uint40");
+        require(newMinTransferSatoshi <= type(uint40).max, "Must fit in uint40");
         minTransferSatoshi = uint40(newMinTransferSatoshi);
     }
 
@@ -574,7 +574,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     onlyAdmin
     {
-        require(newMaxTransferSatoshi < (2 << 40), "Must fit in uint40");
+        require(newMaxTransferSatoshi <= type(uint40).max, "Must fit in uint40");
         maxTransferSatoshi = uint40(newMaxTransferSatoshi);
     }
 
