@@ -216,13 +216,13 @@ export class BitcoinTransferService {
             }
 
             const transfers = await this.getNextBatchTransfers(transaction);
-            // TODO: we don't really need to create the PSBT every time...
+            // we don't really need to create the PSBT every time, but the overhead doesn't really matter
             const initialSignedBtcTransaction = await this.btcMultisig.createPartiallySignedTransaction(transfers);
             const bitcoinTxHash = this.btcMultisig.getBitcoinTransactionHash(
                 initialSignedBtcTransaction
             );
             return new TransferBatch(
-                await this.getTransferBatchEnvironment(bitcoinTxHash),  // TODO: could pass null here since it is not in blockchain
+                await this.getTransferBatchEnvironment(bitcoinTxHash),  // could also null here since it is not in blockchain
                 transfers,
                 [],
                 [],
@@ -278,8 +278,11 @@ export class BitcoinTransferService {
     }
 
     async addRskSendingSignatures(transferBatch: TransferBatch, signaturesAndAddresses: {signature: string, address: string}[]): Promise<TransferBatch> {
-        // TODO: validate transfer batch status, maybe
         if (signaturesAndAddresses.length === 0) {
+            return transferBatch;
+        }
+        if (transferBatch.isMarkedAsSendingInRsk()) {
+            this.logger.info(`not adding any more signatures to a transfer batch that's already marked as sending`);
             return transferBatch;
         }
         transferBatch  = transferBatch.copy();
@@ -316,8 +319,11 @@ export class BitcoinTransferService {
     }
 
     async addRskMinedSignatures(transferBatch: TransferBatch, signaturesAndAddresses: {signature: string, address: string}[]): Promise<TransferBatch> {
-        // TODO: validate transfer batch status, maybe
         if (signaturesAndAddresses.length === 0) {
+            return transferBatch;
+        }
+        if (transferBatch.isMarkedAsMinedInRsk()) {
+            this.logger.info(`not adding any more signatures to a transfer batch that's already marked as mined`);
             return transferBatch;
         }
         transferBatch  = transferBatch.copy();
@@ -354,8 +360,7 @@ export class BitcoinTransferService {
     }
 
     async addBitcoinSignatures(transferBatch: TransferBatch, psbts: PartiallySignedBitcoinTransaction[]): Promise<TransferBatch> {
-        // TODO: validate that public key is valid
-        // (combine should do other validation)
+        // combine should do validation here
         if (transferBatch.hasEnoughBitcoinSignatures()) {
             this.logger.info('Enough bitcoin signatures already, not adding more');
             return transferBatch;
@@ -421,7 +426,7 @@ export class BitcoinTransferService {
                 )
             );
             this.logger.info('transfers successfully marked as sending in tx hash:', result.hash);
-            // TODO: decide if we should just skip local updates
+            // XXX: not sure if we should just skip local updates
             const transfers = await Promise.all(
                 transferBatch.getTransferIds().map(
                     transferId => transferRepository.findOneOrFail({
@@ -455,7 +460,7 @@ export class BitcoinTransferService {
                 )
             );
             this.logger.info('transfers successfully marked as mined in tx hash:', result.hash);
-            // TODO: decide if we should just skip local updates
+            // XXX: not sure if we should just skip local updates
             const transfers = await Promise.all(
                 transferBatch.getTransferIds().map(
                     transferId => transferRepository.findOneOrFail({
@@ -796,7 +801,7 @@ export class TransferBatchValidator {
             seenDepositIds.add(transfer.transferId);
         }
 
-        // TODO: validate signatures
+        // would be good to validate signatures here but it seems it's tricky until the tx is finalized
     }
 
     private async validateTransfers(transferBatch: TransferBatch, expectedStatus: TransferStatus|null) {
@@ -811,7 +816,7 @@ export class TransferBatchValidator {
 
             const depositInfo = await this.fetchRskTransferInfo(transfer.btcAddress, transfer.nonce);
 
-            // TODO: maybe we should compare amount - fees and not whole amount
+            // maybe we should compare amount - fees and not whole amount
             if (!transfer.totalAmountSatoshi.eq(depositInfo.totalAmountSatoshi)) {
                 throw new TransferBatchValidationError(
                     `The transfer ${transfer} has ${depositInfo.totalAmountSatoshi} in RSK but ${transfer.totalAmountSatoshi} in proposed BTC batch`
