@@ -2,11 +2,12 @@ import {inject, injectable} from 'inversify';
 import {BigNumber, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
 import {KeyValuePairRepository, Transfer, TransferStatus} from '../db/models';
-import {EthersProvider, EthersSigner, FastBtcBridgeContract} from './base';
+import {EthersProvider, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
 import {Connection} from 'typeorm';
 import {getEvents, toNumber} from './utils';
 import {Satoshis} from "../btc/types";
+import Logger from '../logger';
 
 export const Scanner = Symbol.for('Scanner');
 
@@ -34,22 +35,16 @@ export function getTransferId(btcAddress: string, nonce: number): string {
 export class EventScanner {
     private defaultStartBlock: number;
     private requiredConfirmations: number;
-    private logger = console;
+    private logger = new Logger("scanner");
 
     constructor(
         @inject(EthersProvider) private ethersProvider: ethers.providers.Provider,
-        @inject(EthersSigner) private ethersSigner: ethers.Signer,
         @inject(FastBtcBridgeContract) private fastBtcBridge: ethers.Contract,
         @inject(DBConnection) private dbConnection: Connection,
         @inject(Config) private config: Config,
     ) {
         this.defaultStartBlock = config.rskStartBlock;
         this.requiredConfirmations = config.rskRequiredConfirmations;
-    }
-
-    // TODO: should be removed from here
-    async getCurrentBlockNumber(): Promise<number> {
-        return await this.ethersProvider.getBlockNumber();
     }
 
     async scanNewEvents(): Promise<Transfer[]> {
@@ -151,65 +146,9 @@ export class EventScanner {
         });
     }
 
-    // TODO: should be removed here
-    async getNextBatchTransfers(maxBatchSize: number): Promise<Transfer[]> {
-        const transferRepository = this.dbConnection.getRepository(Transfer);
-        return transferRepository.find({
-            where: {
-                status: TransferStatus.New,
-            },
-            order: {
-                // TODO: order by (blockNumber, transactionIndex, logIndex) would be better
-                dbId: 'ASC',
-            },
-            take: maxBatchSize,
-        })
-    }
-
-    async updateLocalTransferStatus(
-        transfers: Transfer[] | string[],
-        newStatus: TransferStatus
-    ): Promise<Transfer[]> {
-        const transferIds = this.getTransferIds(transfers);
-
-        return await this.dbConnection.transaction(async db => {
-            const transferRepository = db.getRepository(Transfer);
-            const transfersToUpdate = await transferRepository.find({
-                where: transferIds.map(transferId => ({
-                    transferId
-                }))
-            });
-            if (transfersToUpdate.length !== transferIds.length) {
-                throw new Error('not all transfers with ids found: ' + transferIds.join(', '));
-            }
-            for (let transfer of transfersToUpdate) {
-                transfer.status = newStatus;
-            }
-            await transferRepository.save(transfersToUpdate);
-            return transfersToUpdate;
-        });
-    }
-
     async getNumTransfers(): Promise<number> {
         const transferRepository = this.dbConnection.getRepository(Transfer);
         return transferRepository.count();
-    }
-
-    async markTransfersAsSent(
-        transfers: Transfer[] | string[],
-        signatures: string[],
-    ): Promise<void> {
-        const transferIds = this.getTransferIds(transfers);
-        const tx = await this.fastBtcBridge.markTransfersAsSent(
-            transferIds,
-            signatures,
-        );
-        this.logger.debug('markTransfersAsSent tx hash', tx.hash);
-        const receipt = await tx.wait();
-        if (receipt.status !== 1) {
-            this.logger.error('Invalid status for markTransfersAsSent receipt', receipt);
-            throw new Error('invalid status for markTransfersAsSent receipt');
-        }
     }
 
     async fetchDepositInfo(btcPaymentAddress: string, nonce: number): Promise<RskTransferInfo> {
@@ -244,20 +183,6 @@ export class EventScanner {
         }
 
         return transfer;
-    }
-
-    // TODO: get rid of me
-    async signTransferStatusUpdate(
-        transfers: Transfer[] | string[],
-        newStatus: TransferStatus
-    ): Promise<string> {
-        const transferIds = this.getTransferIds(transfers);
-        const updateHash = await this.fastBtcBridge.getTransferBatchUpdateHash(transferIds, newStatus);
-        return await this.ethersSigner.signMessage(ethers.utils.arrayify(updateHash));
-    }
-
-    async getSignerAddress() {
-        return await this.ethersSigner.getAddress();
     }
 
     private getTransferIds(

@@ -60,9 +60,12 @@ export default class Logger {
         this.debuggers.debug(message, ...optionalParams);
     }
 
-    warning(message?: any, ...optionalParams: any[]) {
-        //this.debuggers.warning(message, ...optionalParams);
+    warn(message?: any, ...optionalParams: any[]) {
         this.debuggers.warn(message, ...optionalParams);
+    }
+
+    warning(message?: any, ...optionalParams: any[]) {
+        this.warning(message, ...optionalParams);
     }
 
     error(message?: any, ...optionalParams: any[]) {
