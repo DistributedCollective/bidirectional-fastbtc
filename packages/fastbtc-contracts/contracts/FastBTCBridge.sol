@@ -80,14 +80,14 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
 
     // The fee must fit in an uint32
-    uint256 public constant MAX_BASE_FEE_SATOSHI = (1 << 32) - 1;
+    uint256 public constant MAX_BASE_FEE_SATOSHI = type(uint32).max;
 
     // uint16; 0.01 % granularity
     uint256 public constant DYNAMIC_FEE_DIVISOR = 10_000;
 
     // After the 255th transfer, with nonce 254, the nextNonces slot will be set to 255;
     // that is unusable because after that nextNonces would roll over
-    uint256 public constant MAXIMUM_VALID_NONCE = 254;
+    uint8 public constant MAXIMUM_VALID_NONCE = 254;
 
     // uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
     mapping(bytes32 => BitcoinTransfer) public transfers;
@@ -139,7 +139,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     {
         require(isValidBtcAddress(btcAddress), "Invalid BTC address");
 
-        uint256 nonce = getNextNonce(btcAddress);
+        uint8 nonce = nextNonces[btcAddress];
 
         // strictly less than 255!
         require(nonce <= MAXIMUM_VALID_NONCE, "Maximum number of transfers to address reached");
