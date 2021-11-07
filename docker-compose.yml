@@ -7,6 +7,7 @@ services:
       context: ./packages/fastbtc-node/
     env_file:
       - integration_test/nodes/docker-env1
+      - integration_test/nodes/docker-env-common
     ports:
       - 11125:11125
     depends_on:
@@ -19,6 +20,7 @@ services:
     image: fastbtc:latest
     env_file:
       - integration_test/nodes/docker-env2
+      - integration_test/nodes/docker-env-common
     ports:
       - 11126:11126
     depends_on:

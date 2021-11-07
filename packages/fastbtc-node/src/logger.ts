@@ -65,7 +65,7 @@ export default class Logger {
     }
 
     warning(message?: any, ...optionalParams: any[]) {
-        this.warning(message, ...optionalParams);
+        this.warn(message, ...optionalParams);
     }
 
     error(message?: any, ...optionalParams: any[]) {

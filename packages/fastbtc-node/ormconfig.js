@@ -9,7 +9,6 @@ module.exports = {
     logging: false,
     namingStrategy: new SnakeNamingStrategy(),
 
-    // TODO: should be false in prod! and have real migrations
     synchronize: false,
     migrations: ["dist/migration/*.js"],
     cli: {

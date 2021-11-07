@@ -54,11 +54,10 @@ services:
       - hardhat
 
   node3:
-
-  node3:
     image: fastbtc:latest
     env_file:
       - integration_test/nodes/docker-env3
+      - integration_test/nodes/docker-env-common
     ports:
       - 11127:11127
     extra_hosts:
