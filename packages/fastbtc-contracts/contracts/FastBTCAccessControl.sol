@@ -123,4 +123,36 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     {
         revokeRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
     }
+
+    function addPauser(
+        address account
+    )
+    public
+    {
+        grantRole(ROLE_PAUSER, account); // enforces onlyAdmin
+    }
+
+    function removePauser(
+        address account
+    )
+    public
+    {
+        revokeRole(ROLE_PAUSER, account); // enforces onlyAdmin
+    }
+
+    function addGuard(
+        address account
+    )
+    public
+    {
+        grantRole(ROLE_GUARD, account); // enforces onlyAdmin
+    }
+
+    function removeGuard(
+        address account
+    )
+    public
+    {
+        revokeRole(ROLE_GUARD, account); // enforces onlyAdmin
+    }
 }
