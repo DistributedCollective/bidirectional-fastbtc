@@ -18,7 +18,7 @@ type FastBTCNodeConfig = Pick<
 interface PropagateTransferBatchMessage {
 }
 
-interface RequestRSKSentSignatureMessage {
+interface RequestRSKSendingSignatureMessage {
     transferBatchDto: TransferBatchDTO;
 }
 
@@ -30,7 +30,7 @@ interface TransferBatchCompleteMessage {
     transferBatchDto: TransferBatchDTO;
 }
 
-interface RSKSentSignatureResponseMessage {
+interface RSKSendingSignatureResponseMessage {
     transferBatchDto: TransferBatchDTO;
     signature: string;
     address: string;
@@ -43,10 +43,10 @@ interface BitcoinSignatureResponseMessage {
 
 interface FastBTCMessage {
     'fastbtc:propagate-transfer-batch': PropagateTransferBatchMessage,
-    'fastbtc:request-rsk-sent-signature': RequestRSKSentSignatureMessage,
+    'fastbtc:request-rsk-sending-signature': RequestRSKSendingSignatureMessage,
     'fastbtc:request-bitcoin-signature': RequestBitcoinSignatureMessage,
     'fastbtc:transfer-batch-complete': TransferBatchCompleteMessage,
-    'fastbtc:rsk-sent-signature-response': RSKSentSignatureResponseMessage,
+    'fastbtc:rsk-sending-signature-response': RSKSendingSignatureResponseMessage,
     'fastbtc:bitcoin-signature-response': BitcoinSignatureResponseMessage,
 }
 
@@ -133,7 +133,7 @@ export class FastBTCNode {
         if(!transferBatch.hasEnoughRskSendingSignatures()) {
             this.logger.info('TransferBatch does not have enough RSK Sent signatures');
             await this.network.broadcast(
-                'fastbtc:request-rsk-sent-signature',
+                'fastbtc:request-rsk-sending-signature',
                 {
                     transferBatchDto: transferBatch.getDto(),
                 }
@@ -142,7 +142,7 @@ export class FastBTCNode {
         }
 
         if(!transferBatch.isMarkedAsSendingInRsk()) {
-            this.logger.info('TransferBatch is not marked as sent in RSK');
+            this.logger.info('TransferBatch is not marked as sending in RSK');
             await this.bitcoinTransferService.markAsSendingInRsk(transferBatch);
             return;
         }
@@ -218,8 +218,8 @@ export class FastBTCNode {
     onMessage = (message: MessageUnion<FastBTCMessage>) => {
         let promise: Promise<any> | null = null;
         switch (message.type) {
-            case 'fastbtc:request-rsk-sent-signature': {
-                promise = this.onRequestRskSentSignature(message.data, message.source);
+            case 'fastbtc:request-rsk-sending-signature': {
+                promise = this.onRequestRskSendingSignature(message.data, message.source);
                 break
             }
             case 'fastbtc:request-bitcoin-signature': {
@@ -230,8 +230,8 @@ export class FastBTCNode {
                 promise = this.onTransferBatchComplete(message.data, message.source);
                 break
             }
-            case 'fastbtc:rsk-sent-signature-response': {
-                promise = this.onRskSentSignatureResponse(message.data, message.source);
+            case 'fastbtc:rsk-sending-signature-response': {
+                promise = this.onRskSendingSignatureResponse(message.data, message.source);
                 break;
             }
             case 'fastbtc:bitcoin-signature-response': {
@@ -249,7 +249,7 @@ export class FastBTCNode {
         }
     }
 
-    onRequestRskSentSignature = async (data: RequestRSKSentSignatureMessage, source: Node<FastBTCMessage>) => {
+    onRequestRskSendingSignature = async (data: RequestRSKSendingSignatureMessage, source: Node<FastBTCMessage>) => {
         if (source.id !== this.networkUtil.getPreferredInitiatorId()) {
             this.logger.warning('Rejecting RSK update signature request from node', source, 'since it is not initiator');
             return;
@@ -267,7 +267,7 @@ export class FastBTCNode {
 
         // TODO: this validates again
         const {address, signature} =  await this.bitcoinTransferService.signRskSendingUpdate(transferBatch);
-        await source.send('fastbtc:rsk-sent-signature-response', {
+        await source.send('fastbtc:rsk-sending-signature-response', {
             transferBatchDto: transferBatch.getDto(),
             address,
             signature
@@ -304,13 +304,13 @@ export class FastBTCNode {
         }
     }
 
-    onRskSentSignatureResponse = async (data: RSKSentSignatureResponseMessage, source: Node<FastBTCMessage>) => {
+    onRskSendingSignatureResponse = async (data: RSKSendingSignatureResponseMessage, source: Node<FastBTCMessage>) => {
         if (!this.networkUtil.isThisNodeInitiator()) {
-            this.logger.warning('Received rsk sent signature response even though I am not the initiator');
+            this.logger.warning('Received rsk sending signature response even though I am not the initiator');
             return;
         }
         if (!this.transientInitiatorData.currentTransferBatch) {
-            this.logger.warning('Cannot deal with received rsk sent signature response because I don\'t know the current transfer batch');
+            this.logger.warning('Cannot deal with received rsk sending signature response because I don\'t know the current transfer batch');
             return;
         }
         const {transferBatchDto, address, signature} = data;
