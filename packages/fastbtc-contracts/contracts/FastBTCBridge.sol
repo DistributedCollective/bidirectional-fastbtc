@@ -16,32 +16,35 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     using Address for address payable;
 
     enum BitcoinTransferStatus {
-        NOT_APPLICABLE,
-        NEW,
-        SENDING,
-        MINED,
-        REFUNDED,
-        RECLAIMED
+        NOT_APPLICABLE, // the transfer slot has not been initialized
+        NEW,            // the transfer was initiated
+        SENDING,        // the federators have approved this transfer
+                        // as part of a transfer batch
+        MINED,          // the transfer was confirmedly mined in Bitcoin blockchain
+        REFUNDED        // the transfer was refunded
+        //, RECLAIMED       // the transfer was reclaimed by the user; not in use in this version of the contract
     }
 
     struct BitcoinTransfer {
-        address rskAddress;
-        BitcoinTransferStatus status;
-        uint8 nonce;
-        uint8 feeStructureIndex;
-        uint32 blockNumber;
-        uint40 totalAmountSatoshi;
-        string btcAddress;
+        address rskAddress;            // source rskAddress
+        BitcoinTransferStatus status;  // the current status
+        uint8 nonce;                   // each Bitcoin address can be reused up to 255 times
+        uint8 feeStructureIndex;       // the fee calculation to be applied to this transfer
+        uint32 blockNumber;            // the RSK block number where this was initialized
+        uint40 totalAmountSatoshi;     // the number of BTC satoshis that the user sent
+        string btcAddress;             // the BTC address in legacy or Bech32 encoded format
     }
 
     struct TransferFee {
-        // enough for up to 42 bitcoins :P
+        // enough for up to 42 bitcoins :P The base fee that is to be paid for each transfer
         uint32 baseFeeSatoshi;
 
-        // 1 = 0.01 %
+        // 1 = 0.01 %, i.e. 0.0000 - 1.0000 4 decimal fixed point proportional fee
         uint16 dynamicFee;
     }
 
+    // emitted for a new user-initiated transfer. The amountSatoshi + feeSatoshi
+    // correspond to the totalAmountSatoshi from the transfer
     event NewBitcoinTransfer(
         bytes32 indexed transferId,
         string  btcAddress,
@@ -51,35 +54,48 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
         address indexed rskAddress
     );
 
+    // Emitted when the federators have committed to sending a transfer batch. Each batch is limited to 40
+    // transfers so uint8 should be more than sufficient. The bitcoinTxHash shall contain the resulting
+    // transaction hash of the bitcoin transaction
     event BitcoinTransferBatchSending(
         bytes32 bitcoinTxHash,
         uint8   transferBatchSize
     );
 
-    event BitcoinTransferFeeChanged(
-        uint256 baseFeeSatoshi,
-        uint256 dynamicFee
-    );
-
+    // Emitted whenever the status of an individual transfer is changed. Especially within a transaction
+    // that has the BitcoinTransferBatchSending event, the next transferBatchSize BitcoinTransferStatusUpdated
+    // events shall be the transfers sent in the BTC transaction with bitcoinTxHash as its transaction id
     event BitcoinTransferStatusUpdated(
         bytes32               indexed transferId,
         BitcoinTransferStatus newStatus
     );
 
+    // Emitted when the fee structure is changed, to show the new prices
+    event BitcoinTransferFeeChanged(
+        uint256 baseFeeSatoshi,
+        uint256 dynamicFee
+    );
+
+    // Divisor for converting
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
 
-    // it is an uint32
+    // The fee must fit in an uint32
     uint256 public constant MAX_BASE_FEE_SATOSHI = (1 << 32) - 1;
 
     // uint16; 0.01 % granularity
     uint256 public constant DYNAMIC_FEE_DIVISOR = 10_000;
 
+    // After the 255th transfer, with nonce 254, the nextNonces slot will be set to 255;
+    // that is unusable because after that nextNonces would roll over
     uint256 public constant MAXIMUM_VALID_NONCE = 254;
-    // uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
 
+    // uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
     mapping(bytes32 => BitcoinTransfer) public transfers;
+
+    // the next nonce to be used for each bitcoin address
     mapping(string => uint8) public nextNonces;
 
+    // The BTC Address validator
     IBTCAddressValidator public btcAddressValidator;
 
     // array of 256 fee structures
@@ -89,12 +105,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     uint40 public maxTransferSatoshi = 200_000_000; // 2 BTC
 
 
-    // set in constructor
+    // set in the constructor / whenever the fee structure is changed
     uint8  public currentFeeStructureIndex;
     uint16 public dynamicFee;
     uint32 public baseFeeSatoshi;
-
-//    uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
 
     constructor(
         FastBTCAccessControl accessControl,
@@ -104,6 +118,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     {
         btcAddressValidator = newBtcAddressValidator;
 
+        // we have a default fee here
         _addFeeStructure({
             feeStructureIndex: 0,
             newBaseFeeSatoshi: 500,
