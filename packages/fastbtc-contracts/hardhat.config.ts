@@ -3,7 +3,7 @@ import "hardhat-deploy";
 import "@tenderly/hardhat-tenderly";
 import dotenv from "dotenv";
 import {task} from "hardhat/config";
-import {BigNumber, Signer, Wallet} from 'ethers';
+import {BigNumber, Signer} from 'ethers';
 import {HardhatRuntimeEnvironment} from 'hardhat/types';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
 
@@ -90,7 +90,8 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
     .addPositionalParam("btcAddress", "BTC address to send")
     .addPositionalParam("rbtcAmount", "RBTC amount to send", "1.0")
     .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
-    .setAction(async ({ privateKey, btcAddress, rbtcAmount, bridgeAddress}, hre) => {
+    .addOptionalParam("repeat", "Repeat the transaction n times", "1")
+    .setAction(async ({ privateKey, btcAddress, rbtcAmount, bridgeAddress, repeat}, hre) => {
         if(!privateKey || !btcAddress) {
             throw new Error("Provide address as first argument");
         }
@@ -110,13 +111,21 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
             bridgeAddress,
             wallet,
         );
-        const nonce = await fastBtcBridge.getNextNonce(btcAddress);
-        console.log('Next BTC nonce', nonce, nonce.toString());
-        const receipt = await fastBtcBridge.transferToBtc(
-            btcAddress,
-            {value: rbtcAmountWei}
-        );
-        console.log('tx hash:', receipt.hash);
+
+        repeat = +repeat;
+        if (repeat < 1) {
+            throw new Error("Too low repeat count given");
+        }
+
+        for (let i = 0; i < repeat; i++) {
+            const nonce = await fastBtcBridge.getNextNonce(btcAddress);
+            console.log('Next BTC nonce', nonce, nonce.toString());
+            const receipt = await fastBtcBridge.transferToBtc(
+                btcAddress,
+                {value: rbtcAmountWei}
+            );
+            console.log('tx hash:', receipt.hash);
+        }
     });
 
 
@@ -286,11 +295,11 @@ export default {
             {
                 version: "0.8.4",
                 settings: {
-      optimizer: {
-        enabled: true,
-        runs: 1000,
-      } 
-    }
+                    optimizer: {
+                        enabled: true,
+                        runs: 1000,
+                    }
+                }
             },
         ]
     },

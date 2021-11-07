@@ -52,3 +52,23 @@ services:
     depends_on:
       - bitcoin-regtest
       - hardhat
+
+  node3:
+
+  node3:
+    image: fastbtc:latest
+    env_file:
+      - demo/docker-env3
+    ports:
+      - 11127:11127
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - FASTBTC_RSK_RPC_URL=http://hardhat:8545
+      - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
+    depends_on:
+      - bitcoin-regtest
+      - hardhat
+      - pg
+      - node1
+      - node2

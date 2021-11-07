@@ -33,7 +33,7 @@ services:
   pg:
     image: postgres:13-alpine
     volumes:
-      - ./demo/initsql:/docker-entrypoint-initdb.d
+      - ./integration_test/postgres/initsql:/docker-entrypoint-initdb.d
     ports:
       - 55432:5432
     environment:
