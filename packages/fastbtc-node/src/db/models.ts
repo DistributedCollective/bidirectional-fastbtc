@@ -3,6 +3,7 @@ import {
     Column,
     Entity,
     EntityRepository,
+    Index,
     PrimaryColumn,
     PrimaryGeneratedColumn,
     Repository,
@@ -65,6 +66,7 @@ export enum TransferStatus {
 
 @Entity()
 @Unique('btcaddress_nonce_uq', ['btcAddress', 'nonce'])
+@Index(['rskBlockNumber', 'rskTransactionIndex', 'rskLogIndex'], {unique: true})
 export class Transfer {
     @PrimaryGeneratedColumn({ name: 'id'})
     dbId!: number;
