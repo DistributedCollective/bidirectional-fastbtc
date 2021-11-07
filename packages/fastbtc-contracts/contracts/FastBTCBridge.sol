@@ -177,7 +177,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
 //    nonReentrant
 //    {
 //        BitcoinTransfer storage transfer = transfers[transferId];
-//        // TODO: decide if it should be possible to also reclaim sent transfers
+//        // decide if it should be possible to also reclaim sent transfers
 //        require(
 //            transfer.status == BitcoinTransferStatus.NEW,
 //            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
@@ -311,10 +311,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     private
     {
         require(feeStructureIndex < feeStructures.length, "Too large fee structure index");
-        // TODO: prevents dynamic-fee only
-        require(feeStructures[feeStructureIndex].baseFeeSatoshi == 0, "This slot has already been used");
-        // TODO: prevents dynamic-fee only
-        require(newBaseFeeSatoshi > 0, "Base fee must be non-zero");
+        require(feeStructures[feeStructureIndex].baseFeeSatoshi == 0
+                && feeStructures[feeStructureIndex].dynamicFee == 0, "This slot has already been used");
+
         require(newBaseFeeSatoshi <= MAX_BASE_FEE_SATOSHI, "Base fee exceeds maximum");
         require(newDynamicFee < DYNAMIC_FEE_DIVISOR, "Dynamic fee divisor too high");
 
@@ -331,8 +330,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     private
     {
         require(feeStructureIndex < feeStructures.length, "Fee structure index invalid");
-        // TODO: this prevents just setting the dynamic fee
-        require(feeStructures[feeStructureIndex].baseFeeSatoshi > 0, "Fee structure entry unset");
+        require(feeStructures[feeStructureIndex].baseFeeSatoshi > 0
+            || feeStructures[feeStructureIndex].dynamicFee > 0,
+            "Fee structure entry unset");
 
         // guarded
         currentFeeStructureIndex = uint8(feeStructureIndex);
