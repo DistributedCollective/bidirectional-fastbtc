@@ -10,6 +10,8 @@ import {EventScanner, Scanner} from '../rsk/scanner';
 import Logger from '../logger';
 import {setExtend, setIntersection} from "../utils/sets";
 
+type TransactionResponse = ethers.providers.TransactionResponse;
+
 
 // NOTE: if the TransferBatchDTO interface is changed in a backwards-incompatible way,
 // we need to handle versioning, because it's also stored in DB.
@@ -169,7 +171,7 @@ export class TransferBatchValidationError extends Error {
 }
 export type BitcoinTransferServiceConfig = Pick<
     Config,
-    'numRequiredSigners' | 'maxPassedBlocksInBatch' | 'maxTransfersInBatch'
+    'numRequiredSigners' | 'maxPassedBlocksInBatch' | 'maxTransfersInBatch' | 'rskRequiredConfirmations'
 >
 
 @injectable()
@@ -348,17 +350,14 @@ export class BitcoinTransferService {
             const transferBatchRepository = transaction.getCustomRepository(StoredBitcoinTransferBatchRepository);
             const transferRepository = transaction.getRepository(Transfer);
             this.logger.info('marking transfer batch', transferBatch, 'as sending in RSK');
-            const result = await this.fastBtcBridge.markTransfersAsSending(
-                `0x${transferBatch.bitcoinTransactionHash}`,
-                transferBatch.getTransferIds(),
-                transferBatch.rskUpdateSignatures
+            const result = await this.sendRskTransaction(
+                () => this.fastBtcBridge.markTransfersAsSending(
+                    `0x${transferBatch.bitcoinTransactionHash}`,
+                    transferBatch.getTransferIds(),
+                    transferBatch.rskUpdateSignatures
+                )
             );
-            this.logger.info('tx hash:', result.hash, 'waiting...');
-            const receipt = await result.wait();
-            this.logger.info('receipt:', receipt);
-            if (!receipt.status) {
-                throw new Error('RSK transaction did not go through');
-            }
+            this.logger.info('transfers successfully marked as sending in tx hash:', result.hash);
             const transfers = await Promise.all(
                 transferBatch.getTransferIds().map(
                     transferId => transferRepository.findOneOrFail({
@@ -427,6 +426,23 @@ export class BitcoinTransferService {
             }
         }
         return undefined;
+    }
+
+    private async sendRskTransaction(sendTransaction: () => Promise<TransactionResponse>): Promise<TransactionResponse> {
+        // TODO: Could do retrying etc here, but the logic in full is built to handle this situation
+        // TODO: also this method doesn't belong in this class really
+        const result = await sendTransaction();
+        const numRequiredConfirmations = Math.max(
+            1,
+            Math.ceil(this.config.rskRequiredConfirmations / 2)
+        );
+        this.logger.info('tx hash:', result.hash, `waiting (${numRequiredConfirmations} confirms)...`);
+        try {
+            await result.wait(numRequiredConfirmations);
+        } catch(e: any) {
+            this.logger.exception(e, `RSK transaction ${result.hash} failed.`)
+        }
+        return result;
     }
 
     //private async getPendingStoredTransferBatches(entityManager: EntityManager): Promise<StoredBitcoinTransferBatch[]> {
