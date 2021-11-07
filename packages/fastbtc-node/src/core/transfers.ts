@@ -313,7 +313,7 @@ export class BitcoinTransferService {
 
             const seenIntersection = setIntersection(seenPublicKeys, new Set(psbt.signedPublicKeys));
             if (seenIntersection.size) {
-                this.logger.info(`public keys ${[...seenPublicKeys]} have already signed`);
+                this.logger.info(`public keys ${[...seenIntersection]} have already signed`);
                 continue;
             }
 
@@ -514,7 +514,7 @@ export class TransferBatchValidator {
             );
         }
 
-        const seenDepositIds = new Map<string, boolean>();
+        const seenDepositIds = new Set<string>();
         for (const psbtTransfer of psbtTransfers) {
             const transfer = transferBatch.getTransferByBitcoinAddressAndNonce(psbtTransfer.btcAddress, psbtTransfer.nonce);
 
@@ -526,27 +526,27 @@ export class TransferBatchValidator {
                 );
             }
 
-            if (seenDepositIds.get(transfer.transferId)) {
+            if (seenDepositIds.has(transfer.transferId)) {
                 throw new TransferBatchValidationError(
                     `Deposit ${depositId} is in the PSBT more than once`
                 );
             }
 
-            seenDepositIds.set(transfer.transferId, true);
+            seenDepositIds.add(transfer.transferId);
         }
 
         // TODO: validate signatures
     }
 
     private async validateTransfers(transferBatch: TransferBatch, expectedStatus: TransferStatus|null) {
-        const seenTransferIds = new Map<string, boolean>();
+        const seenTransferIds = new Set<string>();
         for (const transfer of transferBatch.transfers) {
-            if (seenTransferIds.get(transfer.transferId)) {
+            if (seenTransferIds.has(transfer.transferId)) {
                 throw new TransferBatchValidationError(
                     `Transfer ${transfer} is in the batch more than once`
                 );
             }
-            seenTransferIds.set(transfer.transferId, true);
+            seenTransferIds.add(transfer.transferId);
 
             const depositInfo = await this.eventScanner.fetchDepositInfo(transfer.btcAddress, transfer.nonce);
 

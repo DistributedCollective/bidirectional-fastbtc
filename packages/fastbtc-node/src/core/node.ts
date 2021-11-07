@@ -183,6 +183,7 @@ export class FastBTCNode {
             this.transientInitiatorData.gatheredRskSentSignaturesAndAddresses = [];
             updated = true;
         }
+
         if (this.transientInitiatorData.gatheredBitcoinSignatures.length > 0) {
             transferBatch = await this.bitcoinTransferService.addBitcoinSignatures(
                 transferBatch,
