@@ -487,6 +487,11 @@ export class BitcoinTransferService {
         return {signature, address};
     };
 
+    async signBitcoinTransaction(transferBatch: TransferBatch): Promise<PartiallySignedBitcoinTransaction> {
+        await this.validator.validateForSigningBitcoinTransaction(transferBatch);
+        return this.btcMultisig.signTransaction(transferBatch.initialBtcTransaction);
+    }
+
     async sendToBitcoin(transferBatch: TransferBatch): Promise<void> {
         this.logger.info("Sending TransferBatch to bitcoin");
         await this.validator.validateForSendingToBitcoin(transferBatch);

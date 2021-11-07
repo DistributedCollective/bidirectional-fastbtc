@@ -304,12 +304,11 @@ export class FastBTCNode {
 
     onRequestRskSendingSignature = async (data: RequestRSKSendingSignatureMessage, source: Node<FastBTCMessage>) => {
         await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
-            await this.transferBatchValidator.validateForSigningRskSendingUpdate(transferBatch);
+            // This also validates it
+            const {address, signature} =  await this.bitcoinTransferService.signRskSendingUpdate(transferBatch);
 
             await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
 
-            // TODO: this validates again
-            const {address, signature} =  await this.bitcoinTransferService.signRskSendingUpdate(transferBatch);
             await source.send('fastbtc:rsk-sending-signature-response', {
                 transferBatchDto: transferBatch.getDto(),
                 address,
@@ -320,12 +319,10 @@ export class FastBTCNode {
 
     onRequestBitcoinSignature = async (data: RequestBitcoinSignatureMessage, source: Node<FastBTCMessage>) => {
         await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
-            await this.transferBatchValidator.validateForSigningBitcoinTransaction(transferBatch);
-
+            // This also validates it
+            const signedBtcTransaction = await this.bitcoinTransferService.signBitcoinTransaction(transferBatch);
             await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
 
-            // TODO: maybe this should go through BitcoinTransferService
-            const signedBtcTransaction = await this.btcMultisig.signTransaction(transferBatch.initialBtcTransaction);
             await source.send('fastbtc:bitcoin-signature-response', {
                 transferBatchDto: transferBatch.getDto(),
                 signedBtcTransaction,
@@ -335,12 +332,11 @@ export class FastBTCNode {
 
     onRequestRskMinedSignature = async (data: RequestRSKMinedSignatureMessage, source: Node<FastBTCMessage>) => {
         await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
-            await this.transferBatchValidator.validateForSigningRskMinedUpdate(transferBatch);
+            // This also validates it
+            const {address, signature} =  await this.bitcoinTransferService.signRskMinedUpdate(transferBatch);
 
             await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
 
-            // TODO: this validates again
-            const {address, signature} =  await this.bitcoinTransferService.signRskMinedUpdate(transferBatch);
             await source.send('fastbtc:rsk-mined-signature-response', {
                 transferBatchDto: transferBatch.getDto(),
                 address,
