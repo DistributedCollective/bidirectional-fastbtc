@@ -1,16 +1,16 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./FastBTCAccessControl.sol";
+import "./interfaces/IFastBTCAccessControl.sol";
 
 abstract contract FastBTCAccessControllable {
-    FastBTCAccessControl public accessControl;
+    IFastBTCAccessControl public accessControl;
 
     constructor(
-        FastBTCAccessControl _accessControl
+        address _accessControl
     )
     {
-        accessControl = _accessControl;
+        accessControl = IFastBTCAccessControl(_accessControl);
     }
 
     modifier onlyFederator() {
@@ -22,4 +22,16 @@ abstract contract FastBTCAccessControllable {
         accessControl.checkAdmin(msg.sender);
         _;
     }
+
+    modifier onlyPauser() {
+        accessControl.checkPauser(msg.sender);
+        _;
+    }
+
+    modifier onlyGuard() {
+        accessControl.checkGuard(msg.sender);
+        _;
+    }
+
+    
 }

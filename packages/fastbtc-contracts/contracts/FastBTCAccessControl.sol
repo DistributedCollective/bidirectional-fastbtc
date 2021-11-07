@@ -7,19 +7,13 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract FastBTCAccessControl is AccessControlEnumerable {
     bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
     bytes32 public constant ROLE_FEDERATOR = keccak256("FEDERATOR");
+    bytes32 public constant ROLE_PAUSER = keccak256("PAUSER");
+    bytes32 public constant ROLE_GUARD = keccak256("GUARD");
 
     constructor() {
         _setupRole(ROLE_ADMIN, msg.sender);
-    }
-
-
-    function checkFederator(
-        address addressToCheck
-    )
-    public
-    view
-    {
-        _checkRole(ROLE_FEDERATOR, addressToCheck);
+        _setupRole(ROLE_PAUSER, msg.sender);
+        _setupRole(ROLE_GUARD, msg.sender);
     }
 
     function checkAdmin(
@@ -29,6 +23,37 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     view
     {
         _checkRole(ROLE_ADMIN, addressToCheck);
+    }
+
+    function checkPauser(
+        address addressToCheck
+    )
+    public
+    view
+    {
+       if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            _checkRole(ROLE_PAUSER, addressToCheck);
+        }
+    }
+
+    function checkGuard(
+        address addressToCheck
+    )
+    public
+    view
+    {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            _checkRole(ROLE_GUARD, addressToCheck);
+        }
+    }
+
+    function checkFederator(
+        address addressToCheck
+    )
+    public
+    view
+    {
+        _checkRole(ROLE_FEDERATOR, addressToCheck);
     }
 
     function checkFederatorSignatures(

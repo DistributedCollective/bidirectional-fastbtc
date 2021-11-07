@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./interfaces/IBTCAddressValidator.sol";
-import "./FastBTCAccessControl.sol";
+//import "./IFastBTCAccessControl.sol";
 import "./FastBTCAccessControllable.sol";
 
 contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable {
@@ -18,7 +18,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     uint256 public nonBech32MaxLength = 35;
 
     constructor(
-        FastBTCAccessControl _accessControl,
+        address _accessControl,
         string memory _bech32Prefix,
         string[] memory _nonBech32Prefixes
     )

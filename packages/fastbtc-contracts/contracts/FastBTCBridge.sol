@@ -1,6 +1,8 @@
 //SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "./Freezable.sol";
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -8,10 +10,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
 import "./interfaces/IBTCAddressValidator.sol";
-import "./FastBTCAccessControl.sol";
+//import "./FastBTCAccessControl.sol";
 import "./FastBTCAccessControllable.sol";
 
-contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
+contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, Freezable {
     using SafeERC20 for IERC20;
     using Address for address payable;
 
@@ -111,7 +113,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     uint32 public baseFeeSatoshi;
 
     constructor(
-        FastBTCAccessControl accessControl,
+        address accessControl,
         IBTCAddressValidator newBtcAddressValidator
     )
     FastBTCAccessControllable(accessControl)
@@ -128,14 +130,36 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
         _setCurrentFeeStructure(0);
     }
 
+    function pause() external onlyPauser {
+        _pause();
+    }
+
+    function freeze() external onlyGuard {
+        if (!paused()) { // we don't want to risk a revert
+            _pause();
+        }
+        _freeze();
+    }
+
+    // Cannot unpause when frozen
+    function unpause() external onlyPauser whenNotFrozen {
+        _unpause();
+    }
+
+    function unfreeze() external onlyGuard {
+        _unfreeze();
+        //_unpause(); // it's best to have the option unpause separately
+    }
+    
     // PUBLIC USER API
     // ===============
 
-    function transferToBtc(
+    function transferToBtc (
         string calldata btcAddress
     )
     external
     payable
+    whenNotPaused
     {
         require(isValidBtcAddress(btcAddress), "Invalid BTC address");
 
@@ -221,6 +245,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     )
     external
     onlyFederator
+    whenNotFrozen
     {
         emit BitcoinTransferBatchSending(bitcoinTxHash, uint8(transferIds.length));
 
@@ -247,6 +272,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     )
     external
     onlyFederator
+    whenNotFrozen
     {
         accessControl.checkFederatorSignatures(
             getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.MINED),
@@ -271,6 +297,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable {
     )
     external
     onlyFederator
+    whenNotFrozen
     {
         accessControl.checkFederatorSignatures(
             getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.REFUNDED),
