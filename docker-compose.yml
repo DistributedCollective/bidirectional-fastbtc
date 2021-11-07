@@ -6,6 +6,7 @@ services:
     build:
       context: ./packages/fastbtc-node/
     env_file:
+      - demo/docker-env-common
       - demo/docker-env1
         #- demo/docker-env1-secret
     ports:
@@ -19,6 +20,7 @@ services:
   node2:
     image: fastbtc:latest
     env_file:
+      - demo/docker-env-common
       - demo/docker-env2
         #- demo/docker-env2-secret
     ports:

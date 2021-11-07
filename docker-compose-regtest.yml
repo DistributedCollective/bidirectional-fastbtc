@@ -54,10 +54,9 @@ services:
       - hardhat
 
   node3:
-
-  node3:
     image: fastbtc:latest
     env_file:
+      - demo/docker-env-common
       - demo/docker-env3
     ports:
       - 11127:11127

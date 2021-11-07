@@ -2,7 +2,7 @@ import "@nomiclabs/hardhat-waffle";
 import "hardhat-deploy";
 import "@tenderly/hardhat-tenderly";
 import dotenv from "dotenv";
-import {task} from "hardhat/config";
+import {task, types} from "hardhat/config";
 import {BigNumber, Signer} from 'ethers';
 import {HardhatRuntimeEnvironment} from 'hardhat/types';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
@@ -118,8 +118,6 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
         }
 
         for (let i = 0; i < repeat; i++) {
-            const nonce = await fastBtcBridge.getNextNonce(btcAddress);
-            console.log('Next BTC nonce', nonce, nonce.toString());
             const receipt = await fastBtcBridge.transferToBtc(
                 btcAddress,
                 {value: rbtcAmountWei}
@@ -130,54 +128,66 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
 
 
 task("add-federator", "Add federator")
-    .addPositionalParam("address", "RSK address to add")
+    .addVariadicPositionalParam("address", "RSK address to add")
     .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
-    .setAction(async ({ address, privateKey }, hre) => {
-        if (!address) {
-            throw new Error("Address must be given");
+    .setAction(async ({ address: addresses, privateKey }, hre) => {
+        if (addresses.length === 0) {
+            throw new Error("At least 1 address must be given");
         }
 
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
         const deployment = await hre.deployments.get('FastBTCAccessControl');
         console.log('Bridge address', deployment.address);
-        console.log(`Making ${address} a federator`);
+        console.log(`Adding ${addresses.length} federators`);
+
         const accessControl = await hre.ethers.getContractAt(
             'FastBTCAccessControl',
             deployment.address,
             signer,
         );
 
-        const receipt = await accessControl.addFederator(
-            address
-        );
-        console.log('tx hash:', receipt.hash);
+        for (const address of addresses) {
+            console.log(`Making ${address} a federator`);
+            const receipt = await accessControl.addFederator(
+                address
+            );
+            console.log('tx hash:', receipt.hash);
+        }
+
+        console.log('all done');
     });
 
 
 task("remove-federator", "Remove federator")
-    .addPositionalParam("address", "RSK address to add")
+    .addVariadicPositionalParam("address", "RSK address to add")
     .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
-    .setAction(async ({ address, privateKey }, hre) => {
-        if (!address) {
-            throw new Error("Address must be given");
+    .setAction(async ({ address: addresses, privateKey }, hre) => {
+        if (addresses.length === 0) {
+            throw new Error("At least 1 address must be given");
         }
 
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
         const deployment = await hre.deployments.get('FastBTCAccessControl');
         console.log('Bridge address', deployment.address);
-        console.log(`Removing ${address} from federators`);
+
+        console.log(`Removing ${addresses.length} federators`);
         const accessControl = await hre.ethers.getContractAt(
             'FastBTCAccessControl',
             deployment.address,
             signer,
         );
 
-        const receipt = await accessControl.removeFederator(
-            address
-        );
-        console.log('tx hash:', receipt.hash);
+        for (const address of addresses) {
+            console.log(`Removing ${address} from federators`);
+            const receipt = await accessControl.removeFederator(
+                address
+            );
+            console.log('tx hash:', receipt.hash);
+        }
+
+        console.log('all done');
     });
 
 
@@ -212,6 +222,21 @@ task("set-limits", "Set min/max transfer limits")
             console.log('Setting maximum to: %s BTC (%s sat)', maxBtc, newMaxSatoshi.toString());
             const receipt = await contract.setMaxTransferSatoshi(newMaxSatoshi);
             console.log('tx hash:', receipt.hash);
+        }
+    });
+
+
+task('set-mining-interval', "Set mining interval")
+    .addPositionalParam('ms', 'Mining interval as milliseconds (0 for automine)', undefined, types.int)
+    .setAction(async ({ ms }, hre) => {
+        if (ms === 0) {
+            console.log("Enabling automining");
+            await hre.network.provider.send('evm_setIntervalMining', [0]);
+            await hre.network.provider.send('evm_setAutomine', [true]);
+        } else {
+            console.log("Disabling automining and enabling interval mining with", ms, "ms");
+            await hre.network.provider.send('evm_setAutomine', [false]);
+            await hre.network.provider.send('evm_setIntervalMining', [ms]);
         }
     });
 

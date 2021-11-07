@@ -48,13 +48,12 @@ EXPOSE 7777
 # TODO: not sure if funding here is the best bet or if it should be done for each test individually
 RUN echo -e '#!/bin/sh\n\
 (sleep 20\n\
-npx hardhat --network localhost add-federator $NODE1_ADDRESS\n\
-npx hardhat --network localhost add-federator $NODE2_ADDRESS\n\
-npx hardhat --network localhost add-federator $NODE3_ADDRESS\n\
+npx hardhat --network localhost add-federator $NODE1_ADDRESS $NODE2_ADDRESS $NODE3_ADDRESS\n\
 npx hardhat --network localhost free-money $USER_ADDRESS 10.0\n\
 npx hardhat --network localhost free-money $NODE1_ADDRESS 10.0\n\
 npx hardhat --network localhost free-money $NODE2_ADDRESS 10.0\n\
-npx hardhat --network localhost free-money $NODE3_ADDRESS 10.0)&\n\
+npx hardhat --network localhost free-money $NODE3_ADDRESS 10.0\n\
+npx hardhat --network localhost set-mining-interval 10000)&\n\
 npx hardhat node --hostname 0.0.0.0\n\
 ' > start.sh && chmod +x start.sh
 
