@@ -357,6 +357,10 @@ export class BitcoinTransferService {
             const receipt = await result.wait();
             this.logger.info('receipt:', receipt);
             if (!receipt.status) {
+                this.logger.error(
+                    `Invalid receipt for RSK sending transaction ${result.hash} (maybe it was already sent):`,
+                    receipt,
+                )
                 throw new Error('RSK transaction did not go through');
             }
             const transfers = await Promise.all(
