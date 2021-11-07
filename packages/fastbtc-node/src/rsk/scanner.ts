@@ -30,7 +30,6 @@ export function getTransferId(btcAddress: string, nonce: number): string {
     );
 }
 
-// TODO: the name might be a misnomer since this does quite a few things beside scanning for new events
 @injectable()
 export class EventScanner {
     private defaultStartBlock: number;
@@ -183,14 +182,6 @@ export class EventScanner {
         }
 
         return transfer;
-    }
-
-    private getTransferIds(
-        transfers: (Transfer | string)[]
-    ): string[] {
-        return transfers.map(t => (
-            (typeof t === 'string') ? t : t.transferId
-        ));
     }
 
     async getTransferById(transferId: string): Promise<Transfer> {
