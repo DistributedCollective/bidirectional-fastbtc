@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -7,11 +7,45 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 contract FastBTCAccessControl is AccessControlEnumerable {
     bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
     bytes32 public constant ROLE_FEDERATOR = keccak256("FEDERATOR");
+    bytes32 public constant ROLE_PAUSER = keccak256("PAUSER");
+    bytes32 public constant ROLE_GUARD = keccak256("GUARD");
 
     constructor() {
         _setupRole(ROLE_ADMIN, msg.sender);
+        _setupRole(ROLE_PAUSER, msg.sender);
+        _setupRole(ROLE_GUARD, msg.sender);
     }
 
+    function checkAdmin(
+        address addressToCheck
+    )
+    external
+    view
+    {
+        _checkRole(ROLE_ADMIN, addressToCheck);
+    }
+
+    function checkPauser(
+        address addressToCheck
+    )
+    external
+    view
+    {
+       if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            _checkRole(ROLE_PAUSER, addressToCheck);
+        }
+    }
+
+    function checkGuard(
+        address addressToCheck
+    )
+    external
+    view
+    {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            _checkRole(ROLE_GUARD, addressToCheck);
+        }
+    }
 
     function checkFederator(
         address addressToCheck
@@ -22,20 +56,11 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         _checkRole(ROLE_FEDERATOR, addressToCheck);
     }
 
-    function checkAdmin(
-        address addressToCheck
-    )
-    public
-    view
-    {
-        _checkRole(ROLE_ADMIN, addressToCheck);
-    }
-
     function checkFederatorSignatures(
         bytes32 _messageHash,
         bytes[] memory _signatures
     )
-    public
+    external
     view
     {
         _messageHash = ECDSA.toEthSignedMessageHash(_messageHash);
@@ -72,7 +97,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     }
 
     function federators()
-    public
+    external
     view
     returns (address[] memory addresses)
     {
@@ -86,7 +111,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function addFederator(
         address account
     )
-    public
+    external
     {
         grantRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
     }
@@ -94,8 +119,40 @@ contract FastBTCAccessControl is AccessControlEnumerable {
     function removeFederator(
         address account
     )
-    public
+    external
     {
         revokeRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
+    }
+
+    function addPauser(
+        address account
+    )
+    external
+    {
+        grantRole(ROLE_PAUSER, account); // enforces onlyAdmin
+    }
+
+    function removePauser(
+        address account
+    )
+    external
+    {
+        revokeRole(ROLE_PAUSER, account); // enforces onlyAdmin
+    }
+
+    function addGuard(
+        address account
+    )
+    external
+    {
+        grantRole(ROLE_GUARD, account); // enforces onlyAdmin
+    }
+
+    function removeGuard(
+        address account
+    )
+    external
+    {
+        revokeRole(ROLE_GUARD, account); // enforces onlyAdmin
     }
 }

@@ -13,6 +13,7 @@ export interface Config {
     rskRequiredConfirmations: number;
     rskPrivateKey: string; // secret
     btcNetwork: 'mainnet' | 'testnet' | 'regtest';
+    btcRequiredConfirmations: number;
     btcRpcUrl: string;
     btcRpcUsername: string;
     btcRpcPassword: string; // secret
@@ -91,6 +92,7 @@ export const createEnvConfig = (env = process.env, allowPartial: boolean = false
         rskStartBlock: parseInt(env.FASTBTC_RSK_START_BLOCK!),
         rskRequiredConfirmations: parseInt(env.FASTBTC_RSK_REQUIRED_CONFIRMATIONS ?? '10'),
         rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
+        btcRequiredConfirmations: parseInt(env.FASTBTC_BTC_REQUIRED_CONFIRMATIONS ?? '3'),
         btcNetwork: env.FASTBTC_BTC_NETWORK! as 'mainnet'|'testnet'|'regtest',
         btcRpcUrl: env.FASTBTC_BTC_RPC_URL!,
         btcRpcUsername: env.FASTBTC_BTC_RPC_USERNAME ?? '',

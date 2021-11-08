@@ -1,7 +1,6 @@
 import Logger from './logger';
 import bootstrap from "./inversify.config";
 import {Config, getCensoredConfig} from './config';
-//import {FastBTCNode} from './main';
 import {FastBTCNode} from './core/node';
 import {ConnectionProvider} from './db/connection';
 
@@ -16,7 +15,7 @@ async function main() {
     const config = container.get<Config>(Config);
     rootLogger.log('My config is', getCensoredConfig(config));
 
-    // TODO: this is silly, but we have to init the connection. Architect this thing better
+    // This is silly, but we have to init the connection. Maybe architect this thing better
     const dbConnection = await container.get<ConnectionProvider>(ConnectionProvider)();
 
     try {

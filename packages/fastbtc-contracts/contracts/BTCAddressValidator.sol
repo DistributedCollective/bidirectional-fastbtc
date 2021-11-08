@@ -1,8 +1,7 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.9;
 
 import "./interfaces/IBTCAddressValidator.sol";
-import "./FastBTCAccessControl.sol";
 import "./FastBTCAccessControllable.sol";
 
 contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable {
@@ -22,7 +21,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     uint256 public invalidBech32 = 0xfffffffffffffffffffffffffffffffff8008205fffffffffc02ffffffffffff;
 
     constructor(
-        FastBTCAccessControl _accessControl,
+        address _accessControl,
         string memory _bech32Prefix,
         string[] memory _nonBech32Prefixes
     )
