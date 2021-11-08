@@ -129,27 +129,6 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         _setCurrentFeeStructure(0);
     }
 
-    function pause() external onlyPauser {
-        _pause();
-    }
-
-    function freeze() external onlyGuard {
-        if (!paused()) { // we don't want to risk a revert
-            _pause();
-        }
-        _freeze();
-    }
-
-    // Cannot unpause when frozen
-    function unpause() external onlyPauser whenNotFrozen {
-        _unpause();
-    }
-
-    function unfreeze() external onlyGuard {
-        _unfreeze();
-        //_unpause(); // it's best to have the option unpause separately
-    }
-    
     // PUBLIC USER API
     // ===============
 
@@ -623,5 +602,29 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     onlyAdmin
     {
         token.safeTransfer(receiver, amount);
+    }
+
+    // PAUSING/FREEZING API
+    // ====================
+
+    function pause() external onlyPauser {
+        _pause();
+    }
+
+    function freeze() external onlyGuard {
+        if (!paused()) { // we don't want to risk a revert
+            _pause();
+        }
+        _freeze();
+    }
+
+    // Cannot unpause when frozen
+    function unpause() external onlyPauser whenNotFrozen {
+        _unpause();
+    }
+
+    function unfreeze() external onlyGuard {
+        _unfreeze();
+        //_unpause(); // it's best to have the option unpause separately
     }
 }
