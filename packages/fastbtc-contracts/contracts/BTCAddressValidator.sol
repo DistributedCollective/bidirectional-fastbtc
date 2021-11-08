@@ -67,10 +67,12 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
 
         uint256 bitmask = 0;
         // for each character set the corresponding bit in the bitmask
-        for (uint256 i = bytes(bech32Prefix).length; i < _btcAddressBytes.length; i++) {
-            bitmask |= uint256(1) << uint8(_btcAddressBytes[i]);
+        unchecked {
+            for (uint256 i = bytes(bech32Prefix).length; i < _btcAddressBytes.length; i++) {
+                bitmask |= uint256(1) << uint8(_btcAddressBytes[i]);
+            }
         }
-
+        
         // if any bit in the bitmask thus set corresponds to a character considered invalid
         // in bech32, raise an error here.
         return (bitmask & invalidBech32) == 0;
@@ -93,17 +95,19 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
             return false;
         }
 
-        for (uint i = 1; i < _btcAddressBytes.length; i++) {
-            uint8 c = uint8(_btcAddressBytes[i]);
-            bool isValidCharacter = (
-                (c >= 0x31 && c <= 0x39) // between "1" and "9" (0 is not valid)
-                ||
-                (c >= 0x41 && c <= 0x5a && c != 0x49 && c != 0x4f) // between "A" and "Z" but not "I" or "O"
-                ||
-                (c >= 0x61 && c <= 0x7a && c != 0x6c) // between "a" and "z" but not "l"
-            );
-            if (!isValidCharacter) {
-                return false;
+        unchecked {
+            for (uint i = 1; i < _btcAddressBytes.length; i++) {
+                uint8 c = uint8(_btcAddressBytes[i]);
+                bool isValidCharacter = (
+                    (c >= 0x31 && c <= 0x39) // between "1" and "9" (0 is not valid)
+                    ||
+                    (c >= 0x41 && c <= 0x5a && c != 0x49 && c != 0x4f) // between "A" and "Z" but not "I" or "O"
+                    ||
+                    (c >= 0x61 && c <= 0x7a && c != 0x6c) // between "a" and "z" but not "l"
+                );
+                if (!isValidCharacter) {
+                    return false;
+                }
             }
         }
 
@@ -116,9 +120,11 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     private
     view
     returns (bool) {
-        for (uint i = 0; i < nonBech32Prefixes.length; i++) {
-            if (startsWith(_btcAddress, nonBech32Prefixes[i])) {
-                return true;
+        unchecked {
+            for (uint i = 0; i < nonBech32Prefixes.length; i++) {
+                if (startsWith(_btcAddress, nonBech32Prefixes[i])) {
+                    return true;
+                }
             }
         }
 
@@ -137,9 +143,11 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         if (_prefixBytes.length > _stringBytes.length) {
             return false;
         }
-        for (uint i = 0; i < _prefixBytes.length; i++) {
-            if (_stringBytes[i] != _prefixBytes[i]) {
-                return false;
+        unchecked {
+            for (uint i = 0; i < _prefixBytes.length; i++) {
+                if (_stringBytes[i] != _prefixBytes[i]) {
+                    return false;
+                }
             }
         }
         return true;

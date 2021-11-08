@@ -253,15 +253,17 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
             signatures
         );
 
-        for (uint256 i = 0; i < transferIds.length; i++) {
-            BitcoinTransfer storage transfer = transfers[transferIds[i]];
+        unchecked {
+            for (uint256 i = 0; i < transferIds.length; i++) {
+                BitcoinTransfer storage transfer = transfers[transferIds[i]];
 
-            require(
-                transfer.status == BitcoinTransferStatus.NEW,
-                "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
-            );
+                require(
+                    transfer.status == BitcoinTransferStatus.NEW,
+                    "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
+                );
 
-            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.SENDING);
+                _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.SENDING);
+            }
         }
     }
 
@@ -278,15 +280,17 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
             signatures
         );
 
-        for (uint256 i = 0; i < transferIds.length; i++) {
-            BitcoinTransfer storage transfer = transfers[transferIds[i]];
+        unchecked {
+            for (uint256 i = 0; i < transferIds.length; i++) {
+                BitcoinTransfer storage transfer = transfers[transferIds[i]];
 
-            require(
-                transfer.status == BitcoinTransferStatus.SENDING,
-                "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
-            );
+                require(
+                    transfer.status == BitcoinTransferStatus.SENDING,
+                    "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
+                );
 
-            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.MINED);
+                _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.MINED);
+            }
         }
     }
 
@@ -303,12 +307,14 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
             signatures
         );
 
-        for (uint256 i = 0; i < transferIds.length; i++) {
-            BitcoinTransfer storage transfer = transfers[transferIds[i]];
-            require(transfer.status == BitcoinTransferStatus.NEW, "Invalid existing transfer status or transfer not found");
+        unchecked {
+            for (uint256 i = 0; i < transferIds.length; i++) {
+                BitcoinTransfer storage transfer = transfers[transferIds[i]];
+                require(transfer.status == BitcoinTransferStatus.NEW, "Invalid existing transfer status or transfer not found");
 
-            _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.REFUNDED);
-            _refundTransferRbtc(transfer);
+                _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.REFUNDED);
+                _refundTransferRbtc(transfer);
+            }
         }
     }
 
@@ -481,9 +487,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     view
     returns (BitcoinTransfer[] memory ret) {
         ret = new BitcoinTransfer[](transferIds.length);
-        for (uint256 i = 0; i < transferIds.length; i++) {
-            ret[i] = transfers[transferIds[i]];
-            require(ret[i].status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
+        unchecked {
+            for (uint256 i = 0; i < transferIds.length; i++) {
+                ret[i] = transfers[transferIds[i]];
+                require(ret[i].status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
+            }
         }
     }
 
@@ -496,9 +504,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     returns (BitcoinTransfer[] memory ret) {
         require(btcAddresses.length == nonces.length, "same amount of btcAddresses and nonces must be given");
         ret = new BitcoinTransfer[](btcAddresses.length);
-        for (uint256 i = 0; i < btcAddresses.length; i++) {
-            ret[i] = transfers[getTransferId(btcAddresses[i], nonces[i])];
-            require(ret[i].status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
+        unchecked {
+            for (uint256 i = 0; i < btcAddresses.length; i++) {
+                ret[i] = transfers[getTransferId(btcAddresses[i], nonces[i])];
+                require(ret[i].status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
+            }
         }
     }
 
