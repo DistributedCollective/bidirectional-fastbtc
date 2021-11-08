@@ -40,14 +40,14 @@ FASTBTC_RSK_CONTRACT_ADDRESS         # FastBTCBridge contract address in RSK
 FASTBTC_RSK_START_BLOCK              # First block to scan events from (contract deployment block)
 FASTBTC_RSK_PRIVATE_KEY              # Private key of RSK federator address
 
-FASTBTC_BTC_REQUIRED_CONFIRMATIONS   # Number of required confirmations befrore BTC transaction is treated as final
+FASTBTC_BTC_REQUIRED_CONFIRMATIONS   # Number of required confirmations before a BTC transaction is treated as final
 FASTBTC_BTC_NETWORK                  # Bitcoin network type, (mainnet, testnet, or regtest)
 FASTBTC_BTC_RPC_URL                  # Full Bitcoin RPC url e.g.  http://localhost:18543/wallet/multisig
 FASTBTC_BTC_RPC_USERNAME             # Username for authenticating to bitcoin rpc
 FASTBTC_BTC_RPC_PASSWORD             # Password for authenticating to bitcoin rpc
 FASTBTC_BTC_MASTER_PUBLIC_KEYS       # Comma-separated list of all public keys used in the bitcoin multisig (tpub...,)
 FASTBTC_BTC_MASTER_PRIVATE_KEY       # Hierarchical master private key that has access to bitcoin multisig (tprv...)
-FASTBTC_BTC_KEY_DERIVATION_PATH      # Key derivation path from master private key to sign multisig transactions with
+FASTBTC_BTC_KEY_DERIVATION_PATH      # (Optional) key derivation path from master private key to sign multisig transactions with
 ```
 
 For example configurations, see the [integration_test/nodes](../../integration_test/nodes) directory.
