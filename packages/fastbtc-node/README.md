@@ -1,7 +1,7 @@
 fastbtc-node -- The Bi-directional FastBTC P2P Federator Node
 ============================================================
 
-This packages contains the implementation of the background service. Each node independently validates RSK smart
+This package contains the implementation of the background service. Each node independently validates RSK smart
 contract event data and participates in the network by signing RSK update signatures and Bitcoin transactions.
 
 The nodes form a peer-to-peer network, where they connect to other nodes using pre-configured addresses and then
@@ -12,12 +12,12 @@ sent by the initiator. The network is built so that the initiator can change at 
 
 Each node is expected to hold a private key to an RSK address that has the `FEDERATOR` role in the
 [FastBTCAccessControl](../fastbtc-contracts/contracts/FastBTCAccessControl.sol) contract. When connecting to the
-network, other nodes validate the federator status of the node asking it to sign a challenge message and verifying
+network, other nodes validate the federator status of the node by asking it to sign a challenge message and verifying
 that the recovered address is indeed a federator in the smart contract.
 
 Each node is also expected to hold a private key to the Bitcoin multisig used by the network.
 
-When exploring the code, a good starting point is [src/core/node.ts](src/core/node.ts), since contains the high-level
+When exploring the code, a good starting point is [src/core/node.ts](src/core/node.ts), since it contains the high-level
 P2P logic and serves as a starting point for everything. See the data flow image below for a visual representation
 of its inner workings.
 
@@ -50,8 +50,7 @@ FASTBTC_BTC_MASTER_PRIVATE_KEY       # Hierarchical master private key that has 
 FASTBTC_BTC_KEY_DERIVATION_PATH      # Key derivation path from master private key to sign multisig transactions with
 ```
 
-For example configurations, see the [integration_test/nodes](../../integration_test/nodes) directory. Some of these
-also have default values
+For example configurations, see the [integration_test/nodes](../../integration_test/nodes) directory.
 
 Used technologies
 ----------------
@@ -84,7 +83,7 @@ Development
 
 ### ABI changes
 
-If the contract ABI (in fastbtc-contracts) changes, update the ABI in this directory like this:
+When the contract ABI (in fastbtc-contracts) changes, update the ABI in this directory:
 
 ```
 cd ../fastbtc-contracts

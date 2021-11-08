@@ -10,7 +10,7 @@ It consists of two major parts:
   the Bitcoin network. Status updates are controlled by a network of federators, where signatures from a majority
   of federators is needed for new updates.
 - `fastbtc-node`: The backend service, a federator node that operates in a peer-to-peer network. The network tracks
-  rBTC transfers on the contract and obtains a consensus of actions to do, sending BTC from a  Bitcoin multisig wallet
+  rBTC transfers on the contract and obtains a consensus of actions to do, sending BTC from a Bitcoin multisig wallet
   and updating status to the RSK smart contract. Signatures are exchanged off-chain to avoid gas costs, and various
   techniques are used to prevent double-spending.
 
@@ -78,7 +78,7 @@ Hit Ctrl-C to quit it.
 
 The test setup (launched with `make run-demo-regtest`) will expose the Hardhat RPC server at `http://localhost:18545`
 and the bitcoind regtest RPC server at `http://localhost:18443` (use the `user` RPC wallet, with authentication
-`fastbtc2`/`hunter2`).
+`fastbtc`/`hunter2`).
 
 The Hardhat RPC can be interacted with the `integration-test` Hardhat network, e.g.:
 
@@ -136,7 +136,7 @@ Content-Length: 425
 
 See also `integration_test/scripts/test_example_transfer.sh`
 
-The RKS Smart contracts (fastbtc-contracts)
+The RSK Smart contracts (fastbtc-contracts)
 -------------------------------------------
 
 For details about the smart contracts, see [packages/fastbtc-contracts/README.md](packages/fastbtc-contracts/README.md).
