@@ -1,50 +1,18 @@
-import debug from 'debug';
-
 type LogLevel =  'debug' | 'info' | 'warning' | 'error';
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warning', 'error'];
 
 export default class Logger {
-    //private debuggers: {
-    //    debug: debug.Debugger,
-    //    info: debug.Debugger,
-    //    warning: debug.Debugger,
-    //    error: debug.Debugger,
-    //};
     private debuggers = console;
 
-    private levelNamespaces: {
-        debug: string,
-        info: string,
-        warning: string,
-        error: string,
-    }
-
-    private rootNamespace = 'fastbtc'
-
     constructor(namespace?: string) {
-        const ns = namespace ? `${namespace}:` : '';
-        this.levelNamespaces = {
-            debug: `${this.rootNamespace}:debug${ns}`,
-            info: `${this.rootNamespace}:info${ns}`,
-            warning: `${this.rootNamespace}:warning${ns}`,
-            error: `${this.rootNamespace}:error${ns}`,
-        };
-        // TODO: asdfs
-        //this.debuggers = {
-        //    debug: debug(this.levelNamespaces.debug),
-        //    info: debug(this.levelNamespaces.info),
-        //    warning: debug(this.levelNamespaces.warning),
-        //    error: debug(this.levelNamespaces.error),
-        //};
+        // Do something with the namespace later.
     }
 
     enable(level: LogLevel = 'debug') {
+        // Do something clever with this later
         const start = LOG_LEVELS.indexOf(level);
         if (start === -1) {
             throw new Error(`invalid log level: ${level}`)
-        }
-        for (let i = start; i < LOG_LEVELS.length; i++) {
-            debug.enable(this.levelNamespaces[LOG_LEVELS[i]]);
         }
     }
 

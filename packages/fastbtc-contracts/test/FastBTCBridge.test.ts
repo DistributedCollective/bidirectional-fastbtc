@@ -11,6 +11,7 @@ const TRANSFER_STATUS_SENDING = 2;
 const TRANSFER_STATUS_MINED = 3;
 const TRANSFER_STATUS_REFUNDED = 4;
 const TRANSFER_STATUS_RECLAIMED = 5;
+const TRANSFER_STATUS_INVALID = 255
 
 describe("FastBTCBridge", function() {
     let fastBtcBridge: Contract;

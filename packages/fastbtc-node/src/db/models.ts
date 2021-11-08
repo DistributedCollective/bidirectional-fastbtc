@@ -62,6 +62,7 @@ export enum TransferStatus {
     Mined = 3,
     Refunded = 4,
     Reclaimed = 5,
+    Invalid = 255,
 }
 
 @Entity()
@@ -147,19 +148,31 @@ export class StoredBitcoinTransferBatch {
     @Column('jsonb')
     data!: {[key: string]: any};
 
+    @Column({ default: false})
+    finalized!: boolean;
+
     @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
     createdAt!: Date;
 }
 
 
+export interface CreateOrUpdateFromTransferBatchOpts {
+    markFinalized?: boolean;
+}
 @EntityRepository(StoredBitcoinTransferBatch)
 export class StoredBitcoinTransferBatchRepository extends Repository<StoredBitcoinTransferBatch> {
-    async createOrUpdateFromTransferBatch(transferBatch: unknown & {transferIds: string[]}): Promise<void> {
+    async createOrUpdateFromTransferBatch(
+        transferBatch: unknown & {transferIds: string[]},
+        opts: CreateOrUpdateFromTransferBatchOpts = {}
+    ): Promise<void> {
         let stored = await this.findByTransferIds(transferBatch.transferIds);
         if (!stored) {
             stored = new StoredBitcoinTransferBatch();
         }
         stored.data = transferBatch;
+        if (opts.markFinalized) {
+            stored.finalized = true;
+        }
         await this.save(stored);
     }
 

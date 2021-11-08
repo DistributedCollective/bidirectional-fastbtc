@@ -7,6 +7,8 @@ import {Config} from '../config';
 import {Connection} from 'typeorm';
 import {getEvents, toNumber} from './utils';
 import Logger from '../logger';
+import {Psbt} from "bitcoinjs-lib";
+import {BitcoinMultisig} from "../btc/multisig";
 
 export const Scanner = Symbol.for('Scanner');
 
@@ -30,8 +32,10 @@ export class EventScanner {
         @inject(FastBtcBridgeContract) private fastBtcBridge: ethers.Contract,
         @inject(DBConnection) private dbConnection: Connection,
         @inject(Config) private config: Config,
+        @inject(BitcoinMultisig) private multisig: BitcoinMultisig
     ) {
         this.defaultStartBlock = config.rskStartBlock;
+        this.multisig = multisig;
         this.requiredConfirmations = config.rskRequiredConfirmations;
     }
 
@@ -83,10 +87,18 @@ export class EventScanner {
                 if (event.event === 'NewBitcoinTransfer') {
                     this.logger.debug('NewBitcoinTransfer', args.transferId);
 
+                    let status = TransferStatus.New;
+
+                    // mark any transfer with wrong btc address as invalid
+                    if (! this.multisig.validateAddress(args.btcAddress)) {
+                        status = TransferStatus.Invalid;
+                        this.logger.error(`Invalid BTC deposit address ${args.btcAddress} in transfer ${args.transferId}`);
+                    }
+
                     // TODO: validate that transfer is not already in DB
                     const transfer = transferRepository.create({
                         transferId: args.transferId,
-                        status: TransferStatus.New,
+                        status: status,
                         btcAddress: args.btcAddress,
                         nonce: toNumber(args.nonce),
                         amountSatoshi: BigNumber.from(args.amountSatoshi),
@@ -98,6 +110,7 @@ export class EventScanner {
                         rskBlockNumber: event.blockNumber,
                         btcTransactionHash: '',
                     });
+
                     transfers.push(transfer);
                     transfersByTransferId[transfer.transferId] = transfer;
                 } else if (event.event === 'BitcoinTransferStatusUpdated') {
