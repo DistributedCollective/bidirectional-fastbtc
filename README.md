@@ -70,8 +70,7 @@ User balance: 0.59992000 BTC
 
 Hit Ctrl-C to quit it.
 
-Advanced details about integration test
----------------------------------------
+## Advanced details
 
 The test setup (launched with `make run-demo-regtest`) will expose the Hardhat RPC server at `http://localhost:18545`
 and the bitcoind regtest RPC server at `http://localhost:18443` (use the `user` RPC wallet, with authentication
@@ -132,6 +131,13 @@ Content-Length: 425
 ```
 
 See also `integration_test/scripts/test_example_transfer.sh`
+
+The P2P network (fastbtc-node)
+------------------------------
+
+### Data flow
+
+![fastbtc-node data flow](static/fastbtc-node-data-flow.svg)
 
 UI
 --
