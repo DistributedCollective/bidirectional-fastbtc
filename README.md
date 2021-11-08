@@ -14,6 +14,9 @@ It consists of two major parts:
   and updating status to the RSK smart contract. Signatures are exchanged off-chain to avoid gas costs, and various
   techniques are used to prevent double-spending.
 
+High-level data flow
+--------------------
+
 ![high-level data flow](static/high-level-data-flow.svg)
 
 Integration test
