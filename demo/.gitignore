@@ -1,6 +1,0 @@
-run/
-logs/
-!run/.gitkeep
-!logs/.gitkeep
-docker-env*-secret
-bitcoindata/
