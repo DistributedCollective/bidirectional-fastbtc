@@ -9,8 +9,8 @@ Contract overview
 The main contracts are:
 
 - [FastBTCBridge](contracts/FastBTCBridge.sol): The main contract. Accepts rBTC transfers from users and transfer state
-  updates from federators. Can be managed by admins and paused (new transfers disabled) or freezed by addresses with
-  the righ roles.
+  updates from federators. Can be managed by admins and paused (new transfers disabled) or freezed (federator actions
+  disabled too) by addresses with the righ roles.
 - [FastBTCAccessControl](contracts/FastBTCAccessControl.sol): Controls user roles and validates federator signatures.
   The contract is deployed as its own instance and used by both FastBTCBridge and BTCAddressValidator.
   The supported roles are:
