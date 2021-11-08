@@ -5,7 +5,7 @@ import {Contract, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
 import {Connection, EntityManager} from 'typeorm';
 import {Config} from '../config';
-import {StoredBitcoinTransferBatch, StoredBitcoinTransferBatchRepository, Transfer, TransferStatus} from '../db/models';
+import {StoredBitcoinTransferBatchRepository, Transfer, TransferStatus} from '../db/models';
 import Logger from '../logger';
 import {setExtend, setIntersection} from "../utils/sets";
 import {toNumber} from '../rsk/utils';
@@ -33,6 +33,7 @@ export interface TransferBatchEnvironment {
     maxPassedBlocksInBatch: number;
     maxTransfersInBatch: number;
     currentBlockNumber: number;
+    requiredBitcoinConfirmations: number;
     bitcoinOnChainTransaction?: BitcoinRPCGetTransactionResponse;
 }
 export class TransferBatch {
@@ -162,9 +163,7 @@ export class TransferBatch {
         if (!chainTx) {
             return false;
         }
-        // TODO: this should be configurable
-        const requiredConfirmations = 1;
-        return chainTx.confirmations >= requiredConfirmations;
+        return chainTx.confirmations >= this.environment.requiredBitcoinConfirmations;
     }
 
     hasEnoughRskMinedSignatures(): boolean {
@@ -209,7 +208,7 @@ export class TransferBatch {
 
 export type BitcoinTransferServiceConfig = Pick<
     Config,
-    'numRequiredSigners' | 'maxPassedBlocksInBatch' | 'maxTransfersInBatch' | 'rskRequiredConfirmations'
+    'numRequiredSigners' | 'maxPassedBlocksInBatch' | 'maxTransfersInBatch' | 'rskRequiredConfirmations' | 'btcRequiredConfirmations'
 >
 
 @injectable()
@@ -563,6 +562,7 @@ export class BitcoinTransferService {
         return {
             currentBlockNumber,
             bitcoinOnChainTransaction,
+            requiredBitcoinConfirmations: this.config.btcRequiredConfirmations,
             numRequiredSigners: this.config.numRequiredSigners,
             maxPassedBlocksInBatch: this.config.maxPassedBlocksInBatch,
             maxTransfersInBatch: this.config.maxTransfersInBatch,
