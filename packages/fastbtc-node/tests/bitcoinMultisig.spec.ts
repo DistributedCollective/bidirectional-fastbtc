@@ -43,7 +43,9 @@ it("random regtest addresses should start with bcrt...", async function () {
     assert(randomBech32().startsWith(networks.regtest.bech32), "prefix should match!");
 })
 
-it("should work", async function () {
+// NOTE: this was here to test some things in the past. it requires a very specifc setup to work, which is why
+// it's marked as skipped
+xit("should work", async function () {
     const nodeWrapper = new RegTestNodeWrapper();
 
     const multiSig = new BitcoinMultisig({
