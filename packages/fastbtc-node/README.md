@@ -17,6 +17,10 @@ that the recovered address is indeed a federator in the smart contract.
 
 Each node is also expected to hold a private key to the Bitcoin multisig used by the network.
 
+When exploring the code, a good starting point is [src/core/node.ts](src/core/node.ts), since contains the high-level
+P2P logic and serves as a starting point for everything. See the data flow image below for a visual representation
+of its inner workings.
+
 Configuration
 -------------
 
@@ -48,6 +52,18 @@ FASTBTC_BTC_KEY_DERIVATION_PATH      # Key derivation path from master private k
 
 For example configurations, see the [integration_test/nodes](../../integration_test/nodes) directory. Some of these
 also have default values
+
+Used technologies
+----------------
+
+- [TypeScript](https://www.typescriptlang.org/) as the main language
+- [PostgreSQL](https://www.postgresql.org/) as the database server
+- [Ethers](https://docs.ethers.io/) for RSK interactions
+- [bitcoinjs-lib](https://github.com/bitcoinjs/bitcoinjs-lib) for Bitcoin signature magic
+- [Ataraxia](https://github.com/aholstenson/ataraxia) for P2P networking
+  (note: we use a [vendored version](vendor/ataraxia-core))
+- [Inversify](https://inversify.io/) for dependency injection
+- [TypeORM](https://typeorm.io/) for database interactions
 
 Running
 -------
