@@ -12,7 +12,6 @@ export function setupInversify(container: Container) {
         }
     });
 
-    // TODO: not sure if allowing collection like this is a good idea
     container.bind<Connection>(DBConnection).toDynamicValue(() => (
         getDbConnection()
     ));

@@ -40,7 +40,8 @@ export class EventScanner {
     }
 
     async scanNewEvents(): Promise<Transfer[]> {
-        // TODO: we should obtain a lock maybe
+        // would be good to lock here so that this could not be run if it's already running
+        // as of now, the caller is responsible for this
         const currentBlock = await this.ethersProvider.getBlockNumber();
         this.logger.debug("Current rsk block is", currentBlock);
 

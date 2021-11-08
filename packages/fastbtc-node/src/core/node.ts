@@ -112,7 +112,7 @@ export class FastBTCNode {
         const numTransfers = await this.eventScanner.getNumTransfers();
         const numNodesOnline = this.networkUtil.getNumNodesOnline();
 
-        // TODO: vote for initiator
+        // we could obtain consensus for the initiator, but it's not strictly required
         const initiatorId = this.networkUtil.getPreferredInitiatorId();
         const isInitiator = this.networkUtil.id == initiatorId;
 

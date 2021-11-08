@@ -23,9 +23,6 @@ export async function getEvents(
         throw new Error('batch size must be at least 1');
     }
 
-    // this doesn't set event.args correctly
-    //const filter = createCombinedOrFilter(filters);
-
     if(!Array.isArray(filters)) {
         filters = [filters];
     }
@@ -33,9 +30,7 @@ export async function getEvents(
     const events: ethers.Event[] = [];
     while (fromBlock <= toBlock) {
         const batchToBlock = Math.min(toBlock, fromBlock + batchSize - 1);
-        // TODO: this is ugly, we do 1 call for each event though we could just retrieve all events in a single
-        // call by creating a combined OR filter. but the current implementation doesn't set event.args and I
-        // don't have time to fix it now. So someone fix it later please.
+        // This could be improved by retrieving all events in a single call
         for (const filter of filters) {
             console.debug(`Querying from ${fromBlock} to ${batchToBlock} (up to ${toBlock})`);
             let eventBatch: ethers.Event[] = [];
@@ -95,44 +90,4 @@ export function toNumber(n: BigNumber | number): number {
         return n.toNumber();
     }
     return n;
-}
-
-/**
- * Join all given filters with OR clause to create a single EventFilter
- *
- * TODO: when giving multiple events, args is not set! ARGH
- *
- * @param filters Array of filters to join, or a single filter
- */
-function createCombinedOrFilter(
-    filters: ethers.EventFilter | ethers.EventFilter[],
-): ethers.EventFilter {
-    if (!Array.isArray(filters)) {
-        return filters;
-    }
-
-    let filter: ethers.EventFilter;
-    if (filters.length === 0) {
-        throw new Error('must pass in at least 1 event filter')
-    } else if (filters.length === 1) {
-        filter = filters[0];
-    } else {
-        const topicsCombinedWithOr: string[] = [];
-        for (let f of filters) {
-            if (f.address !== filters[0].address) {
-                throw new Error('all events must have the same address');
-            }
-            if (!f.topics || f.topics.length !== 1 || Array.isArray(f.topics[0])) {
-                throw new Error('each event is supposed to have exactly 1 topic');
-            }
-            topicsCombinedWithOr.push(f.topics[0]);
-        }
-        filter = {
-            address: filters[0].address,
-            // to get OR filtering, we must pass in [[A, B]] ([A, B] would be AND)
-            topics: [topicsCombinedWithOr],
-        };
-    }
-
-    return filter;
 }

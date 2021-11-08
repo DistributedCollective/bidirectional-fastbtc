@@ -254,7 +254,6 @@ export class BitcoinTransferService {
     }
 
     async loadFromDto(dto: TransferBatchDTO): Promise<TransferBatch|undefined> {
-        // TODO: validation
         return this.dbConnection.transaction(async transaction => {
             const transferRepository = transaction.getRepository(Transfer);
             const transfers: Transfer[] = [];
