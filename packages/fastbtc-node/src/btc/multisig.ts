@@ -1,3 +1,6 @@
+/**
+ * Bitcoin multisig signature logic, Bitcoin transaction sending and reading data from the Bitcoin network
+ */
 import {inject, injectable} from 'inversify';
 import {bip32, ECPair, Network, networks, Payment, payments, Psbt} from "bitcoinjs-lib";
 import {normalizeKey, xprvToPublic} from './utils';

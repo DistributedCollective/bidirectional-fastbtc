@@ -12,6 +12,9 @@ import {
 import {BigNumber} from 'ethers';
 import {BigNumberColumn} from './utils';
 
+/**
+ * A bare-bones model to store arbitrary data. Don't use directly -- use KeyValuePairRepository
+ */
 @Entity()
 export class KeyValuePair {
     @PrimaryColumn()
@@ -65,6 +68,9 @@ export enum TransferStatus {
     Invalid = 255,
 }
 
+/**
+ * A rBTC to BTC transfer. Corresponds (almost) directly to the BitcoinTransfer event from FastBTCBridge.sol
+ */
 @Entity()
 @Unique('btcaddress_nonce_uq', ['btcAddress', 'nonce'])
 @Index(['rskBlockNumber', 'rskTransactionIndex', 'rskLogIndex'], {unique: true})
@@ -140,6 +146,9 @@ export class LogItem {
 }
 
 
+/**
+ * A bare-bones model to persist transfer batch data (not stored explicitly in RSK) to DB
+ */
 @Entity()
 export class StoredBitcoinTransferBatch {
     @PrimaryGeneratedColumn({ name: 'id'})

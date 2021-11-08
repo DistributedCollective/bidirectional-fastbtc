@@ -1,3 +1,6 @@
+/**
+ * This module contains the main business logic
+ */
 import {inject, injectable, LazyServiceIdentifer} from 'inversify';
 import {BitcoinMultisig, BitcoinRPCGetTransactionResponse, PartiallySignedBitcoinTransaction} from '../btc/multisig';
 import {EthersProvider, EthersSigner, FastBtcBridgeContract} from '../rsk/base';
@@ -36,6 +39,10 @@ export interface TransferBatchEnvironment {
     requiredBitcoinConfirmations: number;
     bitcoinOnChainTransaction?: BitcoinRPCGetTransactionResponse;
 }
+
+/**
+ * A batch of transfers from RSK to Bitcoin, with associated signatures, Bitcoin transaction data and so on
+ */
 export class TransferBatch {
     constructor(
         private environment: TransferBatchEnvironment,
@@ -211,6 +218,10 @@ export type BitcoinTransferServiceConfig = Pick<
     'numRequiredSigners' | 'maxPassedBlocksInBatch' | 'maxTransfersInBatch' | 'rskRequiredConfirmations' | 'btcRequiredConfirmations'
 >
 
+/**
+ * The main business logic service. Contains methods to manipulate and create TransferBatches, sign actions (RSK or
+ * Bitcoin transactions) and so on.
+ */
 @injectable()
 export class BitcoinTransferService {
     private logger = new Logger('transfers');
@@ -649,6 +660,9 @@ export type TransferBatchValidatorConfig = Pick<
     'rskRequiredConfirmations'
 >
 
+/**
+ * This service is responsible for TransferBatch validation logic
+ */
 @injectable()
 export class TransferBatchValidator {
     private logger = new Logger('transfer-batch-validator');

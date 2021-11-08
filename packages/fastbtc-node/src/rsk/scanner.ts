@@ -1,3 +1,6 @@
+/**
+ * Logic related to updating state from RSK
+ */
 import {inject, injectable} from 'inversify';
 import {BigNumber, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
@@ -7,7 +10,6 @@ import {Config} from '../config';
 import {Connection} from 'typeorm';
 import {getEvents, toNumber} from './utils';
 import Logger from '../logger';
-import {Psbt} from "bitcoinjs-lib";
 import {BitcoinMultisig} from "../btc/multisig";
 
 export const Scanner = Symbol.for('Scanner');
@@ -21,6 +23,9 @@ export function getTransferId(btcAddress: string, nonce: number): string {
     );
 }
 
+/**
+ * This class is responsible for reading events from RSK and keeping the database up-to-date with them.
+ */
 @injectable()
 export class EventScanner {
     private defaultStartBlock: number;
@@ -39,6 +44,10 @@ export class EventScanner {
         this.requiredConfirmations = config.rskRequiredConfirmations;
     }
 
+    /**
+     * Read events (new transfers and transfer status updates) from RSK and update database.
+     * A number of confirmations is always waited before accepting any event.
+     */
     async scanNewEvents(): Promise<Transfer[]> {
         // would be good to lock here so that this could not be run if it's already running
         // as of now, the caller is responsible for this

@@ -1,3 +1,6 @@
+/**
+ * High-level peer-to-peer data flow logic
+ */
 import {inject, injectable} from 'inversify';
 import {EventScanner, Scanner} from '../rsk/scanner';
 import {P2PNetwork} from '../p2p/network';
@@ -80,6 +83,10 @@ function copyTransientInitiatorData(data: TransientInitiatorData): TransientInit
     }
 }
 
+/**
+ * The non-boilerplate entry point to the whole thing. Contains high-level peer-to-peer data flow logic.
+ * Actual business logic is delegated to BitcoinTransferService
+ */
 @injectable()
 export class FastBTCNode {
     private logger = new Logger('node');

@@ -1,3 +1,6 @@
+/**
+ * Peer-to-peer authentication logic with RSK signatures
+ */
 import {
     AuthClientFlow,
     AuthClientReplyType,
