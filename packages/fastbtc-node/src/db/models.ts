@@ -62,6 +62,7 @@ export enum TransferStatus {
     Mined = 3,
     Refunded = 4,
     Reclaimed = 5,
+    Invalid = 255,
 }
 
 @Entity()

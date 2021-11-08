@@ -410,7 +410,8 @@ export class BitcoinMultisig {
         try {
             return await this.nodeWrapper.call('gettransaction', [transactionHash]);
         } catch (e: any) {
-            if (e.code === -5 && e.message == "Invalid or non-wallet transaction id") {
+            // this is the transient error with message ~ "Invalid or non-wallet transaction id"
+            if (e.code === -5) {
                 return undefined;
             }
             throw e;
@@ -419,5 +420,22 @@ export class BitcoinMultisig {
 
     private async getRawTx(txId: string): Promise<any> {
         return await this.nodeWrapper.call("gettransaction", [txId, true]);
+    }
+
+    /**
+     * Check that the given BTC address is sane
+     * @param address
+     * @private
+     */
+    public validateAddress(address: string): boolean {
+        try {
+            const psbt = new Psbt({network: this.network});
+            psbt.addOutput({address, value: 1});
+            return psbt.txOutputs[0].address == address;
+        }
+        catch (e) {
+            console.error(`Received invalid address ${address}`);
+            return false;
+        }
     }
 }
