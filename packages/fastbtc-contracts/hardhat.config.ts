@@ -11,6 +11,26 @@ dotenv.config();
 
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || '';
 
+const INTEGRATION_TEST_ADDRESSES: Record<string, string> = {
+    'FastBTCAccessControl': '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512',
+    'BTCAddressValidator': '0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0',
+    'FastBTCBridge': '0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9',
+}
+async function getDeploymentAddress(givenAddress: string|undefined, hre: HardhatRuntimeEnvironment, name: string): Promise<string> {
+    if (givenAddress) {
+        return givenAddress;
+    }
+    let address: string|undefined = undefined;
+    if (hre.network.name === 'integration-test') {
+        address = INTEGRATION_TEST_ADDRESSES[name];
+    }
+    if (address) {
+        return address;
+    }
+    const deployment = await hre.deployments.get(name);
+    return deployment.address;
+}
+
 task("accounts", "Prints the list of accounts", async (args, hre) => {
     const accounts = await hre.ethers.getSigners();
 
@@ -20,10 +40,9 @@ task("accounts", "Prints the list of accounts", async (args, hre) => {
 });
 
 task("federators", "Prints the list of federators", async (args, hre) => {
-    const deployment = await hre.deployments.get('FastBTCAccessControl');
     const accessControl = await hre.ethers.getContractAt(
         'FastBTCAccessControl',
-        deployment.address,
+        await getDeploymentAddress(undefined, hre, 'FastBTCAccessControl'),
     );
     const federators = await accessControl.federators();
 
@@ -36,11 +55,11 @@ task("federators", "Prints the list of federators", async (args, hre) => {
 task("show-transfer", "Show transfer details")
     .addPositionalParam('btcAddressOrTransferId')
     .addOptionalPositionalParam('nonce')
-    .setAction(async ({ btcAddressOrTransferId, nonce }, hre) => {
-        const deployment = await hre.deployments.get('FastBTCBridge');
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ btcAddressOrTransferId, nonce, bridgeAddress }, hre) => {
         const contract = await hre.ethers.getContractAt(
             'FastBTCBridge',
-            deployment.address,
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
         );
 
         let transferId;
@@ -96,26 +115,23 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
             throw new Error("Provide address as first argument");
         }
 
-        const provider = hre.ethers.provider;
-        const wallet = new hre.ethers.Wallet(privateKey, provider);
-        const rbtcAmountWei = hre.ethers.utils.parseEther(rbtcAmount);
-        console.log(`Sending ${rbtcAmount} rBTC from ${wallet.address} to BTC address ${btcAddress}`)
-
-        if (!bridgeAddress) {
-            const deployment = await hre.deployments.get('FastBTCBridge');
-            bridgeAddress = deployment.address;
-        }
-        console.log('Bridge address', bridgeAddress);
-        const fastBtcBridge = await hre.ethers.getContractAt(
-            'FastBTCBridge',
-            bridgeAddress,
-            wallet,
-        );
-
         repeat = +repeat;
         if (repeat < 1) {
             throw new Error("Too low repeat count given");
         }
+
+        const provider = hre.ethers.provider;
+        const wallet = new hre.ethers.Wallet(privateKey, provider);
+        const rbtcAmountWei = hre.ethers.utils.parseEther(rbtcAmount);
+        console.log(`Sending ${rbtcAmount} rBTC from ${wallet.address} to BTC address ${btcAddress} ${repeat} times`)
+
+        const fastBtcBridge = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+            wallet,
+        );
+        console.log('Bridge address', fastBtcBridge.address);
+
 
         for (let i = 0; i < repeat; i++) {
             const receipt = await fastBtcBridge.transferToBtc(
@@ -137,13 +153,11 @@ task("add-federator", "Add federator")
 
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
-        const deployment = await hre.deployments.get('FastBTCAccessControl');
-        console.log('Bridge address', deployment.address);
         console.log(`Adding ${addresses.length} federators`);
 
         const accessControl = await hre.ethers.getContractAt(
             'FastBTCAccessControl',
-            deployment.address,
+            await getDeploymentAddress(undefined, hre, 'FastBTCAccessControl'),
             signer,
         );
 
@@ -169,13 +183,10 @@ task("remove-federator", "Remove federator")
 
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
-        const deployment = await hre.deployments.get('FastBTCAccessControl');
-        console.log('Bridge address', deployment.address);
-
         console.log(`Removing ${addresses.length} federators`);
         const accessControl = await hre.ethers.getContractAt(
             'FastBTCAccessControl',
-            deployment.address,
+            await getDeploymentAddress(undefined, hre, 'FastBTCAccessControl'),
             signer,
         );
 
@@ -198,10 +209,9 @@ task("set-limits", "Set min/max transfer limits")
     .setAction(async ({ privateKey, minBtc, maxBtc }, hre) => {
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
-        const deployment = await hre.deployments.get('FastBTCBridge');
         const contract = await hre.ethers.getContractAt(
             'FastBTCBridge',
-            deployment.address,
+            await getDeploymentAddress(undefined, hre, 'FastBTCBridge'),
             signer,
         );
 
