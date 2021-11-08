@@ -1,5 +1,5 @@
-fastbtc-node -- The FastBTC P2P Federator Node
-----------------------------------------------
+fastbtc-node -- The Bi-directional FastBTC P2P Federator Node
+============================================================
 
 This packages contains the implementation of the background service. Each node independently validates RSK smart
 contract event data and participates in the network by signing RSK update signatures and Bitcoin transactions.
@@ -65,6 +65,17 @@ Data flow
 
 Development
 -----------
+
+### ABI changes
+
+If the contract ABI (in fastbtc-contracts) changes, update the ABI in this directory like this:
+
+```
+cd ../fastbtc-contracts
+yarn build
+cd ../fastbtc-node
+yarn copy-abi
+```
 
 ### Migrations
 
