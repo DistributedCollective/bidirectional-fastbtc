@@ -35,6 +35,7 @@ It will output a lot of logs. To only observe federator node logs, run the comma
 terminal)
 
 After the network has started, you should see output resembling this (with slight variations):
+
 ```
 fastbtc2-node2-1            | node id:          7eNHnBNMeNxQIcetjAno8R
 fastbtc2-node2-1            | initiator id:     1ZFfiFbX7kkMTVOkgj7x1D
@@ -43,6 +44,9 @@ fastbtc2-node2-1            | nodes online:     3
 fastbtc2-node2-1            | transfers total:  12
 fastbtc2-node2-1            | not initiator, not doing anything
 ```
+
+Note that before the network is fully operational, it's normal to see some messages that look like errors
+(e.g. "Invalid signature from server") in the logs.
 
 After the startup is done, you can run an example script that sends a mixture of valid and invalid transfers
 (it requires `node.js`, `yarn` and `bitcoin-cli` (available in PATH either as `bitcoin-cli` or `bitcoin-core.cli`):
@@ -70,7 +74,7 @@ User balance: 0.59992000 BTC
 
 Hit Ctrl-C to quit it.
 
-## Advanced details
+### Advanced details
 
 The test setup (launched with `make run-demo-regtest`) will expose the Hardhat RPC server at `http://localhost:18545`
 and the bitcoind regtest RPC server at `http://localhost:18443` (use the `user` RPC wallet, with authentication
@@ -132,8 +136,18 @@ Content-Length: 425
 
 See also `integration_test/scripts/test_example_transfer.sh`
 
+The RKS Smart contracts (fastbtc-contracts)
+-------------------------------------------
+
+For details about the smart contracts, see [packages/fastbtc-contracts/README.md](packages/fastbtc-contracts/README.md).
+
 The P2P network (fastbtc-node)
 ------------------------------
+
+The package fastbtc-node contains the implementation of the background service. The nodes form a peer-to-peer network,
+where they connect to other nodes using pre-configured addresses, and then discover all nodes in the network.
+
+For more in-depth information, see [packages/fastbtc-node/README.md](packages/fastbtc-node/README.md).
 
 ### Data flow
 
