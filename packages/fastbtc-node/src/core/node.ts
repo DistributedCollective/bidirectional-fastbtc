@@ -21,6 +21,8 @@ type RequestRSKSendingSignatureMessage = TransferBatchMessage;
 
 type RequestBitcoinSignatureMessage = TransferBatchMessage;
 
+type SendingToBitcoinMessage = TransferBatchMessage;
+
 type RequestRSKMinedSignatureMessage = TransferBatchMessage;
 
 type TransferBatchCompleteMessage = TransferBatchMessage
@@ -45,6 +47,7 @@ interface FastBTCMessage {
     'fastbtc:request-rsk-sending-signature': RequestRSKSendingSignatureMessage,
     'fastbtc:request-bitcoin-signature': RequestBitcoinSignatureMessage,
     'fastbtc:request-rsk-mined-signature': RequestRSKSendingSignatureMessage,
+    'fastbtc:sending-to-bitcoin': SendingToBitcoinMessage,
     'fastbtc:transfer-batch-complete': TransferBatchCompleteMessage,
     'fastbtc:purge-transfer-batch': PurgeTransferBatchMessage,
     'fastbtc:rsk-sending-signature-response': RSKSendingSignatureResponseMessage,
@@ -188,6 +191,12 @@ export class FastBTCNode {
 
         if(!transferBatch.isSentToBitcoin()) {
             this.logger.info('TransferBatch is not sent to bitcoin');
+            await this.network.broadcast(
+                'fastbtc:sending-to-bitcoin',
+                {
+                    transferBatchDto: transferBatch.getDto(),
+                }
+            );
             await this.bitcoinTransferService.sendToBitcoin(transferBatch);
             return;
         }
@@ -288,6 +297,10 @@ export class FastBTCNode {
                 promise = this.onRequestBitcoinSignature(message.data, message.source);
                 break
             }
+            case 'fastbtc:sending-to-bitcoin': {
+                promise = this.onSendingToBitcoin(message.data, message.source);
+                break
+            }
             case 'fastbtc:request-rsk-mined-signature': {
                 promise = this.onRequestRskMinedSignature(message.data, message.source);
                 break
@@ -348,6 +361,13 @@ export class FastBTCNode {
                 transferBatchDto: transferBatch.getDto(),
                 signedBtcTransaction,
             });
+        });
+    }
+
+    onSendingToBitcoin = async (data: RequestBitcoinSignatureMessage, source: Node<FastBTCMessage>) => {
+        await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
+            await this.transferBatchValidator.validateForSendingToBitcoin(transferBatch);
+            await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
         });
     }
 
