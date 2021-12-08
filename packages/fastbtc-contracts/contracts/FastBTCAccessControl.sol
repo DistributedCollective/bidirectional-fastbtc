@@ -108,6 +108,17 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         }
     }
 
+    function grantRole(
+        bytes32 role,
+        address account
+    )
+    public
+    override(AccessControlEnumerable)
+    {
+        require(account != address(0), "Cannot grant role to zero address");
+        super.grantRole(role, account);  // enforces onlyAdmin
+    }
+
     function addFederator(
         address account
     )

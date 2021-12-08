@@ -519,6 +519,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     onlyAdmin
     {
+        require(address(newBtcAddressValidator) != address(0), "Cannot set to zero address");
         btcAddressValidator = newBtcAddressValidator;
     }
 

@@ -58,6 +58,13 @@ describe("FastBTCBridgeAccessControl", function() {
             ).to.be.reverted;
             expect(await accessControl.federators()).to.deep.equal([]);
         });
+
+        it("cannot grant federator role to zero address", async () => {
+            await expect(
+                accessControl.addFederator('0x0000000000000000000000000000000000000000')
+            ).to.be.revertedWith("Cannot grant role to zero address");
+            expect(await accessControl.federators()).to.deep.equal([]);
+        });
     });
 
     describe('#removeFederator', () => {
