@@ -15,7 +15,6 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     uint256 public bech32MaxLength = 64; // 62 for others, 64 for regtest
     uint256 public nonBech32MinLength = 26;
     uint256 public nonBech32MaxLength = 35;
-    uint256 public bech32PrefixLength;
 
     // bech32 allowed characters are ascii lowercase less 1, b, i, o
     uint256 public invalidBech32 = 0xfffffffffffffffffffffffffffffffff8008205fffffffffc02ffffffffffff;
@@ -30,7 +29,6 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         bech32Prefix = _bech32Prefix;
         supportsLegacy = _nonBech32Prefixes.length > 0;
         nonBech32Prefixes = _nonBech32Prefixes;
-        bech32PrefixLength = bytes(_bech32Prefix).length;
     }
 
     function isValidBtcAddress(
@@ -162,7 +160,6 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     onlyAdmin
     {
         bech32Prefix = _prefix;
-        bech32PrefixLength = bytes(_prefix).length;
     }
 
     function setNonBech32Prefixes(
