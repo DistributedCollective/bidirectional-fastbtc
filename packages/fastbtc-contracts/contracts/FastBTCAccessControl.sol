@@ -113,7 +113,7 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         address account
     )
     public
-    override(AccessControlEnumerable)
+    override
     {
         require(account != address(0), "Cannot grant role to zero address");
         super.grantRole(role, account);  // enforces onlyAdmin
