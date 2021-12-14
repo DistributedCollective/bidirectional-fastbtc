@@ -138,6 +138,30 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     payable
     whenNotPaused
     {
+        _transferToBtc(btcAddress, msg.sender, msg.value);
+    }
+
+    function receiveEthFromBridge(
+        bytes calldata userData
+    )
+    external
+    payable
+    whenNotPaused
+    {
+        (address rskAddress, string memory btcAddress) = decodeBridgeUserData(userData);
+        _transferToBtc(btcAddress, rskAddress, msg.value);
+    }
+
+    // PRIVATE METHODS USED BY PUBLIC API
+    // ==================================
+
+    function _transferToBtc (
+        string memory btcAddress,
+        address rskAddress,
+        uint256 amountRbtc
+    )
+    private
+    {
         require(isValidBtcAddress(btcAddress), "Invalid BTC address");
 
         uint8 nonce = nextNonces[btcAddress];
@@ -145,9 +169,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         // strictly less than 255!
         require(nonce <= MAXIMUM_VALID_NONCE, "Maximum number of transfers to address reached");
 
-        require(msg.value % SATOSHI_DIVISOR == 0, "RBTC amount must be evenly divisible to Satoshis");
+        require(amountRbtc % SATOSHI_DIVISOR == 0, "RBTC amount must be evenly divisible to Satoshis");
 
-        uint256 amountSatoshi = msg.value / SATOSHI_DIVISOR;
+        uint256 amountSatoshi = amountRbtc / SATOSHI_DIVISOR;
         require(amountSatoshi >= minTransferSatoshi, "RBTC BitcoinTransfer smaller than minimum");
         require(amountSatoshi <= maxTransferSatoshi, "RBTC BitcoinTransfer greater than maximum");
 
@@ -159,7 +183,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         // shouldn't happen ever
 
         transfers[transferId] = BitcoinTransfer({
-            rskAddress: msg.sender,
+            rskAddress: rskAddress,
             status: BitcoinTransferStatus.NEW,
             nonce: uint8(nonce), // within limits!
             feeStructureIndex: currentFeeStructureIndex,
@@ -180,7 +204,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
             nonce: nonce,
             amountSatoshi: amountSatoshi,
             feeSatoshi: feeSatoshi,
-            rskAddress: msg.sender
+            rskAddress: rskAddress
         });
     }
 
@@ -396,8 +420,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     // PUBLIC UTILITY METHODS
     // ======================
+
     function getTransferId(
-        string calldata btcAddress,
+        string memory btcAddress,
         uint256 nonce
     )
     public
@@ -492,7 +517,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
     function isValidBtcAddress(
-        string calldata btcAddress
+        string memory btcAddress
     )
     public
     view
@@ -508,6 +533,29 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     returns (address[] memory addresses)
     {
         addresses = accessControl.federators();
+    }
+
+    /// @dev encodes rskAddress and btcAddress to be used as userData in bridge
+    function encodeBridgeUserData(
+        address rskAddress,
+        string calldata btcAddress
+    )
+    external
+    pure
+    returns (bytes memory userData)
+    {
+        userData = abi.encode(rskAddress, btcAddress);
+    }
+
+    /// @dev decodes rskAddress and btcAddress out of userData passed from the bridge
+    function decodeBridgeUserData(
+        bytes calldata userData
+    )
+    public
+    pure
+    returns (address rskAddress, string memory btcAddress)
+    {
+        (rskAddress, btcAddress) = abi.decode(userData, (address, string));
     }
 
     // ADMIN API
