@@ -3,8 +3,9 @@ pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./interfaces/IFastBTCAccessControl.sol";
 
-contract FastBTCAccessControl is AccessControlEnumerable {
+contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable {
     bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
     bytes32 public constant ROLE_FEDERATOR = keccak256("FEDERATOR");
     bytes32 public constant ROLE_PAUSER = keccak256("PAUSER");
