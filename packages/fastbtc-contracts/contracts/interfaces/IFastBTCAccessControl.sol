@@ -1,9 +1,7 @@
 //SPDX-License-Identifier: MIT
 pragma solidity 0.8.9;
 
-import "@openzeppelin/contracts/access/IAccessControlEnumerable.sol";
-
-interface IFastBTCAccessControl is IAccessControlEnumerable {
+interface IFastBTCAccessControl {
    
     function checkAdmin(address addressToCheck) external view;
     function checkFederator(address addressToCheck) external view;
@@ -20,5 +18,8 @@ interface IFastBTCAccessControl is IAccessControlEnumerable {
         
     function addFederator(address account) external;    
     function removeFederator(address account) external;
-
+    function addPauser(address account) external;
+    function removePauser(address account) external;
+    function addGuard(address account) external;
+    function removeGuard(address account) external;
 }
