@@ -410,7 +410,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     function getNextNonce(
         string calldata btcAddress
     )
-    public
+    external
     view
     returns (uint8)
     {
