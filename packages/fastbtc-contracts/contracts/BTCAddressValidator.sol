@@ -17,7 +17,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     uint256 public nonBech32MaxLength = 35;
 
     // bech32 allowed characters are ascii lowercase less 1, b, i, o
-    uint256 public invalidBech32 = 0xfffffffffffffffffffffffffffffffff8008205fffffffffc02ffffffffffff;
+    uint256 public constant invalidBech32 = 0xfffffffffffffffffffffffffffffffff8008205fffffffffc02ffffffffffff;
 
     constructor(
         address _accessControl,
