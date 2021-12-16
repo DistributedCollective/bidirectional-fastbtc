@@ -12,7 +12,7 @@ import "./interfaces/IBTCAddressValidator.sol";
 import "./FastBTCAccessControllable.sol";
 
 /// @title The main FastBTC contract
-/// @notice Accepts RBTC from users and provides methods for federators to track/update the state of transfers.
+/// @notice Accepts rBTC from users and provides methods for federators to track/update the state of transfers.
 contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, Freezable {
     using SafeERC20 for IERC20;
     using Address for address payable;
@@ -68,8 +68,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     /// @dev Emitted when the federators have committed to sending a transfer batch. Each batch is limited to 40
     /// transfers so uint8 should be more than sufficient. The bitcoinTxHash shall contain the resulting
-    /// transaction hash of the bitcoin transaction
-    /// @param bitcoinTxHash        Transaction hash/id of the Bitcoin transaction that transfer BTC in the batch.
+    /// transaction hash of the bitcoin transaction.
+    /// @param bitcoinTxHash        Transaction hash/id of the Bitcoin transaction that transfers BTC in the batch.
     /// @param transferBatchSize    Number of transfers in this batch.
     event BitcoinTransferBatchSending(
         bytes32 bitcoinTxHash,
@@ -78,7 +78,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     /// @dev Emitted whenever the status of an individual transfer is changed. Especially within a transaction
     /// that has the BitcoinTransferBatchSending event, the next transferBatchSize BitcoinTransferStatusUpdated
-    /// events shall be the transfers sent in the BTC transaction with bitcoinTxHash as its transaction id
+    /// events shall be the transfers sent in the BTC transaction with bitcoinTxHash as its transaction id.
     /// @param transferId   Unique identifier for the transfer.
     /// @param newStatus    The updated status of the transfer.
     event BitcoinTransferStatusUpdated(
@@ -86,7 +86,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         BitcoinTransferStatus newStatus
     );
 
-    /// @dev Emitted when the fee structure is changed, to show the new prices
+    /// @dev Emitted when the fee structure is changed, to show the new prices.
     /// @param baseFeeSatoshi   The constant fee (in satoshi) that will be paid for each transfer.
     /// @param dynamicFee       Numerator for the percentage fee that will be paid on top of the base fee.
     ///                         The denominator is DYNAMIC_FEE_SATOSHI.
@@ -240,7 +240,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // ==============
 
     /// @dev Federator method to indicate that the network has committed to sending a batch of Bitcoin transfers.
-    /// @dev Can only be called by federators.
+    /// Can only be called by federators.
     /// @param bitcoinTxHash    The pre-calculated Bitcoin transaction hash/id.
     /// @param transferIds      Identifiers of the transfers in the batch.
     /// @param signatures       Signatures from federators that have confirmed the batch update.
@@ -276,7 +276,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     }
 
     /// @dev Federator method to indicate that a batch of transfers has been successfully mined in Bitcoin.
-    /// @dev Can only be called by federators.
+    /// Can only be called by federators.
     /// @param transferIds      Identifiers of the transfers in the batch.
     /// @param signatures       Signatures from federators that have confirmed the batch update.
     ///                         The hash to sign is calculated using getTransferBatchUpdateHash.
@@ -308,7 +308,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     }
 
     /// @dev Federator method to send back rBTC, including fees, to the rskAddress(es) of one or more transfers.
-    /// @dev Can only be called by federators.
+    /// Can only be called by federators.
     /// @param transferIds      Identifiers of the transfers to refund
     /// @param signatures       Signatures from federators that have confirmed the refunding.
     ///                         The hash to sign is calculated using getTransferBatchUpdateHash.
@@ -339,7 +339,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // FEDERATOR UTILITY METHODS
     // =========================
 
-    /// @dev Calculates the hash to sign for a batch update.
+    /// @dev Calculate the hash to sign for a batch update.
     /// @param transferIds  Identifiers of the transfers in the batch.
     /// @param newStatus    The status to update the state to.
     /// @return             The hash for the update, that can be signed by federators.
@@ -354,8 +354,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         return keccak256(abi.encodePacked("batchUpdate:", newStatus, ":", transferIds));
     }
 
-    /// @dev Calculates the hash to sign for a batch update for methods that require Bitcoin transaction hash.
-    /// @param bitcointTxHash   The transaction hash/id in the Bitcoin network.
+    /// @dev Calculate the hash to sign for a batch update for methods that require Bitcoin transaction hash.
+    /// @param bitcoinTxHash    The transaction hash/id in the Bitcoin network.
     /// @param transferIds      Identifiers of the transfers in the batch.
     /// @param newStatus        The status to update the state to.
     /// @return                 The hash for the update, that can be signed by federators.
@@ -495,7 +495,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     /// @dev Calculate the fee that's paid for a transfer, according to the current fee structure, in wei.
     /// @dev This is a pure utility function to be used in DAPPs.
-    /// @param amountSatoshi    Amount of rBTC to transfer, in wei.
+    /// @param amountWei        Amount of rBTC to transfer, in wei.
     /// @return                 The fee that will be paid, in wei.
     function calculateCurrentFeeWei(
         uint256 amountWei
@@ -510,7 +510,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     /// @dev Get a stored transfer based on transfer id.
     /// @dev If the transfer doesn't exist, revert.
     /// @param transferId   The unique identifier of the transfer.
-    /// @return             The stored BitcoinTransfer object
+    /// @return transfer    The stored BitcoinTransfer object
     function getTransferByTransferId(
         bytes32 transferId
     )
@@ -525,7 +525,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     /// @dev If the transfer doesn't exist, revert.
     /// @param btcAddress   The Bitcoin address
     /// @param nonce        The Incrementing nonce
-    /// @return             The stored BitcoinTransfer object
+    /// @return transfer    The stored BitcoinTransfer object
     function getTransfer(
         string calldata btcAddress,
         uint8 nonce
@@ -540,7 +540,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     /// @dev Get multiple transfers by unique transfer ids
     /// @dev If the any of the transfers doesn't exist, revert.
     /// @param transferIds  An array of unique transfer ids.
-    /// @return             An array of stored BitcoinTransfer objects.
+    /// @return ret         An array of stored BitcoinTransfer objects.
     function getTransfersByTransferId(
         bytes32[] calldata transferIds
     )
@@ -560,7 +560,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     /// @dev If the any of the transfers doesn't exist, revert.
     /// @param btcAddresses An array of Bitcoin address
     /// @param nonces       An array of nonces (indexes and length must match btcAddresses)
-    /// @return             An array of stored BitcoinTransfer objects.
+    /// @return ret         An array of stored BitcoinTransfer objects.
     function getTransfers(
         string[] calldata btcAddresses,
         uint8[] calldata nonces
@@ -593,7 +593,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     }
 
     /// @dev An utility method to get the list of federators. Just delegates to FastBTCAccessControl.
-    /// @return An array of federator addresses.
+    /// @return addresses   An array of federator addresses.
     function federators()
     external
     view
@@ -606,7 +606,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // =========
 
     /// @dev Updates the Bitcoin address validator used.
-    /// @dev Can only be called by an admin.
+    /// Can only be called by admins.
     /// @param newBtcAddressValidator   Address of the new BTCAddressValidator.
     function setBtcAddressValidator(
         IBTCAddressValidator newBtcAddressValidator
@@ -618,13 +618,13 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         btcAddressValidator = newBtcAddressValidator;
     }
 
-    /// @dev Add a new fee structure
-    /// @dev Can only be called by an admin.
-    /// @dev Note that there's a limit on how many can be added, and once added, fee structures cannot be removed.
+    /// @dev Add a new fee structure.
+    /// Can only be called by admins.
+    /// Note that there's a limit on how many can be added, and once added, fee structures cannot be removed.
     /// @param feeStructureIndex    The index of the new fee structure
     ///                             A fee structure must not already exist in this index.
     /// @param newBaseFeeSatoshi    The base fee to be used for the fee structure, in satoshi.
-    /// @param newDynamicFeeSatoshi The dynamic fee to be used for the fee structure, in satoshi.
+    /// @param newDynamicFee        The dynamic fee to be used for the fee structure, in satoshi.
     function addFeeStructure(
         uint256 feeStructureIndex,
         uint256 newBaseFeeSatoshi,
@@ -640,8 +640,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         });
     }
 
-    /// @dev Change the current fee structure to the one in the given index
-    /// @dev Can only be called by an admin.
+    /// @dev Change the current fee structure to the one in the given index.
+    /// Can only be called by admins.
     /// @param feeStructureIndex    The index of the fee structure. A fee structure must exist in this index.
     function setCurrentFeeStructure(
         uint256 feeStructureIndex
@@ -653,7 +653,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     }
 
     /// @dev Set the minimum amount that can be transferred, in satoshi.
-    /// @dev Can only be called by an admin.
+    /// Can only be called by admins.
     /// @param newMinTransferSatoshi    The new minimum transfer amount, in satoshi.
     function setMinTransferSatoshi(
         uint256 newMinTransferSatoshi
@@ -666,8 +666,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     }
 
     /// @dev Set the maximum amount that can be transferred, in satoshi.
-    /// @dev Can only be called by an admin.
-    /// @param newMinTransferSatoshi    The new maximum transfer amount, in satoshi.
+    /// Can only be called by admins.
+    /// @param newMaxTransferSatoshi    The new maximum transfer amount, in satoshi.
     function setMaxTransferSatoshi(
         uint256 newMaxTransferSatoshi
     )
@@ -693,7 +693,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     // TODO: figure out if we want to lock this so that only fees can be retrieved
     /// @dev Withdraw rBTC from the contract.
-    /// @dev Can only be called by an admin.
+    /// Can only be called by admins.
     /// @param amount   The amount of rBTC to withdraw (in wei).
     /// @param receiver The address to send the rBTC to.
     function withdrawRbtc(
@@ -706,8 +706,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         receiver.sendValue(amount);
     }
 
-    /// @dev A utility for withdrawing tokens accidentally sent to the contract
-    /// @dev Can only be called by an admin.
+    /// @dev A utility for withdrawing tokens accidentally sent to the contract.
+    /// Can only be called by admins.
     /// @param token    The ERC20 token to withdraw.
     /// @param amount   The amount of the token to withdraw (in wei/base units).
     /// @param receiver The address to send the tokens to.
@@ -726,13 +726,13 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // ====================
 
     /// @dev Pause the contract, stopping new transfers.
-    /// @dev Can only be called by pausers.
+    /// Can only be called by pausers.
     function pause() external onlyPauser {
         _pause();
     }
 
     /// @dev Freeze the contract, disabling the use of federator methods as well as pausing it.
-    /// @dev Can only be called by guards.
+    /// Can only be called by guards.
     /// @dev This is intended only for emergencies (such as in the event of a hostile federator network),
     /// as it effectively stops the system from functioning at all.
     function freeze() external onlyGuard {
@@ -742,17 +742,16 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         _freeze();
     }
 
-    /// @dev Unpause the contract, allowing new transfers again.
-    /// @dev Cannot unpause when frozen.
-    /// @dev After unfreezing, the contract needs to be unpaused manually.
-    /// @dev Can only be called by pausers.
+    /// @dev Unpause the contract, allowing new transfers again. Cannot unpause when frozen.
+    /// After unfreezing, the contract needs to be unpaused manually.
+    /// Can only be called by pausers.
     function unpause() external onlyPauser whenNotFrozen {
         _unpause();
     }
 
     /// @dev Unfreeze the contract, re-enabling the use of federator methods.
-    /// @dev Unfreezing does not automatically unpause the contract.
-    /// @dev Can only be called by guards.
+    /// Unfreezing does not automatically unpause the contract.
+    /// Can only be called by guards.
     function unfreeze() external onlyGuard {
         _unfreeze();
         //_unpause(); // it's best to have the option unpause separately

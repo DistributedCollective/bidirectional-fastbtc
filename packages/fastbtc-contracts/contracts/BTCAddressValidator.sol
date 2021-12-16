@@ -4,6 +4,8 @@ pragma solidity 0.8.9;
 import "./interfaces/IBTCAddressValidator.sol";
 import "./FastBTCAccessControllable.sol";
 
+/// @title The contract that validates Bitcoin addresses.
+/// @dev Supports both bech32 and non-bech32 addresses.
 contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable {
     string public bech32Prefix;
     bool supportsLegacy;
@@ -19,6 +21,11 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
     // bech32 allowed characters are ascii lowercase less 1, b, i, o
     uint256 public constant invalidBech32 = 0xfffffffffffffffffffffffffffffffff8008205fffffffffc02ffffffffffff;
 
+    /// @dev The constructor.
+    /// @param _accessControl       Address of the FastBTCAccessControl contract.
+    /// @param _bech32Prefix        The prefix that bech32 addresses start with.
+    ///                             Differs between mainnet/testnet/regtest.
+    /// @param _nonBech32Prefixes   Valid prefixes for non-bech32 addresses. Differs between mainnet/testnet/regtest.
     constructor(
         address _accessControl,
         string memory _bech32Prefix,
@@ -31,6 +38,9 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         nonBech32Prefixes = _nonBech32Prefixes;
     }
 
+    /// @dev Is the given string is a valid Bitcoin address?
+    /// @param _btcAddress  A (possibly invalid) Bitcoin address.
+    /// @return The validity of the address, as boolean.
     function isValidBtcAddress(
         string calldata _btcAddress
     )
@@ -47,6 +57,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         else return false;
     }
 
+    /// @dev Is the given address a valid bech32 Bitcoin address?
     function validateBech32Address(
         string calldata _btcAddress
     )
@@ -76,6 +87,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         return (bitmask & invalidBech32) == 0;
     }
 
+    /// @dev Is the given address a valid non-bech32 Bitcoin address?
     function validateNonBech32Address(
         string calldata _btcAddress
     )
@@ -112,6 +124,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         return true;
     }
 
+    /// @dev Does the given address start with a valid non-bech32 prefix?
     function hasValidNonBech32Prefix(
         string calldata _btcAddress
     )
@@ -129,6 +142,7 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         return false;
     }
 
+    /// @dev Does a string start with a prefix?
     function startsWith(
         string calldata _string,
         string memory _prefix
@@ -153,6 +167,8 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
 
     // ADMIN API
 
+    /// @dev Sets the valid prefix for bech32 addresses. Can only be called by admins.
+    /// @param _prefix  The new bech32 address prefix.
     function setBech32Prefix(
         string memory _prefix
     )
@@ -162,6 +178,8 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         bech32Prefix = _prefix;
     }
 
+    /// @dev Sets the valid prefix for non-bech32 addresses. Can only be called by admins.
+    /// @param _prefixes    An array of the new valid non-bech32 prefixes.
     function setNonBech32Prefixes(
         string[] memory _prefixes
     )
@@ -172,6 +190,9 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         supportsLegacy = nonBech32Prefixes.length > 0;
     }
 
+    /// @dev Set the minimum and maximum lengths of acceptable bech32 addresses. Can only be called by admins.
+    /// @param _minLength   The new minimum length.
+    /// @param _maxLength   The new maximum length.
     function setBech32MinAndMaxLengths(
         uint256 _minLength,
         uint256 _maxLength
@@ -184,6 +205,9 @@ contract BTCAddressValidator is IBTCAddressValidator, FastBTCAccessControllable 
         bech32MaxLength = _maxLength;
     }
 
+    /// @dev Set the minimum and maximum lengths of acceptable non-bech32 addresses. Can only be called by admins.
+    /// @param _minLength   The new minimum length.
+    /// @param _maxLength   The new maximum length.
     function setNonBech32MinAndMaxLengths(
         uint256 _minLength,
         uint256 _maxLength
