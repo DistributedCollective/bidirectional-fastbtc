@@ -494,7 +494,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     }
 
     /// @dev Calculate the fee that's paid for a transfer, according to the current fee structure, in wei.
-    /// @dev This is a pure utility function to be used in DAPPs.
+    /// This is a pure utility function to be used in DAPPs.
     /// @param amountWei        Amount of rBTC to transfer, in wei.
     /// @return                 The fee that will be paid, in wei.
     function calculateCurrentFeeWei(
