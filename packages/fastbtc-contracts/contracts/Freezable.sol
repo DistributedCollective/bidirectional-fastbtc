@@ -2,7 +2,7 @@
 // Forked from (and customized):
 // OpenZeppelin Contracts v4.3.2 (security/Pausable.sol)
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.9;
 
 /**
  * @dev Contract module which allows children to implement an emergency stop

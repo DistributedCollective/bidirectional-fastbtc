@@ -3,19 +3,33 @@ pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "./interfaces/IFastBTCAccessControl.sol";
 
-contract FastBTCAccessControl is AccessControlEnumerable {
+/// @title The contract that handles the role-based access control of the other bi-directional FastBTC contracts.
+contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable {
+    /// @dev The role that has admin priviliges on the contract, with permissions to manage other roles and call
+    /// admin-only functions.
     bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
+
+    /// @dev The role given to federators that track and update the status of rBTC-to-BTC transfers in the system.
     bytes32 public constant ROLE_FEDERATOR = keccak256("FEDERATOR");
+
+    /// @dev The role given to pausers. Pausers can pause the contracts, blocking new rBTC-to-BTC transfers.
     bytes32 public constant ROLE_PAUSER = keccak256("PAUSER");
+
+    /// @dev The role given to guards. Guards can freeze the contracts, disabling federator actions, as well as
+    /// pausing the contracts.
     bytes32 public constant ROLE_GUARD = keccak256("GUARD");
 
+    /// @dev The constructor.
     constructor() {
         _setupRole(ROLE_ADMIN, msg.sender);
         _setupRole(ROLE_PAUSER, msg.sender);
         _setupRole(ROLE_GUARD, msg.sender);
     }
 
+    /// @dev Make sure that the given address is an admin, else revert.
+    /// @param addressToCheck   The address to check.
     function checkAdmin(
         address addressToCheck
     )
@@ -25,6 +39,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         _checkRole(ROLE_ADMIN, addressToCheck);
     }
 
+    /// @dev Make sure that the given address is a pauser, else revert.
+    /// @param addressToCheck   The address to check.
     function checkPauser(
         address addressToCheck
     )
@@ -36,6 +52,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         }
     }
 
+    /// @dev Make sure that the given address is a guard, else revert.
+    /// @param addressToCheck   The address to check.
     function checkGuard(
         address addressToCheck
     )
@@ -47,6 +65,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         }
     }
 
+    /// @dev Make sure that the given address is a federator, else revert.
+    /// @param addressToCheck   The address to check.
     function checkFederator(
         address addressToCheck
     )
@@ -56,6 +76,10 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         _checkRole(ROLE_FEDERATOR, addressToCheck);
     }
 
+    /// @dev Check that there are enough valid federator signatures for the given message hash.
+    /// If even one signature is invalid, or if there are not enough signatures, revert.
+    /// @param _messageHash The message hash that's signed.
+    /// @param _signatures  An array of federator signatures for the message hash.
     function checkFederatorSignatures(
         bytes32 _messageHash,
         bytes[] memory _signatures
@@ -80,6 +104,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         }
     }
 
+    /// @dev Get the number of federators in the system.
+    /// @return The number of federators.
     function numFederators()
     public
     view
@@ -88,6 +114,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         return getRoleMemberCount(ROLE_FEDERATOR);
     }
 
+    /// @dev Get the number of required federator signatures (a strict majority).
+    /// @return The number of required federator signatures.
     function numRequiredFederators()
     public
     view
@@ -96,6 +124,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         return getRoleMemberCount(ROLE_FEDERATOR) / 2 + 1;
     }
 
+    /// @dev Get the federator addresses of the system.
+    /// @return addresses   An array of federator addresses.
     function federators()
     external
     view
@@ -108,17 +138,23 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         }
     }
 
+    /// @dev Grant a role to an account. Overridden from AccessControlEnumerable to allow custom checks.
+    /// Can only be called by admins.
+    /// @param role     The role to grant.
+    /// @param account  The address to grant the role to.
     function grantRole(
         bytes32 role,
         address account
     )
     public
-    override(AccessControlEnumerable)
+    override
     {
         require(account != address(0), "Cannot grant role to zero address");
         super.grantRole(role, account);  // enforces onlyAdmin
     }
 
+    /// @dev Add a new federator to the system. Can only be called by admins.
+    /// @param account  The address to grant federator role to.
     function addFederator(
         address account
     )
@@ -127,6 +163,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         grantRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
     }
 
+    /// @dev Remove federator from the system. Can only be called by admins.
+    /// @param account  The address to remove the federator role from.
     function removeFederator(
         address account
     )
@@ -135,6 +173,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         revokeRole(ROLE_FEDERATOR, account); // enforces onlyAdmin
     }
 
+    /// @dev Add a new pauser to the system. Can only be called by admins.
+    /// @param account  The address to grant pauser role to.
     function addPauser(
         address account
     )
@@ -143,6 +183,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         grantRole(ROLE_PAUSER, account); // enforces onlyAdmin
     }
 
+    /// @dev Remove pauser from the system. Can only be called by admins.
+    /// @param account  The address to remove the pauser role from.
     function removePauser(
         address account
     )
@@ -151,6 +193,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         revokeRole(ROLE_PAUSER, account); // enforces onlyAdmin
     }
 
+    /// @dev Add a new guard to the system. Can only be called by admins.
+    /// @param account  The address to grant guard role to.
     function addGuard(
         address account
     )
@@ -159,6 +203,8 @@ contract FastBTCAccessControl is AccessControlEnumerable {
         grantRole(ROLE_GUARD, account); // enforces onlyAdmin
     }
 
+    /// @dev Remove guard from the system. Can only be called by admins.
+    /// @param account  The address to remove the guard role from.
     function removeGuard(
         address account
     )

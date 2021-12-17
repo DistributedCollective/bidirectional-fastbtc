@@ -11,10 +11,13 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "./interfaces/IBTCAddressValidator.sol";
 import "./FastBTCAccessControllable.sol";
 
+/// @title The main FastBTC contract
+/// @notice Accepts rBTC from users and provides methods for federators to track/update the state of transfers.
 contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, Freezable {
     using SafeERC20 for IERC20;
     using Address for address payable;
 
+    /// @dev Status of an rBTC-to-BTC transfer.
     enum BitcoinTransferStatus {
         NOT_APPLICABLE, // the transfer slot has not been initialized
         NEW,            // the transfer was initiated
@@ -25,6 +28,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         //, RECLAIMED       // the transfer was reclaimed by the user; not in use in this version of the contract
     }
 
+    /// @dev An rBTC-to-BTC transfer.
     struct BitcoinTransfer {
         address rskAddress;            // source rskAddress
         BitcoinTransferStatus status;  // the current status
@@ -35,6 +39,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         string btcAddress;             // the BTC address in legacy or Bech32 encoded format
     }
 
+    /// @dev A structure to hold fee configurations -- storing index instead of the fields for each transfer
+    /// saves storage space.
     struct TransferFee {
         // enough for up to 42 bitcoins :P The base fee that is to be paid for each transfer
         uint32 baseFeeSatoshi;
@@ -43,8 +49,14 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         uint16 dynamicFee;
     }
 
-    // emitted for a new user-initiated transfer. The amountSatoshi + feeSatoshi
-    // correspond to the totalAmountSatoshi from the transfer
+    /// @dev Emitted for a new user-initiated transfer. The amountSatoshi + feeSatoshi correspond to the
+    /// totalAmountSatoshi from the transfer.
+    /// @param transferId       Unique identifier for this transfer.
+    /// @param btcAddress       Bitcoin address the rBTC is transferred to.
+    /// @param nonce            Incrementing nonce for transfers to the Bitcoin address.
+    /// @param amountSatoshi    The amount (in satoshi) of BTC the user will receive (does not include fees)
+    /// @param feeSatoshi       The amount (in satoshi) that is paid in fees.
+    /// @param rskAddress       Address of the sender in RSK.
     event NewBitcoinTransfer(
         bytes32 indexed transferId,
         string  btcAddress,
@@ -54,62 +66,71 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         address indexed rskAddress
     );
 
-    // Emitted when the federators have committed to sending a transfer batch. Each batch is limited to 40
-    // transfers so uint8 should be more than sufficient. The bitcoinTxHash shall contain the resulting
-    // transaction hash of the bitcoin transaction
+    /// @dev Emitted when the federators have committed to sending a transfer batch. Each batch is limited to 40
+    /// transfers so uint8 should be more than sufficient. The bitcoinTxHash shall contain the resulting
+    /// transaction hash of the bitcoin transaction.
+    /// @param bitcoinTxHash        Transaction hash/id of the Bitcoin transaction that transfers BTC in the batch.
+    /// @param transferBatchSize    Number of transfers in this batch.
     event BitcoinTransferBatchSending(
         bytes32 bitcoinTxHash,
         uint8   transferBatchSize
     );
 
-    // Emitted whenever the status of an individual transfer is changed. Especially within a transaction
-    // that has the BitcoinTransferBatchSending event, the next transferBatchSize BitcoinTransferStatusUpdated
-    // events shall be the transfers sent in the BTC transaction with bitcoinTxHash as its transaction id
+    /// @dev Emitted whenever the status of an individual transfer is changed. Especially within a transaction
+    /// that has the BitcoinTransferBatchSending event, the next transferBatchSize BitcoinTransferStatusUpdated
+    /// events shall be the transfers sent in the BTC transaction with bitcoinTxHash as its transaction id.
+    /// @param transferId   Unique identifier for the transfer.
+    /// @param newStatus    The updated status of the transfer.
     event BitcoinTransferStatusUpdated(
         bytes32               indexed transferId,
         BitcoinTransferStatus newStatus
     );
 
-    // Emitted when the fee structure is changed, to show the new prices
+    /// @dev Emitted when the fee structure is changed, to show the new prices.
+    /// @param baseFeeSatoshi   The constant fee (in satoshi) that will be paid for each transfer.
+    /// @param dynamicFee       Numerator for the percentage fee that will be paid on top of the base fee.
+    ///                         The denominator is DYNAMIC_FEE_SATOSHI.
     event BitcoinTransferFeeChanged(
         uint256 baseFeeSatoshi,
         uint256 dynamicFee
     );
 
-    // Divisor for converting
+    /// @dev Divisor for converting
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
 
-    // The fee must fit in an uint32
+    /// @dev The fee must fit in an uint32
     uint256 public constant MAX_BASE_FEE_SATOSHI = type(uint32).max;
 
-    // uint16; 0.01 % granularity
+    /// @dev Denominator for the dynamic fee. uint16; 0.01 % granularity
     uint256 public constant DYNAMIC_FEE_DIVISOR = 10_000;
 
-    // After the 255th transfer, with nonce 254, the nextNonces slot will be set to 255;
-    // that is unusable because after that nextNonces would roll over
+    /// @dev After the 255th transfer, with nonce 254, the nextNonces slot will be set to 255;
+    /// that is unusable because after that nextNonces would roll over
     uint8 public constant MAXIMUM_VALID_NONCE = 254;
 
     // uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
     mapping(bytes32 => BitcoinTransfer) public transfers;
 
-    // the next nonce to be used for each bitcoin address
+    /// @dev The next nonce to be used for each Bitcoin address
     mapping(string => uint8) public nextNonces;
 
-    // The BTC Address validator
+    /// @dev The contract that validates Bitcoin addresses.
     IBTCAddressValidator public btcAddressValidator;
 
-    // array of 256 fee structures
+    /// @dev Array of 256 fee structures.
     TransferFee[256] public feeStructures;
 
     uint40 public minTransferSatoshi = 1000;
     uint40 public maxTransferSatoshi = 200_000_000; // 2 BTC
 
-
-    // set in the constructor / whenever the fee structure is changed
+    /// @dev Set in the constructor and whenever the fee structure is changed.
     uint8  public currentFeeStructureIndex;
     uint16 public dynamicFee;
     uint32 public baseFeeSatoshi;
 
+    /// @dev Constructor.
+    /// @param accessControl            Address of the FastBTCAccessControl contract.
+    /// @param newBtcAddressValidator   Address of the BTCAddressValidator contract.
     constructor(
         address accessControl,
         IBTCAddressValidator newBtcAddressValidator
@@ -131,6 +152,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // PUBLIC USER API
     // ===============
 
+    /// @dev The main function to transfer rBTC to BTC
+    /// @dev Amount of Bitcoin is specified in msg.value, which must be evenly divisible by SATOSHI_DIVISOR
+    /// @param btcAddress   The Bitcoin address to transfer the BTC to.
     function transferToBtc (
         string calldata btcAddress
     )
@@ -155,6 +179,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // PRIVATE METHODS USED BY PUBLIC API
     // ==================================
 
+    /// @dev Internal method to do the rBTC-to-BTC transfer, so it can be reused in multiple methods.
     function _transferToBtc (
         string memory btcAddress,
         address rskAddress,
@@ -239,6 +264,12 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // FEDERATOR API
     // ==============
 
+    /// @dev Federator method to indicate that the network has committed to sending a batch of Bitcoin transfers.
+    /// Can only be called by federators.
+    /// @param bitcoinTxHash    The pre-calculated Bitcoin transaction hash/id.
+    /// @param transferIds      Identifiers of the transfers in the batch.
+    /// @param signatures       Signatures from federators that have confirmed the batch update.
+    ///                         The hash to sign is calculated using getTransferBatchUpdateHashWithTxHash.
     function markTransfersAsSending(
         bytes32 bitcoinTxHash,
         bytes32[] calldata transferIds,
@@ -269,6 +300,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         }
     }
 
+    /// @dev Federator method to indicate that a batch of transfers has been successfully mined in Bitcoin.
+    /// Can only be called by federators.
+    /// @param transferIds      Identifiers of the transfers in the batch.
+    /// @param signatures       Signatures from federators that have confirmed the batch update.
+    ///                         The hash to sign is calculated using getTransferBatchUpdateHash.
     function markTransfersAsMined(
         bytes32[] calldata transferIds,
         bytes[] memory signatures
@@ -296,6 +332,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         }
     }
 
+    /// @dev Federator method to send back rBTC, including fees, to the rskAddress(es) of one or more transfers.
+    /// Can only be called by federators.
+    /// @param transferIds      Identifiers of the transfers to refund
+    /// @param signatures       Signatures from federators that have confirmed the refunding.
+    ///                         The hash to sign is calculated using getTransferBatchUpdateHash.
     function refundTransfers(
         bytes32[] calldata transferIds,
         bytes[] memory signatures
@@ -323,6 +364,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // FEDERATOR UTILITY METHODS
     // =========================
 
+    /// @dev Calculate the hash to sign for a batch update.
+    /// @param transferIds  Identifiers of the transfers in the batch.
+    /// @param newStatus    The status to update the state to.
+    /// @return             The hash for the update, that can be signed by federators.
     function getTransferBatchUpdateHash(
         bytes32[] calldata transferIds,
         BitcoinTransferStatus newStatus
@@ -334,6 +379,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         return keccak256(abi.encodePacked("batchUpdate:", newStatus, ":", transferIds));
     }
 
+    /// @dev Calculate the hash to sign for a batch update for methods that require Bitcoin transaction hash.
+    /// @param bitcoinTxHash    The transaction hash/id in the Bitcoin network.
+    /// @param transferIds      Identifiers of the transfers in the batch.
+    /// @param newStatus        The status to update the state to.
+    /// @return                 The hash for the update, that can be signed by federators.
     function getTransferBatchUpdateHashWithTxHash(
         bytes32 bitcoinTxHash,
         bytes32[] calldata transferIds,
@@ -350,6 +400,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // FEDERATOR PRIVATE METHODS
     // =========================
 
+    /// @dev Internal method to update the status of a single transfer and emit the correct event.
     function _updateTransferStatus(
         bytes32 transferId,
         BitcoinTransfer storage transfer,
@@ -364,6 +415,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         );
     }
 
+    /// @dev Internal method to send back the rBTC associated with a transfer to the user.
+    /// Does not update transfer status or emit events.
     function _refundTransferRbtc(
         BitcoinTransfer storage transfer
     )
@@ -376,6 +429,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // INTERNAL FEE STRUCTURE API
     // ==========================
 
+    /// @dev Internal method to add a new fee structure.
+    /// Note that there's a limit on how many can be added and once added, fee structures cannot be removed.
+    /// Also note that `newBaseFeeSatoshi` or `newDynamicFee` cannot both be 0
     function _addFeeStructure(
         uint256 feeStructureIndex,
         uint256 newBaseFeeSatoshi,
@@ -397,6 +453,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         feeStructures[feeStructureIndex].dynamicFee = uint16(newDynamicFee);
     }
 
+    /// @dev Internal method set the fee structure in use for new transfers
     function _setCurrentFeeStructure(
         uint256 feeStructureIndex
     )
@@ -421,6 +478,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // PUBLIC UTILITY METHODS
     // ======================
 
+    /// @dev Calculate the unique id for a transfer.
+    /// @param btcAddress   The Bitcoin address of the transfer.
+    /// @param nonce        The incrementing nonce for the Bitcoin address in the transfer
+    /// @return             The unique id for the transfer.
     function getTransferId(
         string memory btcAddress,
         uint256 nonce
@@ -432,16 +493,22 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         return keccak256(abi.encodePacked("transfer:", btcAddress, ":", nonce));
     }
 
+    /// @dev Get the next incrementing nonce for a Bitcoin address
+    /// @param btcAddress   The Bitcoin address.
+    /// @return             The next incrementing nonce for the Bitcoin address.
     function getNextNonce(
         string calldata btcAddress
     )
-    public
+    external
     view
     returns (uint8)
     {
         return nextNonces[btcAddress];
     }
 
+    /// @dev Calculate the fee that's paid for a transfer, according to the current fee structure, in satoshi.
+    /// @param amountSatoshi    Amount of (r)BTC to transfer, in satoshi.
+    /// @return                 The fee that will be paid, in satoshi.
     function calculateCurrentFeeSatoshi(
         uint256 amountSatoshi
     )
@@ -451,7 +518,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         return baseFeeSatoshi + (amountSatoshi * dynamicFee / DYNAMIC_FEE_DIVISOR);
     }
 
-    /// @dev pure utility function to be used in DApps
+    /// @dev Calculate the fee that's paid for a transfer, according to the current fee structure, in wei.
+    /// This is a pure utility function to be used in DAPPs.
+    /// @param amountWei        Amount of rBTC to transfer, in wei.
+    /// @return                 The fee that will be paid, in wei.
     function calculateCurrentFeeWei(
         uint256 amountWei
     )
@@ -462,6 +532,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         return calculateCurrentFeeSatoshi(amountSatoshi) * SATOSHI_DIVISOR;
     }
 
+    /// @dev Get a stored transfer based on transfer id.
+    /// @dev If the transfer doesn't exist, revert.
+    /// @param transferId   The unique identifier of the transfer.
+    /// @return transfer    The stored BitcoinTransfer object
     function getTransferByTransferId(
         bytes32 transferId
     )
@@ -472,6 +546,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         require(transfer.status != BitcoinTransferStatus.NOT_APPLICABLE, "Transfer doesn't exist");
     }
 
+    /// @dev Get a stored transfer based on Bitcoin address and nonce.
+    /// @dev If the transfer doesn't exist, revert.
+    /// @param btcAddress   The Bitcoin address
+    /// @param nonce        The Incrementing nonce
+    /// @return transfer    The stored BitcoinTransfer object
     function getTransfer(
         string calldata btcAddress,
         uint8 nonce
@@ -483,6 +562,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         transfer = getTransferByTransferId(transferId);
     }
 
+    /// @dev Get multiple transfers by unique transfer ids
+    /// @dev If the any of the transfers doesn't exist, revert.
+    /// @param transferIds  An array of unique transfer ids.
+    /// @return ret         An array of stored BitcoinTransfer objects.
     function getTransfersByTransferId(
         bytes32[] calldata transferIds
     )
@@ -498,6 +581,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         }
     }
 
+    /// @dev Get multiple transfers by Bitcoin addresses and nonces.
+    /// @dev If the any of the transfers doesn't exist, revert.
+    /// @param btcAddresses An array of Bitcoin address
+    /// @param nonces       An array of nonces (indexes and length must match btcAddresses)
+    /// @return ret         An array of stored BitcoinTransfer objects.
     function getTransfers(
         string[] calldata btcAddresses,
         uint8[] calldata nonces
@@ -515,7 +603,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         }
     }
 
-    // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
+    /// @dev An utility method to determine if a string is a valid Bitcoin address.
+    /// Just delegates to BTCAddressValidator
+    /// @param btcAddress   A (possibly invalid) Bitcoin address.
+    /// @return             True if the address is a valid Bitcoin address, else false.
     function isValidBtcAddress(
         string memory btcAddress
     )
@@ -526,7 +617,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         return btcAddressValidator.isValidBtcAddress(btcAddress);
     }
 
-    // TODO: maybe get rid of this -- it's needlessly duplicated to preserve backwards compatibility
+    /// @dev An utility method to get the list of federators. Just delegates to FastBTCAccessControl.
+    /// @return addresses   An array of federator addresses.
     function federators()
     external
     view
@@ -561,6 +653,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // ADMIN API
     // =========
 
+    /// @dev Updates the Bitcoin address validator used.
+    /// Can only be called by admins.
+    /// @param newBtcAddressValidator   Address of the new BTCAddressValidator.
     function setBtcAddressValidator(
         IBTCAddressValidator newBtcAddressValidator
     )
@@ -571,6 +666,13 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         btcAddressValidator = newBtcAddressValidator;
     }
 
+    /// @dev Add a new fee structure.
+    /// Can only be called by admins.
+    /// Note that there's a limit on how many can be added, and once added, fee structures cannot be removed.
+    /// @param feeStructureIndex    The index of the new fee structure
+    ///                             A fee structure must not already exist in this index.
+    /// @param newBaseFeeSatoshi    The base fee to be used for the fee structure, in satoshi.
+    /// @param newDynamicFee        The dynamic fee to be used for the fee structure, in satoshi.
     function addFeeStructure(
         uint256 feeStructureIndex,
         uint256 newBaseFeeSatoshi,
@@ -586,6 +688,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         });
     }
 
+    /// @dev Change the current fee structure to the one in the given index.
+    /// Can only be called by admins.
+    /// @param feeStructureIndex    The index of the fee structure. A fee structure must exist in this index.
     function setCurrentFeeStructure(
         uint256 feeStructureIndex
     )
@@ -595,6 +700,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         _setCurrentFeeStructure(feeStructureIndex);
     }
 
+    /// @dev Set the minimum amount that can be transferred, in satoshi.
+    /// Can only be called by admins.
+    /// @param newMinTransferSatoshi    The new minimum transfer amount, in satoshi.
     function setMinTransferSatoshi(
         uint256 newMinTransferSatoshi
     )
@@ -605,6 +713,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         minTransferSatoshi = uint40(newMinTransferSatoshi);
     }
 
+    /// @dev Set the maximum amount that can be transferred, in satoshi.
+    /// Can only be called by admins.
+    /// @param newMaxTransferSatoshi    The new maximum transfer amount, in satoshi.
     function setMaxTransferSatoshi(
         uint256 newMaxTransferSatoshi
     )
@@ -629,7 +740,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 //    }
 
     // TODO: figure out if we want to lock this so that only fees can be retrieved
-    /// @dev utility for withdrawing RBTC from the contract
+    /// @dev Withdraw rBTC from the contract.
+    /// Can only be called by admins.
+    /// @param amount   The amount of rBTC to withdraw (in wei).
+    /// @param receiver The address to send the rBTC to.
     function withdrawRbtc(
         uint256 amount,
         address payable receiver
@@ -640,7 +754,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         receiver.sendValue(amount);
     }
 
-    /// @dev utility for withdrawing tokens accidentally sent to the contract
+    /// @dev A utility for withdrawing tokens accidentally sent to the contract.
+    /// Can only be called by admins.
+    /// @param token    The ERC20 token to withdraw.
+    /// @param amount   The amount of the token to withdraw (in wei/base units).
+    /// @param receiver The address to send the tokens to.
     function withdrawTokens(
         IERC20 token,
         uint256 amount,
@@ -655,10 +773,16 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // PAUSING/FREEZING API
     // ====================
 
+    /// @dev Pause the contract, stopping new transfers.
+    /// Can only be called by pausers.
     function pause() external onlyPauser {
         _pause();
     }
 
+    /// @dev Freeze the contract, disabling the use of federator methods as well as pausing it.
+    /// Can only be called by guards.
+    /// @dev This is intended only for emergencies (such as in the event of a hostile federator network),
+    /// as it effectively stops the system from functioning at all.
     function freeze() external onlyGuard {
         if (!paused()) { // we don't want to risk a revert
             _pause();
@@ -666,11 +790,16 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         _freeze();
     }
 
-    // Cannot unpause when frozen
+    /// @dev Unpause the contract, allowing new transfers again. Cannot unpause when frozen.
+    /// After unfreezing, the contract needs to be unpaused manually.
+    /// Can only be called by pausers.
     function unpause() external onlyPauser whenNotFrozen {
         _unpause();
     }
 
+    /// @dev Unfreeze the contract, re-enabling the use of federator methods.
+    /// Unfreezing does not automatically unpause the contract.
+    /// Can only be called by guards.
     function unfreeze() external onlyGuard {
         _unfreeze();
         //_unpause(); // it's best to have the option unpause separately
