@@ -165,6 +165,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         _transferToBtc(btcAddress, msg.sender, msg.value);
     }
 
+    /// @dev Transfer rBTC to BTC from a given user address, with addresses encoded in userData.
+    /// Integration to the token bridge -- called by the Bridge contract.
+    /// Amount of Bitcoin is specified in msg.value, which must be evenly divisible by SATOSHI_DIVISOR.
+    /// @param userData The originating user address (rskAddress) and the Bitcoin address to transfer the BTC to,
+    ///                 encoded in bytes as in encodeBridgeUserData.
     function receiveEthFromBridge(
         bytes calldata userData
     )
@@ -627,7 +632,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         addresses = accessControl.federators();
     }
 
-    /// @dev encodes rskAddress and btcAddress to be used as userData in bridge
+    /// @dev Encode rskAddress and btcAddress to be used as userData in the token bridge
+    /// @param rskAddress   The end-user's RSK (or other blockchain) address that transfers the rBTC
+    /// @param btcAddress   The Bitcoin address to transfer the BTC to.
+    /// @return userData    Parameters encoded in bytes, passable to bridge/aggregator methods.
     function encodeBridgeUserData(
         address rskAddress,
         string calldata btcAddress
@@ -639,7 +647,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         userData = abi.encode(rskAddress, btcAddress);
     }
 
-    /// @dev decodes rskAddress and btcAddress out of userData passed from the bridge
+    /// @dev Decode rskAddress and btcAddress out of userData passed from the token bridge.
+    /// @param userData     Parameters encoded in bytes, as it comes from the token bridge.
+    /// @return rskAddress  The end-user's RSK (or other blockchain) address that transfers the rBTC
+    /// @return btcAddress  The Bitcoin address to transfer the BTC to.
     function decodeBridgeUserData(
         bytes calldata userData
     )
