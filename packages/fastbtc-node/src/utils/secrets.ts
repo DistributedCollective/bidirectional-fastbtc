@@ -117,7 +117,7 @@ export function encryptSecrets(password: Buffer, secrets: {[key: string]: string
             Buffer.from(secrets[secretName], 'utf-8'), derivedKey
         ).toString('hex');
     }
-    return JSON.stringify({salt: salt.toString('hex'), encryptedSecrets});
+    return JSON.stringify({salt: salt.toString('hex'), encryptedSecrets}, undefined, 4);
 }
 
 export function decryptSecrets(password: Buffer, secretContents: string): {[key: string]: string} {
