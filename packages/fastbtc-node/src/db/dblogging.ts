@@ -1,17 +1,16 @@
-import {injectable} from "inversify";
+import {inject, injectable} from "inversify";
 import {Connection} from "typeorm";
 import {LogItem} from "./models";
-import {p2data} from "bitcoinjs-lib/types/payments/embed";
+import {DBConnection} from "./connection";
 
 @injectable()
 export class DBLogging {
-    private connection: Connection;
-    constructor(connection: Connection) {
-        this.connection = connection;
+    constructor(@inject(DBConnection) private dbConnection: Connection) {
+
     }
 
-    async log(type: string, args = {}) {
-        const repo = this.connection.getRepository(LogItem);
+    public async log(type: string, args = {}) {
+        const repo = this.dbConnection.getRepository(LogItem);
         await repo.save(repo.create({
             type: type,
             data: args,
