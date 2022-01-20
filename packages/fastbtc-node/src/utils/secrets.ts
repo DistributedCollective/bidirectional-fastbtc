@@ -133,7 +133,7 @@ export function decryptSecrets(password: Buffer, secretContents: string): {[key:
     return decryptedSecrets;
 }
 
-export async function promptPassword(): Promise<string> {
+export async function promptPassword(prompt: string="Password: "): Promise<string> {
     return new Promise(function (resolve, reject) {
         const mutedStdout = new Writable({
             write: function (chunk, encoding, callback) {
@@ -147,7 +147,7 @@ export async function promptPassword(): Promise<string> {
             terminal: true
         });
 
-        process.stderr.write('Password: ');
+        process.stderr.write(prompt);
         rl.question('', function(password) {
             rl.close();
             resolve(password);
