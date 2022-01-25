@@ -10,6 +10,7 @@ import {Config} from '../config';
 import Logger from '../logger';
 import NetworkUtil from './networkutil';
 import {BitcoinTransferService, TransferBatch, TransferBatchDTO, TransferBatchValidator} from './transfers';
+import {DBLogging} from "../db/dblogging";
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -99,7 +100,8 @@ export class FastBTCNode {
         @inject(P2PNetwork) private network: Network<FastBTCMessage>,
         @inject(BitcoinTransferService) private bitcoinTransferService: BitcoinTransferService,
         @inject(TransferBatchValidator) private transferBatchValidator: TransferBatchValidator,
-        @inject(Config) private config: FastBTCNodeConfig
+        @inject(Config) private config: FastBTCNodeConfig,
+        @inject(DBLogging) private dbLogging: DBLogging
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger);
         network.onNodeAvailable(this.onNodeAvailable);
@@ -293,8 +295,11 @@ export class FastBTCNode {
         this.logger.log('node no longer available:', node);
     }
 
-    onMessage = (message: MessageUnion<FastBTCMessage>) => {
+    onMessage = async (message: MessageUnion<FastBTCMessage>) => {
         let promise: Promise<any> | null = null;
+
+        await this.dbLogging.log('messageReceived', {data: message.data, source: message.source.id});
+
         switch (message.type) {
             case 'fastbtc:request-rsk-sending-signature': {
                 promise = this.onRequestRskSendingSignature(message.data, message.source);

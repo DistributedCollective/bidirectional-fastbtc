@@ -4,7 +4,7 @@ const ormconfig = require('./ormconfig');
 
 const rskUrl = process.env.FASTBTC_RSK_RPC_URL;
 if (!rskUrl) {
-    throw new Error('required env var FASTBTC_RSK_RPC_URL not set!')
+    console.log('env var FASTBTC_RSK_RPC_URL not set, not checking for RSK node availability');
 }
 
 
@@ -15,9 +15,7 @@ for(let attempt = 0; attempt < 100; attempt++) {
         "./node_modules/typeorm/cli.js",
         ['query', 'SELECT 1'],
     );
-    //console.log('psql', ret);
-    //console.log('stdout', ret.stdout.toString());
-    //console.log('stderr', ret.stderr.toString());
+
     if (ret.status === 0) {
         dbWaitSuccess = true;
         break;
@@ -39,32 +37,33 @@ child_process.spawnSync(
 );
 
 
-console.log('Waiting for rsk network at', rskUrl);
-let rskWaitSuccess = false;
-for(let attempt = 0; attempt < 100; attempt++) {
-    const ret = child_process.spawnSync(
-        "curl",
-        [rskUrl],
-    );
+if (rskUrl) {
+    console.log('Waiting for RSK network at', rskUrl);
+    let rskWaitSuccess = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+        const ret = child_process.spawnSync(
+            "curl",
+            [rskUrl],
+        );
 
-    if (ret.status === null && ret.error?.code === 'ENOENT') {
-        console.warn('curl not found. continuing anyway');
-        rskWaitSuccess = true;
-        break;
+        if (ret.status === null && ret.error?.code === 'ENOENT') {
+            console.warn('curl not found. continuing anyway');
+            rskWaitSuccess = true;
+            break;
+        }
+        if (ret.status === 0) {
+            rskWaitSuccess = true;
+            break;
+        }
+        child_process.spawnSync(
+            "sleep",
+            ["2"],
+        );
     }
-    if (ret.status === 0) {
-        rskWaitSuccess = true;
-        break;
+    if (!rskWaitSuccess) {
+        throw new Error('rsk wait failure');
     }
-    child_process.spawnSync(
-        "sleep",
-        ["2"],
-    );
 }
-if (!rskWaitSuccess) {
-    throw new Error('rsk wait failure');
-}
-
 
 const main = require('./dist/index.js')['default'];
 main();

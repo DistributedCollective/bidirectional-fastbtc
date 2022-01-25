@@ -10,9 +10,10 @@ async function main() {
     rootLogger.enable();
 
     rootLogger.log(`Hello, fastbtc-node here.`);
-    let container = bootstrap();
+    let container = await bootstrap();
 
-    const config = container.get<Config>(Config);
+    const config = await container.get<Config>(Config);
+    console.log(config);
     rootLogger.log('My config is', getCensoredConfig(config));
 
     // This is silly, but we have to init the connection. Maybe architect this thing better

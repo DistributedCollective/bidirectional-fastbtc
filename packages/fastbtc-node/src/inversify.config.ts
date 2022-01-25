@@ -1,16 +1,16 @@
 import {Container} from "inversify";
-import {Config, createEnvConfig} from './config';
+import {Config, envConfigProviderFactory} from './config';
 import * as db from './db';
 import * as rsk from './rsk';
 import * as p2p from './p2p';
 import * as btc from './btc';
 import * as core from './core';
 
-function bootstrap(): Container {
+async function bootstrap(): Promise<Container> {
     const container = new Container();
 
-    container.bind<Config>(Config).toConstantValue(
-        createEnvConfig()
+    container.bind<Config>(Config).toDynamicValue(
+        await envConfigProviderFactory()
     );
 
     db.setupInversify(container);

@@ -1,0 +1,28 @@
+version: "3.7"
+
+services:
+  node:
+    image: fastbtc:latest
+    build:
+      context: ./packages/fastbtc-node/
+    environment:
+      - FASTBTC_CONFIG_FILE=/config/fastbtc_config.json
+      - FASTBTC_DB_URL=postgresql://fastbtc_node1:node1@pg/fastbtc1
+
+    ports:
+      - 11125:11125
+    depends_on:
+      - pg  
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "./config:/config"
+
+  pg:
+    image: postgres:13-alpine
+    volumes:
+      - ./integration_test/postgres/initsql:/docker-entrypoint-initdb.d
+    ports:
+      - 55432:5432
+    environment:
+      - POSTGRES_PASSWORD=8b23e5c09eb06b9bd11e2369d6587206

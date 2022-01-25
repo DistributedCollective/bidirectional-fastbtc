@@ -29,6 +29,8 @@ RUN yarn install --production=true --frozen-lockfile
 
 COPY ormconfig.js startup.js ./
 
+COPY src/scripts /app/scripts
+
 RUN ls node_modules
 
 ###################
