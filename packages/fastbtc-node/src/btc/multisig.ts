@@ -222,7 +222,15 @@ export class BitcoinMultisig {
                 inputCounts[inputType]++;
                 totalSum = totalSum.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
 
-                fee = BigNumber.from(getByteCount(inputCounts, outputCounts, transfers.map(t => t.btcAddress)) * this.gasSatoshi);
+                fee = BigNumber.from(
+                    getByteCount(
+                        inputCounts,
+                        outputCounts,
+                        transfers.map(t => t.btcAddress),
+                        this.network
+                    )
+                    * this.gasSatoshi
+                );
                 if (totalSum.gte(amountSatoshi.add(fee))) {
                     break;
                 }
@@ -277,7 +285,7 @@ export class BitcoinMultisig {
         if (transferLength < 1) {
             throw new Error(
                 `The partial transaction does not have enough outputs, ` +
-                `should have at least 3 outputs, has ${transferLength + 2}`)
+                `should have at least 3 outputs, has ${transferLength + 2}`);
         }
 
         const dataOutput = psbtUnserialized.txOutputs[0];

@@ -1,6 +1,6 @@
 // https://gist.github.com/junderw/b43af3253ea5865ed52cb51c200ac19c
 
-import {address} from "bitcoinjs-lib";
+import {address, Network, networks} from "bitcoinjs-lib";
 
 /**
  * Estimate bytes for bitcoin transaction
@@ -13,6 +13,7 @@ export default function getByteCount(
     inputs: Record<string, number>,
     outputs: Record<string, number>,
     outputAddresses?: string[],
+    network: Network = networks.bitcoin
 ): number {
     let totalWeight = 0;
     let hasWitness = false;
