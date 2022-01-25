@@ -627,9 +627,11 @@ export class BitcoinTransferService {
         // This method doesn't also really belong in this class (there should be another service), but it's good
         // enough for now
         const result = await sendTransaction();
+        // Wait for numRequiredConfirmations + 1 so that other nodes have a chance to catch up (decreases
+        // false positive errors in logs)
         const numRequiredConfirmations = Math.max(
             1,
-            Math.ceil(this.config.rskRequiredConfirmations / 2)
+            this.config.rskRequiredConfirmations + 1
         );
         this.logger.info('tx hash:', result.hash, `waiting (${numRequiredConfirmations} confirms)...`);
         try {
