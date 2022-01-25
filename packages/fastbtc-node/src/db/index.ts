@@ -3,6 +3,7 @@ import Container = interfaces.Container;
 import {ConnectionProvider, Connection, createDbConnection, getDbConnection, DBConnection} from './connection';
 import {Config} from '../config';
 import {DBLogging} from "./dblogging";
+import * as scanner from "../rsk/scanner";
 
 export function setupInversify(container: Container) {
     container.bind<ConnectionProvider>(ConnectionProvider).toProvider((context) => {
@@ -16,10 +17,5 @@ export function setupInversify(container: Container) {
         getDbConnection()
     ));
 
-    container.bind<DBLogging>(DBLogging).toProvider( (context) => {
-        return async () => {
-            const conn = await context.container.get<Connection>(DBConnection);
-            return new DBLogging(conn);
-        }
-    });
+    container.bind<DBLogging>(DBLogging).toSelf();
 }
