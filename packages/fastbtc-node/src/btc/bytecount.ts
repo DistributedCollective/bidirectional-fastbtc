@@ -87,7 +87,7 @@ export default function getByteCount(
 
     if (outputAddresses) {
         outputAddresses.forEach(function (addr) {
-            totalWeight += (9 + address.toOutputScript(addr).length) * 4;
+            totalWeight += (9 + address.toOutputScript(addr, network).length) * 4;
             outputCount += 1;
         });
     }
