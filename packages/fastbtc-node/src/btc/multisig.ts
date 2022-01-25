@@ -200,7 +200,7 @@ export class BitcoinMultisig {
 
         let totalSum = BigNumber.from(0);
         let outputCounts = {
-            'P2WSH': 2 + transfers.length, // change!
+            'P2WSH': 2, // OP_RETURN data + change address; this actually always exceeds the byte size of the OP_RETURN
         };
         let inputCounts = {
             [inputType]: 0,
@@ -222,7 +222,7 @@ export class BitcoinMultisig {
                 inputCounts[inputType]++;
                 totalSum = totalSum.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
 
-                fee = BigNumber.from(getByteCount(inputCounts, outputCounts) * this.gasSatoshi);
+                fee = BigNumber.from(getByteCount(inputCounts, outputCounts, transfers.map(t => t.btcAddress)) * this.gasSatoshi);
                 if (totalSum.gte(amountSatoshi.add(fee))) {
                     break;
                 }
@@ -276,7 +276,8 @@ export class BitcoinMultisig {
         const transferLength = psbtUnserialized.txOutputs.length - 2;
         if (transferLength < 1) {
             throw new Error(
-                `The partial transaction does not have enough outputs, should have at least 3 outputs, has ${transferLength + 2}`)
+                `The partial transaction does not have enough outputs, ` +
+                `should have at least 3 outputs, has ${transferLength + 2}`)
         }
 
         const dataOutput = psbtUnserialized.txOutputs[0];
@@ -304,7 +305,7 @@ export class BitcoinMultisig {
             throw new Error(`Proposed transaction is trying to pay change to ${changeOutput.address}, which does not match expected ${this.payoutScript.address}`);
         }
 
-        // TODO: estimate the Bitcoin network fee and make it sensible  !
+        // TODO: estimate the Bitcoin gas cost and make it sensible!
 
         const alreadyTransferred = new Set<string>();
 
@@ -316,10 +317,6 @@ export class BitcoinMultisig {
         return psbtUnserialized.txOutputs.slice(1, -1).map((output, i) => {
             if (!output.address) {
                 throw new Error(`Transaction output ${output.script} does not have address!`);
-            }
-
-            if (!output.address.startsWith(this.network.bech32)) {
-                throw new Error(`The transaction ${output.script}/${output.address} does not pay to a Bech32 address!`);
             }
 
             const nonce = dataPayment[i];

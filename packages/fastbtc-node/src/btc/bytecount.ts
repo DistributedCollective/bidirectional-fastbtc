@@ -1,5 +1,7 @@
 // https://gist.github.com/junderw/b43af3253ea5865ed52cb51c200ac19c
 
+import {address} from "bitcoinjs-lib";
+
 /**
  * Estimate bytes for bitcoin transaction
  *
@@ -9,7 +11,8 @@
  */
 export default function getByteCount(
     inputs: Record<string, number>,
-    outputs: Record<string, number>
+    outputs: Record<string, number>,
+    outputAddresses?: string[],
 ): number {
     let totalWeight = 0;
     let hasWitness = false;
@@ -29,17 +32,17 @@ export default function getByteCount(
             'P2SH': 32 * 4,
             'P2PKH': 34 * 4,
             'P2WPKH': 31 * 4,
-            'P2WSH': 43 * 4
+            'P2WSH': 43 * 4,
         }
     };
 
-    function checkUInt53 (n: number) {
+    function checkUInt53(n: number) {
         if (n < 0 || n > Number.MAX_SAFE_INTEGER || n % 1 !== 0) {
-            throw new RangeError('value out of range')
+            throw new RangeError('value out of range');
         }
     }
 
-    function varIntLength (number: number) {
+    function varIntLength(number: number) {
         checkUInt53(number);
 
         return (
@@ -47,47 +50,54 @@ export default function getByteCount(
                 : number <= 0xffff ? 3
                     : number <= 0xffffffff ? 5
                         : 9
-        )
+        );
     }
 
-    Object.keys(inputs).forEach(function(key) {
+    Object.keys(inputs).forEach(function (key) {
         checkUInt53(inputs[key])
-        if (key.slice(0,8) === 'MULTISIG') {
+        if (key.slice(0, 8) === 'MULTISIG') {
             // ex. "MULTISIG-P2SH:2-3" would mean 2 of 3 P2SH MULTISIG
             const keyParts = key.split(':');
             if (keyParts.length !== 2) {
-                throw new Error('invalid input: ' + key)
+                throw new Error('invalid input: ' + key);
             }
             const newKey = keyParts[0];
             const mAndN = keyParts[1].split('-').map(function (item) {
-                return parseInt(item)
+                return parseInt(item);
             });
 
-            totalWeight += types.inputs[newKey] * inputs[key]
+            totalWeight += types.inputs[newKey] * inputs[key];
             const multiplier = (newKey === 'MULTISIG-P2SH') ? 4 : 1;
-            totalWeight += ((73 * mAndN[0]) + (34 * mAndN[1])) * multiplier * inputs[key]
+            totalWeight += ((73 * mAndN[0]) + (34 * mAndN[1])) * multiplier * inputs[key];
         } else {
-            totalWeight += types.inputs[key] * inputs[key]
+            totalWeight += types.inputs[key] * inputs[key];
         }
-        inputCount += inputs[key]
+        inputCount += inputs[key];
         if (key.indexOf('W') >= 0) {
-            hasWitness = true
+            hasWitness = true;
         }
     })
 
-    Object.keys(outputs).forEach(function(key) {
-        checkUInt53(outputs[key])
-        totalWeight += types.outputs[key] * outputs[key]
-        outputCount += outputs[key]
-    })
+    Object.keys(outputs).forEach(function (key) {
+        checkUInt53(outputs[key]);
+        totalWeight += types.outputs[key] * outputs[key];
+        outputCount += outputs[key];
+    });
 
-    if (hasWitness) {
-        totalWeight += 2
+    if (outputAddresses) {
+        outputAddresses.forEach(function (addr) {
+            totalWeight += (9 + address.toOutputScript(addr).length) * 4;
+            outputCount += 1;
+        });
     }
 
-    totalWeight += 8 * 4
-    totalWeight += varIntLength(inputCount) * 4
-    totalWeight += varIntLength(outputCount) * 4
+    if (hasWitness) {
+        totalWeight += 2;
+    }
 
-    return Math.ceil(totalWeight / 4)
+    totalWeight += 8 * 4;
+    totalWeight += varIntLength(inputCount) * 4;
+    totalWeight += varIntLength(outputCount) * 4;
+
+    return Math.ceil(totalWeight / 4);
 }
