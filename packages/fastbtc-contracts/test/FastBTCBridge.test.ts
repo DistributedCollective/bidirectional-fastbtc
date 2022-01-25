@@ -562,4 +562,91 @@ describe("FastBTCBridge", function() {
             ).to.equal(2200);
         });
     });
+
+    describe('bridge integration', () => {
+        beforeEach(async () => {
+            await ownerAccount.sendTransaction({
+                value: parseUnits('1', 'ether'),
+                to: anotherAddress,
+            });
+            fastBtcBridge = fastBtcBridge.connect(anotherAccount);
+        });
+
+        it('encodes userData from token bridge', async () => {
+            const ret = await fastBtcBridge.encodeBridgeUserData(
+                '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+                'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+            );
+
+            expect(ret).to.equal(
+                '0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c' +
+                '80000000000000000000000000000000000000000000000000000000000000040' +
+                '000000000000000000000000000000000000000000000000000000000000002a6' +
+                '263317177353038643671656a7874646734793572337a61727661727930633578' +
+                '77376b76386633743400000000000000000000000000000000000000000000'
+            );
+        });
+
+        it('decodes userData from tokenBridge', async () => {
+            const [rskAddress, btcAddress] = await fastBtcBridge.decodeBridgeUserData(
+                '0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c' +
+                '80000000000000000000000000000000000000000000000000000000000000040' +
+                '000000000000000000000000000000000000000000000000000000000000002a6' +
+                '263317177353038643671656a7874646734793572337a61727661727930633578' +
+                '77376b76386633743400000000000000000000000000000000000000000000'
+            );
+
+            expect(rskAddress).to.equal('0x70997970C51812dc3A010C7d01b50e0d17dc79C8');
+            expect(btcAddress).to.equal('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4');
+        });
+
+        it('receiveEthFromBridge transfers rbtc', async () => {
+            const amountEther = parseEther('0.8');
+
+            const userData = await fastBtcBridge.encodeBridgeUserData(
+                '0x0000000000000000000000000000000000001337',
+                'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+            );
+
+            await expect(
+                await fastBtcBridge.receiveEthFromBridge(
+                    userData,
+                    {
+                        value: amountEther,
+                    }
+                )
+            ).to.changeEtherBalances(
+                [anotherAccount, fastBtcBridge],
+                [amountEther.mul(-1), amountEther]
+            );
+        });
+
+        it('receiveEthFromBridge emits the correct event', async () => {
+            const amountEther = parseEther('0.5');
+            let amountSatoshi = BigNumber.from(Math.floor(0.5 * 10 ** 8))
+            const feeSatoshi = await fastBtcBridge.calculateCurrentFeeSatoshi(amountSatoshi);
+            amountSatoshi = amountSatoshi.sub(feeSatoshi);
+
+            const userData = await fastBtcBridge.encodeBridgeUserData(
+                '0x0000000000000000000000000000000000001337',
+                'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+            );
+
+            await expect(
+                fastBtcBridge.receiveEthFromBridge(
+                    userData,
+                    {
+                        value: amountEther,
+                    }
+                )
+            ).to.emit(fastBtcBridge, 'NewBitcoinTransfer').withArgs(
+                await fastBtcBridge.getTransferId('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', 0), // bytes32 _transferId,
+                'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4', // string _btcAddress,
+                BigNumber.from(0), // uint _nonce,
+                amountSatoshi, // uint _amountSatoshi,
+                feeSatoshi, // uint _feeSatoshi,
+                '0x0000000000000000000000000000000000001337', // address _rskAddress
+            );
+        });
+    });
 });

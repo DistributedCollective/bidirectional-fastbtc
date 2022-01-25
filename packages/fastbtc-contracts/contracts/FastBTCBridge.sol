@@ -162,6 +162,36 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     payable
     whenNotPaused
     {
+        _transferToBtc(btcAddress, msg.sender, msg.value);
+    }
+
+    /// @dev Transfer rBTC to BTC from a given user address, with addresses encoded in userData.
+    /// Integration to the token bridge -- called by the Bridge contract.
+    /// Amount of Bitcoin is specified in msg.value, which must be evenly divisible by SATOSHI_DIVISOR.
+    /// @param userData The originating user address (rskAddress) and the Bitcoin address to transfer the BTC to,
+    ///                 encoded in bytes as in encodeBridgeUserData.
+    function receiveEthFromBridge(
+        bytes calldata userData
+    )
+    external
+    payable
+    whenNotPaused
+    {
+        (address rskAddress, string memory btcAddress) = decodeBridgeUserData(userData);
+        _transferToBtc(btcAddress, rskAddress, msg.value);
+    }
+
+    // PRIVATE METHODS USED BY PUBLIC API
+    // ==================================
+
+    /// @dev Internal method to do the rBTC-to-BTC transfer, so it can be reused in multiple methods.
+    function _transferToBtc (
+        string memory btcAddress,
+        address rskAddress,
+        uint256 amountRbtc
+    )
+    private
+    {
         require(isValidBtcAddress(btcAddress), "Invalid BTC address");
 
         uint8 nonce = nextNonces[btcAddress];
@@ -169,9 +199,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         // strictly less than 255!
         require(nonce <= MAXIMUM_VALID_NONCE, "Maximum number of transfers to address reached");
 
-        require(msg.value % SATOSHI_DIVISOR == 0, "RBTC amount must be evenly divisible to Satoshis");
+        require(amountRbtc % SATOSHI_DIVISOR == 0, "RBTC amount must be evenly divisible to Satoshis");
 
-        uint256 amountSatoshi = msg.value / SATOSHI_DIVISOR;
+        uint256 amountSatoshi = amountRbtc / SATOSHI_DIVISOR;
         require(amountSatoshi >= minTransferSatoshi, "RBTC BitcoinTransfer smaller than minimum");
         require(amountSatoshi <= maxTransferSatoshi, "RBTC BitcoinTransfer greater than maximum");
 
@@ -183,7 +213,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         // shouldn't happen ever
 
         transfers[transferId] = BitcoinTransfer({
-            rskAddress: msg.sender,
+            rskAddress: rskAddress,
             status: BitcoinTransferStatus.NEW,
             nonce: uint8(nonce), // within limits!
             feeStructureIndex: currentFeeStructureIndex,
@@ -204,7 +234,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
             nonce: nonce,
             amountSatoshi: amountSatoshi,
             feeSatoshi: feeSatoshi,
-            rskAddress: msg.sender
+            rskAddress: rskAddress
         });
     }
 
@@ -458,7 +488,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     /// @param nonce        The incrementing nonce for the Bitcoin address in the transfer
     /// @return             The unique id for the transfer.
     function getTransferId(
-        string calldata btcAddress,
+        string memory btcAddress,
         uint256 nonce
     )
     public
@@ -583,7 +613,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     /// @param btcAddress   A (possibly invalid) Bitcoin address.
     /// @return             True if the address is a valid Bitcoin address, else false.
     function isValidBtcAddress(
-        string calldata btcAddress
+        string memory btcAddress
     )
     public
     view
@@ -600,6 +630,35 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     returns (address[] memory addresses)
     {
         addresses = accessControl.federators();
+    }
+
+    /// @dev Encode rskAddress and btcAddress to be used as userData in the token bridge
+    /// @param rskAddress   The end-user's RSK (or other blockchain) address that transfers the rBTC
+    /// @param btcAddress   The Bitcoin address to transfer the BTC to.
+    /// @return userData    Parameters encoded in bytes, passable to bridge/aggregator methods.
+    function encodeBridgeUserData(
+        address rskAddress,
+        string calldata btcAddress
+    )
+    external
+    pure
+    returns (bytes memory userData)
+    {
+        userData = abi.encode(rskAddress, btcAddress);
+    }
+
+    /// @dev Decode rskAddress and btcAddress out of userData passed from the token bridge.
+    /// @param userData     Parameters encoded in bytes, as it comes from the token bridge.
+    /// @return rskAddress  The end-user's RSK (or other blockchain) address that transfers the rBTC
+    /// @return btcAddress  The Bitcoin address to transfer the BTC to.
+    function decodeBridgeUserData(
+        bytes calldata userData
+    )
+    public
+    pure
+    returns (address rskAddress, string memory btcAddress)
+    {
+        (rskAddress, btcAddress) = abi.decode(userData, (address, string));
     }
 
     // ADMIN API
