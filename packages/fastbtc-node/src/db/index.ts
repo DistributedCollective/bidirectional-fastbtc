@@ -1,9 +1,8 @@
 import {interfaces} from 'inversify';
-import Container = interfaces.Container;
-import {ConnectionProvider, Connection, createDbConnection, getDbConnection, DBConnection} from './connection';
+import {Connection, ConnectionProvider, createDbConnection, DBConnection, getDbConnection} from './connection';
 import {Config} from '../config';
 import {DBLogging} from "./dblogging";
-import * as scanner from "../rsk/scanner";
+import Container = interfaces.Container;
 
 export function setupInversify(container: Container) {
     container.bind<ConnectionProvider>(ConnectionProvider).toProvider((context) => {
