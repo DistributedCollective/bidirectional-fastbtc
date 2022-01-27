@@ -62,7 +62,7 @@ export const envConfigProviderFactory = async (
                 app.use(express.json());
                 app.use(express.urlencoded());
                 app.post('/password', (req: any, res: any) => {
-                    console.log(req, req.body);
+                    console.log('new password request');
                     const password = req.body.password;
                     try {
                         const contents = decryptSecrets(Buffer.from(password, 'utf8'), encryptedConfig);
