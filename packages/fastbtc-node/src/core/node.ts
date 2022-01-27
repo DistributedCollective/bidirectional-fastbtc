@@ -11,6 +11,7 @@ import Logger from '../logger';
 import NetworkUtil from './networkutil';
 import {BitcoinTransferService, TransferBatch, TransferBatchDTO, TransferBatchValidator} from './transfers';
 import {DBLogging} from "../db/dblogging";
+import {StatsD} from "hot-shots";
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -101,7 +102,8 @@ export class FastBTCNode {
         @inject(BitcoinTransferService) private bitcoinTransferService: BitcoinTransferService,
         @inject(TransferBatchValidator) private transferBatchValidator: TransferBatchValidator,
         @inject(Config) private config: FastBTCNodeConfig,
-        @inject(DBLogging) private dbLogging: DBLogging
+        @inject(DBLogging) private dbLogging: DBLogging,
+        @inject(StatsD) private statsd: StatsD,
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger);
         network.onNodeAvailable(this.onNodeAvailable);
@@ -125,11 +127,12 @@ export class FastBTCNode {
         const initiatorId = this.networkUtil.getPreferredInitiatorId();
         const isInitiator = this.networkUtil.id == initiatorId;
 
-        this.logger.info('node id:         ', this.networkUtil.id);
-        this.logger.info('initiator id:    ', initiatorId);
-        this.logger.info('is initiator?    ', isInitiator);
-        this.logger.info('nodes online:    ', numNodesOnline);
-        this.logger.info('transfers total: ', numTransfers);
+        this.logger.throttledInfo(
+            `node id: ${this.networkUtil.id}; initiator id: ${initiatorId};` +
+            `nodes online: ${numNodesOnline}, transfers total: ${numTransfers}`
+        );
+
+        this.statsd.gauge('fastbtc.pegout.transfers.total', numTransfers);
 
         if (!isInitiator) {
             this.logger.info('not initiator, not doing anything');
@@ -137,6 +140,7 @@ export class FastBTCNode {
             return;
         }
 
+        this.statsd.gauge('fastbtc.pegout.nodes.online', numNodesOnline);
         if (numNodesOnline < this.config.numRequiredSigners) {
             this.logger.info(
                 `Waiting until at least ${this.config.numRequiredSigners} nodes online ` +
@@ -147,10 +151,13 @@ export class FastBTCNode {
 
         let transferBatch = await this.bitcoinTransferService.getCurrentTransferBatch();
         transferBatch = await this.updateTransferBatchFromTransientInitiatorData(transferBatch);
-        this.logger.info('transfers queued:', transferBatch.transfers.length);
+        this.logger.throttledInfo(`transfers queued: ${transferBatch.transfers.length}`);
 
-        this.logger.info('TransferBatch:', transferBatch);
+        if (transferBatch.transfers.length !== 0) {
+            this.logger.info('TransferBatch:', transferBatch);
+        }
 
+        this.statsd.gauge('fastbtc.pegout.batch.queued_transfers', transferBatch.transfers.length);
         if (!transferBatch.hasValidTransferState()) {
             this.logger.warning(
                 'TransferBatch has invalid transfer state -- purging it and starting with a fresh one!'
@@ -162,16 +169,19 @@ export class FastBTCNode {
                     transferBatchDto: transferBatch.getDto(),
                 }
             );
+            this.statsd.increment('fastbtc.pegout.purged_batches');
             return;
         }
 
+        this.statsd.gauge('fastbtc.pegout.batch.due', +transferBatch.isDue());
         if (!transferBatch.isDue()) {
             this.logger.info('TransferBatch not due')
             return;
         }
 
+        this.statsd.gauge('fastbtc.pegout.batch.rsk_sending_signatures', +transferBatch.rskSendingSignatures.length);
         if(!transferBatch.hasEnoughRskSendingSignatures()) {
-            this.logger.info('TransferBatch does not have enough RSK sending signatures');
+            this.logger.throttledInfo('TransferBatch does not have enough RSK sending signatures');
             await this.network.broadcast(
                 'fastbtc:request-rsk-sending-signature',
                 {
@@ -181,14 +191,18 @@ export class FastBTCNode {
             return;
         }
 
-        if(!transferBatch.isMarkedAsSendingInRsk()) {
-            this.logger.info('TransferBatch is not marked as sending in RSK');
+        this.statsd.gauge('fastbtc.pegout.batch.sending', +transferBatch.isMarkedAsSendingInRsk());
+        if (!transferBatch.isMarkedAsSendingInRsk()) {
+            this.logger.throttledInfo('TransferBatch is not marked as sending in RSK');
             await this.bitcoinTransferService.markAsSendingInRsk(transferBatch);
             return;
         }
 
-        if(!transferBatch.hasEnoughBitcoinSignatures()) {
-            this.logger.info('TransferBatch does not have enough bitcoin signatures');
+        this.statsd.gauge('fastbtc.pegout.batch.rsk_sending_signatures',
+            +(transferBatch.signedBtcTransaction as any).signedPublicKeys.length);
+
+        if (!transferBatch.hasEnoughBitcoinSignatures()) {
+            this.logger.throttledInfo('TransferBatch does not have enough bitcoin signatures');
             await this.network.broadcast(
                 'fastbtc:request-bitcoin-signature',
                 {
@@ -198,8 +212,13 @@ export class FastBTCNode {
             return;
         }
 
-        if(!transferBatch.isSentToBitcoin()) {
-            this.logger.info('TransferBatch is not sent to bitcoin');
+        this.statsd.gauge(
+            'fastbtc.pegout.batch.sent_to_bitcoin',
+            +!transferBatch.isSentToBitcoin()
+        );
+
+        if (!transferBatch.isSentToBitcoin()) {
+            this.logger.throttledInfo('TransferBatch is not sent to bitcoin');
             await this.network.broadcast(
                 'fastbtc:sending-to-bitcoin',
                 {
@@ -210,8 +229,13 @@ export class FastBTCNode {
             return;
         }
 
-        if(!transferBatch.hasEnoughRskMinedSignatures()) {
-            this.logger.info('TransferBatch does not have enough RSK mined signatures');
+        this.statsd.gauge(
+            'fastbtc.pegout.batch.rsk_mined_signatures',
+            +!transferBatch.rskMinedSignatures.length
+        );
+
+        if (!transferBatch.hasEnoughRskMinedSignatures()) {
+            this.logger.throttledInfo('TransferBatch does not have enough RSK mined signatures');
             await this.network.broadcast(
                 'fastbtc:request-rsk-mined-signature',
                 {
@@ -221,8 +245,13 @@ export class FastBTCNode {
             return;
         }
 
+        this.statsd.gauge(
+            'fastbtc.pegout.batch.mined_in_rsk',
+            +!transferBatch.isMarkedAsMinedInRsk()
+        );
+
         if(!transferBatch.isMarkedAsMinedInRsk()) {
-            this.logger.info('TransferBatch is not marked as mined in RSK');
+            this.logger.throttledInfo('TransferBatch is not marked as mined in RSK');
             await this.bitcoinTransferService.markAsMinedInRsk(transferBatch);
             await this.network.broadcast(
                 'fastbtc:transfer-batch-complete',
@@ -338,7 +367,7 @@ export class FastBTCNode {
                 break;
             }
         }
-        if(promise) {
+        if (promise) {
             this.logger.debug('received message:');
             this.logger.debug('type  ', message.type);
             this.logger.debug('source', message.source);
