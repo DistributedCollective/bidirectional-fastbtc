@@ -372,7 +372,13 @@ export class FastBTCNode {
             this.logger.debug('source', message.source);
             this.logger.debug('data  ', JSON.stringify(message.data, null, 2));
 
-            promise.catch(err => this.logger.exception(err, 'error processing message:', message));
+            promise.catch(err => {
+                if (err.isValidationError) {
+                    this.logger.warning('Validation error:', err.message)
+                } else {
+                    this.logger.exception(err, 'error processing message:', message)
+                }
+            });
         }
     }
 
