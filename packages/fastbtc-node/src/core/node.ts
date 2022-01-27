@@ -12,6 +12,7 @@ import NetworkUtil from './networkutil';
 import {BitcoinTransferService, TransferBatch, TransferBatchDTO, TransferBatchValidator} from './transfers';
 import {DBLogging} from "../db/dblogging";
 import {StatsD} from "hot-shots";
+import {TYPES} from "../stats";
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -103,7 +104,7 @@ export class FastBTCNode {
         @inject(TransferBatchValidator) private transferBatchValidator: TransferBatchValidator,
         @inject(Config) private config: FastBTCNodeConfig,
         @inject(DBLogging) private dbLogging: DBLogging,
-        @inject(StatsD) private statsd: StatsD,
+        @inject(TYPES.StatsD) private statsd: StatsD,
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger);
         network.onNodeAvailable(this.onNodeAvailable);

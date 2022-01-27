@@ -13,10 +13,12 @@ class DummyStatsD extends StatsD {
     }
 }
 
-const StatsD = Symbol.for("StatsD");
+export const TYPES = {
+    StatsD: Symbol.for("StatsD")
+};
 
 export function setupInversify(container: Container) {
-    container.bind<StatsD>(StatsD).toDynamicValue((ctx) => {
+    container.bind<StatsD>(TYPES.StatsD).toDynamicValue((ctx) => {
         const config = ctx.container.get<Config>(Config);
 
         if (! config.statsdUrl) {
