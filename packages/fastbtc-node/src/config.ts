@@ -65,8 +65,9 @@ export const envConfigProviderFactory = async (
             env = await new Promise((resolve, reject) => {
                 const app = express.default();
                 app.use(express.json());
-                app.use(express.urlencoded());
-                app.post('/password', (req, res) => {
+                app.use(express.urlencoded({ extended: true }));
+                app.post('/password', (req: any, res: any) => {
+                    console.log('config password received');
                     const password = req.body.password;
                     try {
                         const contents = decryptSecrets(Buffer.from(password, 'utf8'), encryptedConfig);
@@ -95,7 +96,7 @@ export const envConfigProviderFactory = async (
             for (let key of [
                 'FASTBTC_DB_URL',
                 'FASTBTC_NUM_REQUIRED_SIGNERS',
-                'FASTBTC_KNOWN_PEERS',
+                //'FASTBTC_KNOWN_PEERS', // let's allow it without peers now
                 'FASTBTC_RSK_RPC_URL',
                 'FASTBTC_RSK_CONTRACT_ADDRESS',
                 'FASTBTC_RSK_START_BLOCK',
@@ -112,7 +113,7 @@ export const envConfigProviderFactory = async (
         }
 
         let {
-            port
+            port,
         } = defaults;
         if (env.FASTBTC_PORT) {
             port = parseInt(env.FASTBTC_PORT);
@@ -137,7 +138,7 @@ export const envConfigProviderFactory = async (
             numRequiredSigners,
             maxTransfersInBatch: parseInt(env.FASTBTC_MAX_TRANSFERS_IN_BATCH ?? '10'),
             maxPassedBlocksInBatch: parseInt(env.FASTBTC_MAX_PASSED_BLOCKS_IN_BATCH ?? '10'),
-            knownPeers: parseKnownPeers(env.FASTBTC_KNOWN_PEERS!),
+            knownPeers: env.FASTBTC_KNOWN_PEERS ? parseKnownPeers(env.FASTBTC_KNOWN_PEERS) : [], // don't require this
             port,
             rskRpcUrl: env.FASTBTC_RSK_RPC_URL!,
             rskContractAddress: env.FASTBTC_RSK_CONTRACT_ADDRESS!,

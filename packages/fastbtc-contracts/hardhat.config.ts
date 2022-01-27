@@ -236,6 +236,137 @@ task("set-limits", "Set min/max transfer limits")
     });
 
 
+task("fees", "View and manage fees")
+    .addFlag('add', 'Add a new fee structure')
+    .addOptionalParam('dynamicFeePercentage', 'Dynamic fee for the new fee structure, in percentage (max 2 decimals)', undefined, types.float)
+    .addOptionalParam('baseFeeSatoshi', 'Base fee for the new fee structure, in satoshi', undefined, types.int)
+    .addOptionalParam('setIndex', 'Change the current fee structure index', undefined, types.int)
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .setAction(async ({ add, dynamicFeePercentage, baseFeeSatoshi, setIndex, privateKey }, hre) => {
+        if (add && setIndex !== undefined) {
+            console.error('Error: --add and --set-index cannot both be provided')
+            return;
+        }
+
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
+
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(undefined, hre, 'FastBTCBridge'),
+            signer,
+        );
+
+        const currentFeeStructureIndex = await contract.currentFeeStructureIndex();
+        const currentDynamicFee = await contract.dynamicFee();
+        const currentBaseFeeSatoshi = await contract.baseFeeSatoshi();
+        console.log('Current dynamic fee:        ', currentDynamicFee / 100, '%', `(raw: ${currentDynamicFee})`);
+        console.log(
+            'Current base fee:           ',
+            currentBaseFeeSatoshi, 'sat',
+            `(${formatUnits(currentBaseFeeSatoshi, 8)} BTC)`,
+        );
+        console.log('Current fee structure index:', currentFeeStructureIndex);
+        console.log('\nAvailable fee structures:')
+
+        const logFeeStructure = (index: number, feeStructure: Record<string, number>) => {
+            console.log(
+                `Fee structure #${index}`,
+                index === currentFeeStructureIndex ? '(current)' : ''
+            )
+            console.log(
+                '    Dynamic fee:',
+                feeStructure.dynamicFee / 100,'%',
+                `(raw: ${feeStructure.dynamicFee})`);
+            console.log(
+                '    Base fee:   ',
+                feeStructure.baseFeeSatoshi, 'sat',
+                `(${formatUnits(feeStructure.baseFeeSatoshi, 8)} BTC)`,
+            );
+        }
+
+        let lastIndex = 0;
+        const feeStructures: Record<string, number>[] = [];
+        for (let i = 0; i <= 255; i++) {
+            const feeStructure = await contract.feeStructures(i);
+            if (feeStructure.baseFeeSatoshi === 0 && feeStructure.dynamicFee === 0) {
+                break;
+            }
+            logFeeStructure(i, feeStructure);
+
+            feeStructures.push(feeStructure)
+
+            lastIndex = i;
+        }
+
+        if (setIndex !== undefined) {
+            if (setIndex > lastIndex) {
+                console.error(`Index ${setIndex} out of bounds, must be between 0 and ${lastIndex}`);
+                return;
+            }
+            if (setIndex === currentFeeStructureIndex) {
+                console.error(`Fee structure #${setIndex} is already in use`);
+                return;
+            }
+
+            const feeStructure = feeStructures[setIndex];
+            console.log('Setting fee structure to:');
+            logFeeStructure(setIndex, feeStructure);
+            console.log('after 5s');
+            await sleep(5000);
+            const receipt = await contract.setCurrentFeeStructure(setIndex);
+            console.log('tx hash:', receipt.hash);
+            console.log('waiting for confirmation');
+            await receipt.wait();
+            console.log('Done.');
+        } else if (add) {
+            const index = lastIndex + 1;
+            baseFeeSatoshi = baseFeeSatoshi ?? 0;
+            dynamicFeePercentage = dynamicFeePercentage ?? 0.0;
+            if (!baseFeeSatoshi && !dynamicFeePercentage) {
+                console.error('baseFeeSatoshi and dynamicFeePercentage cannot both be 0');
+                return;
+            }
+            if (dynamicFeePercentage > 0.2) {
+                console.error("Too high dynamic fee -- you probably didn't mean it :)");
+                return;
+            }
+            const dynamicFee = Math.floor(dynamicFeePercentage * 100);
+            if (dynamicFee !== dynamicFeePercentage * 100) {
+                console.error(`Dynamic fee ${dynamicFeePercentage} is too precise -- should have at most 2 decimals`);
+                return;
+            }
+            const existingIndex = feeStructures.findIndex(f => (
+                f.baseFeeSatoshi === baseFeeSatoshi && f.dynamicFee === dynamicFee
+            ));
+            if (existingIndex !== -1) {
+                console.error('Fee structure already exists:')
+                logFeeStructure(existingIndex, feeStructures[existingIndex]);
+                console.error('not adding a duplicate one')
+                return;
+            }
+
+            console.log('Adding fee structure')
+            logFeeStructure(index, {
+                baseFeeSatoshi,
+                dynamicFee,
+            });
+            console.log('And setting it as current in 5s');
+            await sleep(5000);
+
+            let receipt = await contract.addFeeStructure(index, baseFeeSatoshi, dynamicFee);
+            console.log('tx hash:', receipt.hash);
+            console.log('waiting for confirmation');
+            await receipt.wait();
+            console.log('setting as current');
+            receipt = await contract.setCurrentFeeStructure(index);
+            console.log('tx hash:', receipt.hash);
+            console.log('waiting for confirmation');
+            await receipt.wait();
+            console.log('Done.');
+        }
+    });
+
+
 task('set-mining-interval', "Set mining interval")
     .addPositionalParam('ms', 'Mining interval as milliseconds (0 for automine)', undefined, types.int)
     .setAction(async ({ ms }, hre) => {

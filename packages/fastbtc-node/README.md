@@ -68,7 +68,7 @@ Running
 -------
 
 While not strictly required, fastbtc-node is meant to be run inside Docker. A [Dockerfile](Dockerfile) is provided for
-this. See the [root docker-compose.yml](../../docker-compose.yml) and
+this. See the [root docker-compose-base.yml](../../docker-compose-base.yml) and
 [docker-compose-regtest.yml](../../docker-compose-regtest.yml) for examples.
 
 
