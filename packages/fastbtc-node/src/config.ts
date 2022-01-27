@@ -60,7 +60,7 @@ export const envConfigProviderFactory = async (
             env = await new Promise((resolve, reject) => {
                 const app = express.default();
                 app.use(express.json());
-                app.use(express.urlencoded());
+                app.use(express.urlencoded({ extended: true }));
                 app.post('/password', (req: any, res: any) => {
                     console.log('new password request');
                     const password = req.body.password;
