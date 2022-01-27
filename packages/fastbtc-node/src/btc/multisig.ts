@@ -442,7 +442,7 @@ export class BitcoinMultisig {
             return psbt.txOutputs[0].address == address;
         }
         catch (e) {
-            console.error(`Received invalid address ${address}`);
+            console.error(`Received invalid address ${address} (${e})`);
             return false;
         }
     }

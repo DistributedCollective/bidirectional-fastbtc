@@ -9,6 +9,7 @@ services:
       context: ./integration_test/bitcoind-regtest/
 
     environment:
+     # NOTE: these "secrets" are supposed to be there -- they are not used in the real world. Don't report them.
      - NODE1_HDSEED=cTj4tA23bVHAnA42bYGGPfv13G2dfuChxtenJKsZffkCVMvofcfC
      - NODE2_HDSEED=cUroJKmyKxRJVaeKzprMZExtPoZqt9HPnfhhJvAqtprWCVsuzUBU
      - NODE3_HDSEED=cSsv1YhxQqce8ywLiwhMjKcq9L1J7J2wm66zX7kfB1eLBBBaTt8N
