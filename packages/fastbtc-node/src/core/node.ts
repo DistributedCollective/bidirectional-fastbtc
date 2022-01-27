@@ -200,7 +200,7 @@ export class FastBTCNode {
         }
 
         this.statsd.gauge('fastbtc.pegout.batch.rsk_sending_signatures',
-            +(transferBatch.signedBtcTransaction as any).signedPublicKeys.length);
+            transferBatch.bitcoinSignatureCount());
 
         if (!transferBatch.hasEnoughBitcoinSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough bitcoin signatures');

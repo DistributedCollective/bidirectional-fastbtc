@@ -165,6 +165,11 @@ export class TransferBatch {
         return psbt ? psbt.signedPublicKeys.length >= psbt.requiredSignatures : false;
     }
 
+    bitcoinSignatureCount(): number {
+        const psbt = this.signedBtcTransaction;
+        return psbt ? psbt.signedPublicKeys.length : 0;
+    }
+
     isSentToBitcoin(): boolean {
         const chainTx = this.environment.bitcoinOnChainTransaction;
         if (!chainTx) {
