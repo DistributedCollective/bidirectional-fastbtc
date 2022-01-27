@@ -374,9 +374,9 @@ export class FastBTCNode {
 
             promise.catch(err => {
                 if (err.isValidationError) {
-                    this.logger.warning('Validation error:', err.message)
+                    this.logger.warning('Validation error:', err.message, 'when processing message:', message);
                 } else {
-                    this.logger.exception(err, 'error processing message:', message)
+                    this.logger.exception(err, 'error processing message:', message);
                 }
             });
         }
