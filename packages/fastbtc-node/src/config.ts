@@ -27,6 +27,7 @@ export interface Config {
     btcMasterPrivateKey: string; // secret
     btcMasterPublicKeys: string[]; // secret
     btcKeyDerivationPath: string;
+    statsdUrl?: string;
 }
 
 const secretConfigKeys: Extract<keyof Config, string>[] = [
@@ -54,7 +55,11 @@ export const envConfigProviderFactory = async (
     const resolve = async () => {
         let env = {} as {[key: string]: string};
         console.log(`Config file set to ${filename}`)
-        if (filename && fs.existsSync(filename)) {
+        if (filename) {
+            if (! fs.existsSync(filename)) {
+                console.error(`... but the config file does not exist!`);
+                process.exit(1);
+            }
             console.log(`Found encrypted config file at ${filename}`);
             const encryptedConfig = readFileSync(filename, {encoding: 'utf8'});
             env = await new Promise((resolve, reject) => {
@@ -62,7 +67,6 @@ export const envConfigProviderFactory = async (
                 app.use(express.json());
                 app.use(express.urlencoded());
                 app.post('/password', (req, res) => {
-                    console.log(req, req.body);
                     const password = req.body.password;
                     try {
                         const contents = decryptSecrets(Buffer.from(password, 'utf8'), encryptedConfig);
@@ -148,6 +152,7 @@ export const envConfigProviderFactory = async (
             btcMasterPrivateKey: env.FASTBTC_BTC_MASTER_PRIVATE_KEY!,
             btcMasterPublicKeys: env.FASTBTC_BTC_MASTER_PUBLIC_KEYS!.split(',').map(x => x.trim()),
             btcKeyDerivationPath: env.FASTBTC_BTC_KEY_DERIVATION_PATH ?? 'm/0/0/0',
+            statsdUrl: env.FASTBTC_STATSD_URL,
         };
     }
 
