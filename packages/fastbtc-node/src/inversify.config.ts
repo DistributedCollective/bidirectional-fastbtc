@@ -5,6 +5,7 @@ import * as rsk from './rsk';
 import * as p2p from './p2p';
 import * as btc from './btc';
 import * as core from './core';
+import * as stats from './stats';
 
 async function bootstrap(): Promise<Container> {
     const container = new Container();
@@ -18,7 +19,7 @@ async function bootstrap(): Promise<Container> {
     p2p.setupInversify(container);
     btc.setupInversify(container);
     core.setupInversify(container);
-
+    stats.setupInversify(container);
     return container;
 }
 
