@@ -886,7 +886,7 @@ export class TransferBatchValidator {
         for (const transfer of transferBatch.transfers) {
             if (seenTransferIds.has(transfer.transferId)) {
                 throw new TransferBatchValidationError(
-                    `Transfer ${transfer} is in the batch more than once`
+                    `Transfer ${transfer.transferId} is in the batch more than once`
                 );
             }
             seenTransferIds.add(transfer.transferId);
@@ -896,13 +896,13 @@ export class TransferBatchValidator {
             // maybe we should compare amount - fees and not whole amount
             if (!transfer.totalAmountSatoshi.eq(depositInfo.totalAmountSatoshi)) {
                 throw new TransferBatchValidationError(
-                    `The transfer ${transfer} has ${depositInfo.totalAmountSatoshi} in RSK but ${transfer.totalAmountSatoshi} in proposed BTC batch`
+                    `The transfer ${transfer.transferId} has ${depositInfo.totalAmountSatoshi} in RSK but ${transfer.totalAmountSatoshi} in proposed BTC batch`
                 );
             }
 
             if (expectedStatus !== null && depositInfo.status != expectedStatus) {
                 throw new TransferBatchValidationError(
-                    `The RSK contract has invalid state for deposit ${transfer}; expected ${expectedStatus}, got ${depositInfo.status}`
+                    `The RSK contract has invalid state for deposit ${transfer.transferId}; expected ${expectedStatus}, got ${depositInfo.status}`
                 );
             }
         }
