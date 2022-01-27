@@ -134,6 +134,7 @@ export class FastBTCNode {
         );
 
         this.statsd.gauge('fastbtc.pegout.transfers.total', numTransfers);
+        this.statsd.gauge('fastbtc.pegout.nodes.online', numNodesOnline);
 
         if (!isInitiator) {
             this.logger.info('not initiator, not doing anything');
@@ -141,7 +142,6 @@ export class FastBTCNode {
             return;
         }
 
-        this.statsd.gauge('fastbtc.pegout.nodes.online', numNodesOnline);
         if (numNodesOnline < this.config.numRequiredSigners) {
             this.logger.info(
                 `Waiting until at least ${this.config.numRequiredSigners} nodes online ` +
@@ -159,6 +159,24 @@ export class FastBTCNode {
         }
 
         this.statsd.gauge('fastbtc.pegout.batch.queued_transfers', transferBatch.transfers.length);
+        this.statsd.gauge('fastbtc.pegout.batch.due', +transferBatch.isDue());
+        this.statsd.gauge('fastbtc.pegout.batch.rsk_sending_signatures', +transferBatch.rskSendingSignatures.length);
+        this.statsd.gauge('fastbtc.pegout.batch.sending', +transferBatch.isMarkedAsSendingInRsk());
+        this.statsd.gauge('fastbtc.pegout.batch.rsk_sending_signatures',
+            transferBatch.bitcoinSignatureCount());
+        this.statsd.gauge(
+            'fastbtc.pegout.batch.sent_to_bitcoin',
+            +!transferBatch.isSentToBitcoin()
+        );
+        this.statsd.gauge(
+            'fastbtc.pegout.batch.rsk_mined_signatures',
+            +transferBatch.rskMinedSignatures.length
+        );
+        this.statsd.gauge(
+            'fastbtc.pegout.batch.mined_in_rsk',
+            +!transferBatch.isMarkedAsMinedInRsk()
+        );
+
         if (!transferBatch.hasValidTransferState()) {
             this.logger.warning(
                 'TransferBatch has invalid transfer state -- purging it and starting with a fresh one!'
@@ -174,13 +192,12 @@ export class FastBTCNode {
             return;
         }
 
-        this.statsd.gauge('fastbtc.pegout.batch.due', +transferBatch.isDue());
         if (!transferBatch.isDue()) {
             this.logger.info('TransferBatch not due')
             return;
         }
 
-        this.statsd.gauge('fastbtc.pegout.batch.rsk_sending_signatures', +transferBatch.rskSendingSignatures.length);
+
         if(!transferBatch.hasEnoughRskSendingSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough RSK sending signatures');
             await this.network.broadcast(
@@ -192,15 +209,11 @@ export class FastBTCNode {
             return;
         }
 
-        this.statsd.gauge('fastbtc.pegout.batch.sending', +transferBatch.isMarkedAsSendingInRsk());
         if (!transferBatch.isMarkedAsSendingInRsk()) {
             this.logger.throttledInfo('TransferBatch is not marked as sending in RSK');
             await this.bitcoinTransferService.markAsSendingInRsk(transferBatch);
             return;
         }
-
-        this.statsd.gauge('fastbtc.pegout.batch.rsk_sending_signatures',
-            transferBatch.bitcoinSignatureCount());
 
         if (!transferBatch.hasEnoughBitcoinSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough bitcoin signatures');
@@ -212,11 +225,6 @@ export class FastBTCNode {
             );
             return;
         }
-
-        this.statsd.gauge(
-            'fastbtc.pegout.batch.sent_to_bitcoin',
-            +!transferBatch.isSentToBitcoin()
-        );
 
         if (!transferBatch.isSentToBitcoin()) {
             this.logger.throttledInfo('TransferBatch is not sent to bitcoin');
@@ -230,11 +238,6 @@ export class FastBTCNode {
             return;
         }
 
-        this.statsd.gauge(
-            'fastbtc.pegout.batch.rsk_mined_signatures',
-            +!transferBatch.rskMinedSignatures.length
-        );
-
         if (!transferBatch.hasEnoughRskMinedSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough RSK mined signatures');
             await this.network.broadcast(
@@ -245,11 +248,6 @@ export class FastBTCNode {
             );
             return;
         }
-
-        this.statsd.gauge(
-            'fastbtc.pegout.batch.mined_in_rsk',
-            +!transferBatch.isMarkedAsMinedInRsk()
-        );
 
         if(!transferBatch.isMarkedAsMinedInRsk()) {
             this.logger.throttledInfo('TransferBatch is not marked as mined in RSK');
