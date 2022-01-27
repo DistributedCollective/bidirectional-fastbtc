@@ -27,7 +27,7 @@ export function setupInversify(container: Container) {
 
         const parsed = new URL(config.statsdUrl);
         return new StatsD({
-            host: parsed.host,
+            host: parsed.hostname,
             port: +parsed.port,
         })
     }).inSingletonScope();
