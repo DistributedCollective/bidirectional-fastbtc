@@ -9,7 +9,9 @@ class DummyStatsD extends StatsD {
     }
 
     sendMessage(message: any, callback: (a: any) => void) {
-        callback(null);
+        if(callback) {
+            callback(null);
+        }
     }
 }
 
