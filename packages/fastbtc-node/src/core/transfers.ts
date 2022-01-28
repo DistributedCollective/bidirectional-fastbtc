@@ -10,6 +10,7 @@ import {Connection, EntityManager} from 'typeorm';
 import {Config} from '../config';
 import {StoredBitcoinTransferBatchRepository, Transfer, TransferStatus} from '../db/models';
 import Logger from '../logger';
+import {sleep} from '../utils';
 import {setExtend, setIntersection} from "../utils/sets";
 import {toNumber} from '../rsk/utils';
 import {Satoshis} from '../btc/types';
@@ -555,6 +556,22 @@ export class BitcoinTransferService {
         }
         await this.btcMultisig.submitTransaction(transferBatch.signedBtcTransaction);
         this.logger.info("TransferBatch successfully sent to bitcoin");
+
+        // This method should be idempotent, but we will still wait for the required number of confirmations.
+        const requiredConfirmations = this.config.btcRequiredConfirmations;
+        const maxIterations = 200;
+        const avgBlockTimeMs = 10 * 60 * 1000;
+        const overheadMultiplier = 2;
+        const sleepTimeMs = Math.round((avgBlockTimeMs * requiredConfirmations * overheadMultiplier) / maxIterations);
+        this.logger.info(`Waiting for ${requiredConfirmations} confirmations`);
+        for (let i = 0; i < maxIterations; i++) {
+            const chainTx = await this.btcMultisig.getTransaction(transferBatch.bitcoinTransactionHash);
+            const confirmations = chainTx ? chainTx.confirmations : 0;
+            if (confirmations >= requiredConfirmations) {
+                break;
+            }
+            await sleep(sleepTimeMs);
+        }
     }
 
     async signRskMinedUpdate(transferBatch: TransferBatch): Promise<{signature: string, address: string}> {
