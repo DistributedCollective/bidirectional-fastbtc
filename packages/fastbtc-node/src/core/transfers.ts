@@ -701,8 +701,12 @@ export class TransferBatchValidator {
         if (transferBatch.transfers.length === 0) {
             throw new TransferBatchValidationError('Refusing to sign a batch without transfers');
         }
-        if (!transferBatch.hasEnoughRskSendingSignatures()) {
-            throw new TransferBatchValidationError('Refusing to sign a batch without enough RSK signatures');
+        // Not necessary if it's already Sending
+        //if (!transferBatch.hasEnoughRskSendingSignatures()) {
+        //    throw new TransferBatchValidationError('Refusing to sign a batch without enough RSK signatures');
+        //}
+        if (!transferBatch.isMarkedAsSendingInRsk()) {
+            throw new TransferBatchValidationError('Refusing to sign a batch that is not marked as sending');
         }
         await this.validateTransferBatch(transferBatch, TransferStatus.Sending, false);
     }
