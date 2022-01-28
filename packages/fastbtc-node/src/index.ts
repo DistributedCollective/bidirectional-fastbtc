@@ -13,7 +13,6 @@ async function main() {
     let container = await bootstrap();
 
     const config = await container.get<Config>(Config);
-    console.log(config);
     rootLogger.log('My config is', getCensoredConfig(config));
 
     // This is silly, but we have to init the connection. Maybe architect this thing better
