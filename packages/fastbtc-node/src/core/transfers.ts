@@ -10,6 +10,7 @@ import {Connection, EntityManager} from 'typeorm';
 import {Config} from '../config';
 import {StoredBitcoinTransferBatchRepository, Transfer, TransferStatus} from '../db/models';
 import Logger from '../logger';
+import {sleep} from '../utils';
 import {setExtend, setIntersection} from "../utils/sets";
 import {toNumber} from '../rsk/utils';
 import {Satoshis} from '../btc/types';
@@ -555,6 +556,22 @@ export class BitcoinTransferService {
         }
         await this.btcMultisig.submitTransaction(transferBatch.signedBtcTransaction);
         this.logger.info("TransferBatch successfully sent to bitcoin");
+
+        // This method should be idempotent, but we will still wait for the required number of confirmations.
+        const requiredConfirmations = this.config.btcRequiredConfirmations;
+        const maxIterations = 200;
+        const avgBlockTimeMs = 10 * 60 * 1000;
+        const overheadMultiplier = 2;
+        const sleepTimeMs = Math.round((avgBlockTimeMs * requiredConfirmations * overheadMultiplier) / maxIterations);
+        this.logger.info(`Waiting for ${requiredConfirmations} confirmations`);
+        for (let i = 0; i < maxIterations; i++) {
+            const chainTx = await this.btcMultisig.getTransaction(transferBatch.bitcoinTransactionHash);
+            const confirmations = chainTx ? chainTx.confirmations : 0;
+            if (confirmations >= requiredConfirmations) {
+                break;
+            }
+            await sleep(sleepTimeMs);
+        }
     }
 
     async signRskMinedUpdate(transferBatch: TransferBatch): Promise<{signature: string, address: string}> {
@@ -701,8 +718,12 @@ export class TransferBatchValidator {
         if (transferBatch.transfers.length === 0) {
             throw new TransferBatchValidationError('Refusing to sign a batch without transfers');
         }
-        if (!transferBatch.hasEnoughRskSendingSignatures()) {
-            throw new TransferBatchValidationError('Refusing to sign a batch without enough RSK signatures');
+        // Not necessary if it's already Sending
+        //if (!transferBatch.hasEnoughRskSendingSignatures()) {
+        //    throw new TransferBatchValidationError('Refusing to sign a batch without enough RSK signatures');
+        //}
+        if (!transferBatch.isMarkedAsSendingInRsk()) {
+            throw new TransferBatchValidationError('Refusing to sign a batch that is not marked as sending');
         }
         await this.validateTransferBatch(transferBatch, TransferStatus.Sending, false);
     }
@@ -710,7 +731,7 @@ export class TransferBatchValidator {
     async validateForSendingToBitcoin(transferBatch: TransferBatch): Promise<void> {
         if (
             transferBatch.transfers.length == 0 ||
-            !transferBatch.hasEnoughRskSendingSignatures() ||
+            //!transferBatch.hasEnoughRskSendingSignatures() ||
             !transferBatch.hasEnoughBitcoinSignatures() ||
             !transferBatch.isMarkedAsSendingInRsk() ||
             !transferBatch.signedBtcTransaction
@@ -723,12 +744,14 @@ export class TransferBatchValidator {
     async validateCompleteTransferBatch(transferBatch: TransferBatch): Promise<void> {
         if (
             transferBatch.transfers.length == 0 ||
-            !transferBatch.hasEnoughRskSendingSignatures() ||
-            !transferBatch.hasEnoughBitcoinSignatures() ||
-            !transferBatch.hasEnoughRskMinedSignatures() ||
+            //!transferBatch.hasEnoughRskSendingSignatures() ||
+            //!transferBatch.hasEnoughBitcoinSignatures() ||
+            //!transferBatch.hasEnoughRskMinedSignatures() ||
             // We should probably validate that all transfers are mined instead of just sending, but it's possible
             // that that state is not yet reflected in the transfers. So let's just roll with this now.
             !transferBatch.isMarkedAsSendingInRsk() ||
+            // Or maybe we'll do this
+            (!transferBatch.hasEnoughRskMinedSignatures() && !transferBatch.isMarkedAsMinedInRsk()) ||
             !transferBatch.isSentToBitcoin() ||
             !transferBatch.signedBtcTransaction
         ) {

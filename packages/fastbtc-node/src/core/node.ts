@@ -197,8 +197,7 @@ export class FastBTCNode {
             return;
         }
 
-
-        if(!transferBatch.hasEnoughRskSendingSignatures()) {
+        if(!transferBatch.isMarkedAsSendingInRsk() && !transferBatch.hasEnoughRskSendingSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough RSK sending signatures');
             await this.network.broadcast(
                 'fastbtc:request-rsk-sending-signature',
@@ -215,7 +214,7 @@ export class FastBTCNode {
             return;
         }
 
-        if (!transferBatch.hasEnoughBitcoinSignatures()) {
+        if (!transferBatch.isSentToBitcoin() && !transferBatch.hasEnoughBitcoinSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough bitcoin signatures');
             await this.network.broadcast(
                 'fastbtc:request-bitcoin-signature',
@@ -238,7 +237,7 @@ export class FastBTCNode {
             return;
         }
 
-        if (!transferBatch.hasEnoughRskMinedSignatures()) {
+        if (!transferBatch.isMarkedAsMinedInRsk() && !transferBatch.hasEnoughRskMinedSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough RSK mined signatures');
             await this.network.broadcast(
                 'fastbtc:request-rsk-mined-signature',
@@ -374,9 +373,9 @@ export class FastBTCNode {
 
             promise.catch(err => {
                 if (err.isValidationError) {
-                    this.logger.warning('Validation error:', err.message)
+                    this.logger.warning('Validation error:', err.message, 'when processing message:', message);
                 } else {
-                    this.logger.exception(err, 'error processing message:', message)
+                    this.logger.exception(err, 'error processing message:', message);
                 }
             });
         }
