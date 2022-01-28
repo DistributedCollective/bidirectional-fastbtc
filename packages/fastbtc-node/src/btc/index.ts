@@ -5,7 +5,7 @@ import {Config} from '../config';
 import Container = interfaces.Container;
 
 export function setupInversify(container: Container) {
-    container.bind<BitcoinMultisig>(BitcoinMultisig).toSelf();
+    container.bind<BitcoinMultisig>(BitcoinMultisig).toSelf().inSingletonScope();
     container.bind<BitcoinNodeWrapper>(BitcoinNodeWrapper).toDynamicValue(
         (context) => {
             const config = context.container.get<Config>(Config);
@@ -16,5 +16,5 @@ export function setupInversify(container: Container) {
                 password: config.secrets().btcRpcPassword,
             });
         },
-    );
+    ).inSingletonScope();
 }

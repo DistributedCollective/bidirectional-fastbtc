@@ -5,5 +5,5 @@ import * as scanner from './scanner';
 
 export function setupInversify(container: Container) {
     base.bindAllToContainer(container);
-    container.bind<scanner.EventScanner>(scanner.Scanner).to(scanner.EventScanner)
+    container.bind<scanner.EventScanner>(scanner.Scanner).to(scanner.EventScanner).inSingletonScope();
 }

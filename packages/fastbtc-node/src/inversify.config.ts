@@ -12,7 +12,7 @@ async function bootstrap(): Promise<Container> {
 
     container.bind<Config>(Config).toDynamicValue(
         await envConfigProviderFactory()
-    );
+    ).inSingletonScope();
 
     db.setupInversify(container);
     rsk.setupInversify(container);

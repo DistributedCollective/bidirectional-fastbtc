@@ -14,7 +14,7 @@ export function setupInversify(container: Container) {
 
     container.bind<Connection>(DBConnection).toDynamicValue(() => (
         getDbConnection()
-    ));
+    )).inSingletonScope();
 
-    container.bind<DBLogging>(DBLogging).toSelf();
+    container.bind<DBLogging>(DBLogging).toSelf().inSingletonScope();
 }
