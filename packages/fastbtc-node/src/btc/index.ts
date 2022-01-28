@@ -13,7 +13,7 @@ export function setupInversify(container: Container) {
                 url: config.btcRpcUrl,
                 btcNetwork: config.btcNetwork,
                 user: config.btcRpcUsername,
-                password: config.btcRpcPassword,
+                password: config.secrets().btcRpcPassword,
             });
         },
     );

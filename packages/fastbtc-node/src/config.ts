@@ -7,8 +7,15 @@ import {decryptSecrets} from "./utils/secrets";
 import {interfaces} from "inversify";
 import Context = interfaces.Context;
 
-export interface Config {
+export interface ConfigSecrets {
     dbUrl: string;
+    btcRpcPassword: string; // secret
+    btcMasterPrivateKey: string; // secret
+    btcMasterPublicKeys: string[]; // secret
+    rskPrivateKey: string; // secret
+}
+
+export interface Config {
     knownPeers: string[];
     port: number;
     numRequiredSigners: number; // this can be inferred but maybe it's better to be explicit now
@@ -18,23 +25,21 @@ export interface Config {
     rskContractAddress: string;
     rskStartBlock: number;
     rskRequiredConfirmations: number;
-    rskPrivateKey: string; // secret
     btcNetwork: 'mainnet' | 'testnet' | 'regtest';
     btcRequiredConfirmations: number;
     btcRpcUrl: string;
     btcRpcUsername: string;
-    btcRpcPassword: string; // secret
-    btcMasterPrivateKey: string; // secret
-    btcMasterPublicKeys: string[]; // secret
     btcKeyDerivationPath: string;
     statsdUrl?: string;
+    secrets: () => ConfigSecrets;
 }
 
-const secretConfigKeys: Extract<keyof Config, string>[] = [
+const secretConfigKeys: Extract<keyof ConfigSecrets, string>[] = [
     'dbUrl',
     'rskPrivateKey',
     'btcRpcPassword',
     'btcMasterPrivateKey',
+    'btcMasterPublicKeys',
 ];
 
 const defaults = {
@@ -134,7 +139,6 @@ export const envConfigProviderFactory = async (
         }
 
         return {
-            dbUrl: env.FASTBTC_DB_URL!,
             numRequiredSigners,
             maxTransfersInBatch: parseInt(env.FASTBTC_MAX_TRANSFERS_IN_BATCH ?? '10'),
             maxPassedBlocksInBatch: parseInt(env.FASTBTC_MAX_PASSED_BLOCKS_IN_BATCH ?? '10'),
@@ -144,16 +148,21 @@ export const envConfigProviderFactory = async (
             rskContractAddress: env.FASTBTC_RSK_CONTRACT_ADDRESS!,
             rskStartBlock: parseInt(env.FASTBTC_RSK_START_BLOCK!),
             rskRequiredConfirmations: parseInt(env.FASTBTC_RSK_REQUIRED_CONFIRMATIONS ?? '10'),
-            rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
             btcRequiredConfirmations: parseInt(env.FASTBTC_BTC_REQUIRED_CONFIRMATIONS ?? '3'),
             btcNetwork: env.FASTBTC_BTC_NETWORK! as 'mainnet' | 'testnet' | 'regtest',
             btcRpcUrl: env.FASTBTC_BTC_RPC_URL!,
             btcRpcUsername: env.FASTBTC_BTC_RPC_USERNAME ?? '',
-            btcRpcPassword: env.FASTBTC_BTC_RPC_PASSWORD ?? '',
-            btcMasterPrivateKey: env.FASTBTC_BTC_MASTER_PRIVATE_KEY!,
-            btcMasterPublicKeys: env.FASTBTC_BTC_MASTER_PUBLIC_KEYS!.split(',').map(x => x.trim()),
             btcKeyDerivationPath: env.FASTBTC_BTC_KEY_DERIVATION_PATH ?? 'm/0/0/0',
             statsdUrl: env.FASTBTC_STATSD_URL,
+            secrets: () => (
+                {
+                    btcRpcPassword: env.FASTBTC_BTC_RPC_PASSWORD ?? '',
+                    btcMasterPrivateKey: env.FASTBTC_BTC_MASTER_PRIVATE_KEY!,
+                    btcMasterPublicKeys: env.FASTBTC_BTC_MASTER_PUBLIC_KEYS!.split(',').map(x => x.trim()),
+                    rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
+                    dbUrl: env.FASTBTC_DB_URL!,
+                }
+            )
         };
     }
 
@@ -178,21 +187,11 @@ function parseKnownPeers(raw: string) {
 export function getCensoredConfig(config: Config): Record<Extract<keyof Config, string>, any> {
     const ret: any = {};
     for (let [key, value] of Object.entries(config)) {
-        if (key === 'dbUrl') {
-            try {
-                const url = new URL(value);
-                if (url.password) {
-                    url.password = '*****';
-                }
-                value = url.toString();
-            } catch (e) {
-                value = '<censored>';
-            }
-
-        } else if (secretConfigKeys.indexOf(key as any) >= 0) {
-            value = '<censored>';
+        if (key != 'secrets') {
+            ret[key] = value;
         }
-        ret[key] = value;
     }
+
+    ret.secrets = `{ ${secretConfigKeys.join(', ')} }`;
     return ret;
 }

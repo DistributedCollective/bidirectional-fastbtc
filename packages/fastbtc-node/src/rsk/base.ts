@@ -18,7 +18,7 @@ export const bindAllToContainer = (container: Container) => {
     container.bind<ethers.Signer>(EthersSigner).toDynamicValue((context) => {
         const config = context.container.get<Config>(Config);
         const provider = context.container.get<Provider>(EthersProvider);
-        return new ethers.Wallet(config.rskPrivateKey, provider);
+        return new ethers.Wallet(config.secrets().rskPrivateKey, provider);
     })
 
     container.bind<Contract>(FastBtcBridgeContract).toDynamicValue((context) => {

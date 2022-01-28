@@ -31,8 +31,7 @@ export interface BitcoinRPCGetTransactionResponse {
 }
 
 export type BitcoinMultisigConfig = Pick<Config,
-    'btcRpcUrl' | 'btcRpcUsername' | 'btcRpcPassword' | 'btcNetwork' | 'btcMasterPrivateKey' |
-    'btcMasterPublicKeys' | 'btcKeyDerivationPath' | 'numRequiredSigners'
+    'btcRpcUrl' | 'btcRpcUsername' | 'btcNetwork' | 'btcKeyDerivationPath' | 'numRequiredSigners' | 'secrets'
 >
 
 @injectable()
@@ -42,7 +41,7 @@ export class BitcoinMultisig {
     private readonly network: Network;
     private gasSatoshi = 10; // TODO: make variable/configurable
     private nodeWrapper: IBitcoinNodeWrapper;
-    private readonly masterPrivateKey: string;
+    private readonly masterPrivateKey: () => string;
     private readonly masterPublicKey: string;
     private masterPublicKeys: string[];
     private readonly keyDerivationPath: string;
@@ -63,9 +62,10 @@ export class BitcoinMultisig {
         this.nodeWrapper = nodeWrapper;
 
         this.cosigners = config.numRequiredSigners;
-        this.masterPrivateKey = normalizeKey(config.btcMasterPrivateKey);
-        this.masterPublicKey = xprvToPublic(this.masterPrivateKey, this.network);
-        this.masterPublicKeys = config.btcMasterPublicKeys;
+        const masterPrv = normalizeKey(config.secrets().btcMasterPrivateKey)
+        this.masterPrivateKey = () => masterPrv;
+        this.masterPublicKey = xprvToPublic(this.masterPrivateKey(), this.network);
+        this.masterPublicKeys = config.secrets().btcMasterPublicKeys;
 
         this.keyDerivationPath = config.btcKeyDerivationPath || '0/0/0';
 
@@ -355,7 +355,7 @@ export class BitcoinMultisig {
             throw new Error('already signed by this node');
         }
 
-        const childPrivateKey = bip32.fromBase58(this.masterPrivateKey, this.network).derivePath(this.keyDerivationPath);
+        const childPrivateKey = bip32.fromBase58(this.masterPrivateKey(), this.network).derivePath(this.keyDerivationPath);
         const ecPair = ECPair.fromWIF(childPrivateKey.toWIF(), this.network);
 
         const psbtUnserialized = Psbt.fromBase64(tx.serializedTransaction, {network: this.network});
