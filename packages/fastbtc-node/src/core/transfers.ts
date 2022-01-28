@@ -710,7 +710,7 @@ export class TransferBatchValidator {
     async validateForSendingToBitcoin(transferBatch: TransferBatch): Promise<void> {
         if (
             transferBatch.transfers.length == 0 ||
-            !transferBatch.hasEnoughRskSendingSignatures() ||
+            //!transferBatch.hasEnoughRskSendingSignatures() ||
             !transferBatch.hasEnoughBitcoinSignatures() ||
             !transferBatch.isMarkedAsSendingInRsk() ||
             !transferBatch.signedBtcTransaction
@@ -723,12 +723,14 @@ export class TransferBatchValidator {
     async validateCompleteTransferBatch(transferBatch: TransferBatch): Promise<void> {
         if (
             transferBatch.transfers.length == 0 ||
-            !transferBatch.hasEnoughRskSendingSignatures() ||
-            !transferBatch.hasEnoughBitcoinSignatures() ||
-            !transferBatch.hasEnoughRskMinedSignatures() ||
+            //!transferBatch.hasEnoughRskSendingSignatures() ||
+            //!transferBatch.hasEnoughBitcoinSignatures() ||
+            //!transferBatch.hasEnoughRskMinedSignatures() ||
             // We should probably validate that all transfers are mined instead of just sending, but it's possible
             // that that state is not yet reflected in the transfers. So let's just roll with this now.
             !transferBatch.isMarkedAsSendingInRsk() ||
+            // Or maybe we'll do this
+            (!transferBatch.hasEnoughRskMinedSignatures() && !transferBatch.isMarkedAsMinedInRsk()) ||
             !transferBatch.isSentToBitcoin() ||
             !transferBatch.signedBtcTransaction
         ) {
