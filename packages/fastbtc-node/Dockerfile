@@ -33,6 +33,8 @@ COPY src/scripts /app/scripts
 
 RUN ls node_modules
 
+COPY version.json ./
+
 ###################
 # the final image #
 ###################
