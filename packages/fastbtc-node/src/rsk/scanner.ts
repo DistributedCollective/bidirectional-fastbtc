@@ -138,11 +138,11 @@ export class EventScanner {
                             }
                         });
 
-                        transfer.status = newStatus;
-
                         transfers.push(transfer);
                         transfersByTransferId[transfer.transferId] = transfer;
                     }
+
+                    transfer.status = newStatus;
                 } else {
                     this.logger.error('Unknown event:', event);
                 }
