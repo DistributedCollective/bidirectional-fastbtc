@@ -113,6 +113,7 @@ export class FastBTCNode {
     }
 
     async run() {
+        this.statsd.event('FastBTC node started');
         await this.networkUtil.enterMainLoop(this.runIteration);
     }
 

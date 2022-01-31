@@ -1,4 +1,3 @@
-import {URL} from 'url';
 import * as fs from "fs";
 import {readFileSync} from "fs";
 import * as process from "process";
