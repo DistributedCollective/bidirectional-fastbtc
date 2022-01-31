@@ -1,6 +1,15 @@
 const child_process = require('child_process');
 const ormconfig = require('./ormconfig');
+const fs = require('fs');
 
+try {
+    const version = JSON.parse(fs.readFileSync(__dirname + '/version.json').toString());
+    console.log(`FastBTC node, git commit ${version.commit}`);
+    console.log(`Commit message: ${version.message}`);
+}
+catch (e) {
+    console.log(`Could not parse version info, got ${e}`);
+}
 
 const rskUrl = process.env.FASTBTC_RSK_RPC_URL;
 if (!rskUrl) {
