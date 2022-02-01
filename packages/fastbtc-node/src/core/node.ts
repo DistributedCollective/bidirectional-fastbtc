@@ -282,7 +282,7 @@ export class FastBTCNode {
 
         let updated = false;
         if (gatheredRskSendingSignaturesAndAddresses.length > 0) {
-            this.logger.info('Gathered', gatheredRskSendingSignaturesAndAddresses.length, 'RSK mined signatures');
+            this.logger.info('Gathered', gatheredRskSendingSignaturesAndAddresses.length, 'RSK sending signatures');
             transferBatch = await this.bitcoinTransferService.addRskSendingSignatures(
                 transferBatch,
                 gatheredRskSendingSignaturesAndAddresses
