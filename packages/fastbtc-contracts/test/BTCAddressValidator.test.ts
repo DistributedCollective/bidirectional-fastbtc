@@ -68,6 +68,7 @@ describe("BTCAddressValidator", function() {
 
             // we don't allow upper case
             expect(await btcAddressValidator.isValidBtcAddress("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4".toUpperCase())).to.be.false;
+            expect(await btcAddressValidator.isValidBtcAddress("bc1q" + ("w508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4".toUpperCase()))).to.be.false;
         })
     })
 
