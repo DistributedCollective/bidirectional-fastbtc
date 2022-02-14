@@ -2,7 +2,7 @@
     {
         "inputs": [
             {
-                "internalType": "contract FastBTCAccessControl",
+                "internalType": "address",
                 "name": "accessControl",
                 "type": "address"
             },
@@ -76,6 +76,19 @@
         "anonymous": false,
         "inputs": [
             {
+                "indexed": false,
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "Frozen",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
                 "indexed": true,
                 "internalType": "bytes32",
                 "name": "transferId",
@@ -116,6 +129,45 @@
         "type": "event"
     },
     {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "Paused",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "Unfrozen",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+            }
+        ],
+        "name": "Unpaused",
+        "type": "event"
+    },
+    {
         "inputs": [],
         "name": "DYNAMIC_FEE_DIVISOR",
         "outputs": [
@@ -133,9 +185,9 @@
         "name": "MAXIMUM_VALID_NONCE",
         "outputs": [
             {
-                "internalType": "uint256",
+                "internalType": "uint8",
                 "name": "",
-                "type": "uint256"
+                "type": "uint8"
             }
         ],
         "stateMutability": "view",
@@ -172,7 +224,7 @@
         "name": "accessControl",
         "outputs": [
             {
-                "internalType": "contract FastBTCAccessControl",
+                "internalType": "contract IFastBTCAccessControl",
                 "name": "",
                 "type": "address"
             }
@@ -281,6 +333,30 @@
         "type": "function"
     },
     {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "userData",
+                "type": "bytes"
+            }
+        ],
+        "name": "decodeBridgeUserData",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "rskAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "btcAddress",
+                "type": "string"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
         "inputs": [],
         "name": "dynamicFee",
         "outputs": [
@@ -291,6 +367,30 @@
             }
         ],
         "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "rskAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "string",
+                "name": "btcAddress",
+                "type": "string"
+            }
+        ],
+        "name": "encodeBridgeUserData",
+        "outputs": [
+            {
+                "internalType": "bytes",
+                "name": "userData",
+                "type": "bytes"
+            }
+        ],
+        "stateMutability": "pure",
         "type": "function"
     },
     {
@@ -325,6 +425,26 @@
                 "internalType": "uint16",
                 "name": "dynamicFee",
                 "type": "uint16"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "freeze",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "frozen",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
             }
         ],
         "stateMutability": "view",
@@ -766,6 +886,39 @@
         "type": "function"
     },
     {
+        "inputs": [],
+        "name": "pause",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "paused",
+        "outputs": [
+            {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes",
+                "name": "userData",
+                "type": "bytes"
+            }
+        ],
+        "name": "receiveEthFromBridge",
+        "outputs": [],
+        "stateMutability": "payable",
+        "type": "function"
+    },
+    {
         "inputs": [
             {
                 "internalType": "bytes32[]",
@@ -895,6 +1048,20 @@
             }
         ],
         "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "unfreeze",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "unpause",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
