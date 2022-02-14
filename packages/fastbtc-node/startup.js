@@ -39,11 +39,17 @@ if (!dbWaitSuccess) {
 }
 console.log('PostgreSQL started');
 
-child_process.spawnSync(
+const migrationsRet = child_process.spawnSync(
     "./node_modules/typeorm/cli.js",
     ['migration:run'],
     {stdio: 'inherit'}
 );
+if (migrationsRet.status !== 0) {
+    console.error(
+        `Error running migrations (status ${migrationsRet.status}) `
+    );
+    process.exit(migrationsRet.status);
+}
 
 
 if (rskUrl) {
