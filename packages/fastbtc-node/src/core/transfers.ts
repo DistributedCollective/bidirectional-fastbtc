@@ -38,6 +38,7 @@ export interface TransferBatchEnvironment {
     maxTransfersInBatch: number;
     currentBlockNumber: number;
     requiredBitcoinConfirmations: number;
+    requiredRskConfirmations: number;
     bitcoinOnChainTransaction?: BitcoinRPCGetTransactionResponse;
 }
 
@@ -144,7 +145,10 @@ export class TransferBatch {
             return true;
         }
         const firstTransferBlock = Math.min(...transfers.map(t => t.rskBlockNumber));
-        const passedBlocks = this.environment.currentBlockNumber - firstTransferBlock;
+        // We only see blocks up to the required block confirmations,
+        // which needs to be taken into account here to wait for the passed blocks correctly
+        const currentBlockWithConfirmations = this.environment.currentBlockNumber - this.environment.requiredRskConfirmations;
+        const passedBlocks = currentBlockWithConfirmations - firstTransferBlock;
         return passedBlocks >= this.environment.maxPassedBlocksInBatch;
     }
 
@@ -595,6 +599,7 @@ export class BitcoinTransferService {
             currentBlockNumber,
             bitcoinOnChainTransaction,
             requiredBitcoinConfirmations: this.config.btcRequiredConfirmations,
+            requiredRskConfirmations: this.config.rskRequiredConfirmations,
             numRequiredSigners: this.config.numRequiredSigners,
             maxPassedBlocksInBatch: this.config.maxPassedBlocksInBatch,
             maxTransfersInBatch: this.config.maxTransfersInBatch,
