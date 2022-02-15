@@ -12,3 +12,7 @@ src/rsk/abi: ../fastbtc-contracts/contracts
 	cd ../fastbtc-contracts && make
 	node copy-abi.js
 	touch src/rsk/abi
+
+.PHONY: test
+test: build
+	yarn test

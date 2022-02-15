@@ -23,6 +23,14 @@ test-transfers:
 run-testnet:
 	@docker-compose -f docker-compose-base.yml -f docker-compose-testnet.yml up --build
 
+.PHONY: test
+test:
+	@echo "Testing fastbtc-contracts"
+	cd packages/fastbtc-contracts && make test
+	@echo "Testing fastbtc-node"
+	cd packages/fastbtc-node && make test
+
+
 # This is required for startup, so we'll create a dummy version if it doesn't exist
 packages/fastbtc-node/version.json:
 	@if test -f packages/fastbtc-node/version.json ; \

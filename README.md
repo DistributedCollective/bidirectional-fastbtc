@@ -19,6 +19,15 @@ High-level data flow
 
 ![high-level data flow](static/high-level-data-flow.svg)
 
+Unit tests
+----------
+
+To run unit tests in all packages, run:
+
+```
+make test
+```
+
 Integration test
 ----------------
 
