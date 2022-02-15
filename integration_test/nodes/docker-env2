@@ -6,4 +6,5 @@ FASTBTC_KNOWN_PEERS=node1:11125
 # They are development values -- don't use them on production as they will get cleared!
 # Using them on the integration test, which runs on local network, is fine however.
 FASTBTC_RSK_PRIVATE_KEY=0x034262349de8b7bb1d8fdd7a9b6096aae0906a8f3b58ecc31af58b9f9a30e567
+# Address: 0x09dcD91DF9300a81a4b9C85FDd04345C3De58F48
 FASTBTC_BTC_MASTER_PRIVATE_KEY=tprv8ZgxMBicQKsPdMXsXv4Ddkgimo1m89QjXBNUrCgAaDRX5tEDMVA8HotnZmHcMvUVtgh1yXbN74StoJqv76jvRxJmkr2wvkPwTbZb1zeXv3Y
