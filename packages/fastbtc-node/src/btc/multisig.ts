@@ -446,4 +446,34 @@ export class BitcoinMultisig {
             return false;
         }
     }
+
+    /**
+     * Return the health status (true = healthy) of the connection to the bitcoin rpc node.
+     * In the future, this can be extended to also check that the multisig has been loaded, for example.
+     */
+    public async healthCheck(): Promise<boolean> {
+        let expectedChain: 'main' | 'test' | 'regtest';
+        if (this.network === networks.bitcoin) {
+            expectedChain = 'main';
+        } else if (this.network === networks.testnet) {
+            expectedChain = 'test';
+        } else if (this.network === networks.regtest) {
+            expectedChain = 'regtest';
+        } else {
+            throw new Error('Unknown network' + this.network.toString());
+        }
+        try {
+            const blockchaininfo = await this.nodeWrapper.call('getblockchaininfo', []);
+            if (blockchaininfo.chain !== expectedChain) {
+                this.logger.error(
+                    `Invalid chain from getblockchaininfo, expected ${expectedChain}, got ${blockchaininfo.chain}`
+                );
+                return false;
+            }
+            return true;
+        } catch (e) {
+            this.logger.error('Connection to the Bitcoin RPC cannot be established (getblockchaininfo failed)')
+            return false;
+        }
+    }
 }
