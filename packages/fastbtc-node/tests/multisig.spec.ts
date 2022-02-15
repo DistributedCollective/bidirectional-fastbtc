@@ -1,9 +1,9 @@
 import { describe, it, beforeEach } from 'mocha';
 import { expect } from 'chai';
-import {Network, networks} from 'bitcoinjs-lib';
+import { networks} from 'bitcoinjs-lib';
 import { BitcoinMultisig, BitcoinMultisigConfig } from '../src/btc/multisig';
 import { IBitcoinNodeWrapper } from '../src/btc/nodewrapper';
-import * as net from 'net';
+import {ConfigSecrets} from '../src/config';
 
 describe('BitcoinMultisig', () => {
     describe('validateAddress', () => {
@@ -14,27 +14,37 @@ describe('BitcoinMultisig', () => {
             const fauxBaseConfig = {
                 'btcRpcUrl': '',
                 'btcRpcUsername': '',
-                'btcRpcPassword': '',
                 'btcKeyDerivationPath': '0/0',
                 'numRequiredSigners': 1,
+            }
+            const fauxBaseSecrets: Pick<ConfigSecrets, 'dbUrl' | 'btcRpcPassword' | 'rskPrivateKey'> = {
+                'dbUrl': '',
+                'btcRpcPassword': '',
+                'rskPrivateKey': '',
             }
             // NOTE: the keys here are generated from mnemonic "test test foo bar". They are supposed to be here --
             // do not send actual funds to them.
             const fauxMainnetConfig : BitcoinMultisigConfig = {
                 ...fauxBaseConfig,
                 'btcNetwork': 'mainnet',
-                'btcMasterPrivateKey': 'xprv9tviSb99cQK1ZSZBUJV3YMsD1eXujJr8P6FH8JB2WZF2TgZSMSfpZjjKbsp5sEnX53ufPE8QjQwCuNaZ8hnZm9iWLxoampf8x8xVzZwd27N',
-                'btcMasterPublicKeys': [
-                    'xpub67v4r6g3SmsJmvdeaL23uVowZgNQ8mZykKAsvgae4tn1LUtatyz57Y3oT9jwxtmDiDSXPFvqDynFiLfpigLbDFsV5ny3YsEeuyhn1511AoQ'
-                ],
+                secrets: () => ({
+                    ...fauxBaseSecrets,
+                    'btcMasterPrivateKey': 'xprv9tviSb99cQK1ZSZBUJV3YMsD1eXujJr8P6FH8JB2WZF2TgZSMSfpZjjKbsp5sEnX53ufPE8QjQwCuNaZ8hnZm9iWLxoampf8x8xVzZwd27N',
+                    'btcMasterPublicKeys': [
+                        'xpub67v4r6g3SmsJmvdeaL23uVowZgNQ8mZykKAsvgae4tn1LUtatyz57Y3oT9jwxtmDiDSXPFvqDynFiLfpigLbDFsV5ny3YsEeuyhn1511AoQ'
+                    ],
+                }),
             };
             const fauxTestnetConfig : BitcoinMultisigConfig = {
                 ...fauxBaseConfig,
                 'btcNetwork': 'testnet',
-                'btcMasterPrivateKey': 'tprv8bbfDvTV1g96AFni8sLYi1VCKmx7xpt8ieAPzibUzXjWFHJXLp1a5V6mX3yjscAqSVSSPKkAtmX1NE8JFv8WaCz6sc1tSBPBsEhvSHE7S3b',
-                'btcMasterPublicKeys': [
-                    'tpubD8HhNLVjA3pm3ipW2X197R9JtoU48A53HwmBHEdnQoXu5mZHyCqAFyidhBpjVPiTW7yRzqShm5cJQXAS7YBq6hKn9PiMEPttVwJBm7FpjfF'
-                ],
+                secrets: () => ({
+                    ...fauxBaseSecrets,
+                    'btcMasterPrivateKey': 'tprv8bbfDvTV1g96AFni8sLYi1VCKmx7xpt8ieAPzibUzXjWFHJXLp1a5V6mX3yjscAqSVSSPKkAtmX1NE8JFv8WaCz6sc1tSBPBsEhvSHE7S3b',
+                    'btcMasterPublicKeys': [
+                        'tpubD8HhNLVjA3pm3ipW2X197R9JtoU48A53HwmBHEdnQoXu5mZHyCqAFyidhBpjVPiTW7yRzqShm5cJQXAS7YBq6hKn9PiMEPttVwJBm7FpjfF'
+                    ],
+                }),
             };
             const fauxMainnetNodeWrapper: IBitcoinNodeWrapper = {
                 network: networks.bitcoin,

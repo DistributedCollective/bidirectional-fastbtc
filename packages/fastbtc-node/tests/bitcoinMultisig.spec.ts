@@ -1,7 +1,6 @@
 import {BitcoinMultisig} from '../src/btc/multisig';
 import {BigNumber} from 'ethers';
 import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from '../src/btc/nodewrapper';
-import {RegtestUtils} from 'regtest-client';
 import {ECPair, Network, networks, payments} from 'bitcoinjs-lib';
 import assert from 'assert';
 
@@ -51,16 +50,21 @@ xit("should work", async function () {
     const multiSig = new BitcoinMultisig({
             btcKeyDerivationPath: '0/0',
             numRequiredSigners: 2,
-            btcMasterPublicKeys: [
-                'tpubD6NzVbkrYhZ4WokHnVXX8CVBt1S88jkmeG78yWbLxn7Wd89nkNDe2J8b6opP4K38mRwXf9d9VVN5uA58epPKjj584R1rnDDbk6oHUD1MoWD',
-                'tpubD6NzVbkrYhZ4WpZfRZip3ALqLpXhHUbe6UyG8iiTzVDuvNUyysyiUJWejtbszZYrDaUM8UZpjLmHyvtV7r1QQNFmTqciAz1fYSYkw28Ux6y',
-                'tpubD6NzVbkrYhZ4WQZnWqU8ieBsujhoZKZLF6wMvTApJ4ZiGmipk481DyM2su3y5BDeB9fFLwSmmmsGDGJum79he2fnuQMnpWhe3bGir7Mf4uS',
-            ],
-            btcMasterPrivateKey: 'tprv8ZgxMBicQKsPdLiVtqrvinq5JyvByQZs4xWMgzZ3YWK7ndu27yQ3qoWivh8cgdtB3bKuYKWRKhaEvtykaFCsDCB7akNdcArjgrCnFhuDjmV',
             btcNetwork: 'regtest',
             btcRpcUrl: 'http://host.invalid:18333',
-            btcRpcPassword: 'foo',
             btcRpcUsername: 'bar',
+            secrets: () => ({
+                // NOTE: these are test secrets that are supposed to be there. Do not consider them as leaked
+                btcRpcPassword: 'foo',
+                btcMasterPublicKeys: [
+                    'tpubD6NzVbkrYhZ4WokHnVXX8CVBt1S88jkmeG78yWbLxn7Wd89nkNDe2J8b6opP4K38mRwXf9d9VVN5uA58epPKjj584R1rnDDbk6oHUD1MoWD',
+                    'tpubD6NzVbkrYhZ4WpZfRZip3ALqLpXhHUbe6UyG8iiTzVDuvNUyysyiUJWejtbszZYrDaUM8UZpjLmHyvtV7r1QQNFmTqciAz1fYSYkw28Ux6y',
+                    'tpubD6NzVbkrYhZ4WQZnWqU8ieBsujhoZKZLF6wMvTApJ4ZiGmipk481DyM2su3y5BDeB9fFLwSmmmsGDGJum79he2fnuQMnpWhe3bGir7Mf4uS',
+                ],
+                btcMasterPrivateKey: 'tprv8ZgxMBicQKsPdLiVtqrvinq5JyvByQZs4xWMgzZ3YWK7ndu27yQ3qoWivh8cgdtB3bKuYKWRKhaEvtykaFCsDCB7akNdcArjgrCnFhuDjmV',
+                dbUrl: '',
+                rskPrivateKey: '',
+            }),
         },
         nodeWrapper,
     );
