@@ -26,11 +26,15 @@ interface TransferBatchMessage {
 
 type RequestRSKSendingSignatureMessage = TransferBatchMessage;
 
+type MarkingAsSendingInRSKMessage = TransferBatchMessage;
+
 type RequestBitcoinSignatureMessage = TransferBatchMessage;
 
 type SendingToBitcoinMessage = TransferBatchMessage;
 
 type RequestRSKMinedSignatureMessage = TransferBatchMessage;
+
+type MarkingAsMinedInRSKMessage = TransferBatchMessage;
 
 type TransferBatchCompleteMessage = TransferBatchMessage
 
@@ -52,8 +56,10 @@ type RSKMinedSignatureResponseMessage = TransferBatchMessage & {
 
 interface FastBTCMessage {
     'fastbtc:request-rsk-sending-signature': RequestRSKSendingSignatureMessage,
+    'fastbtc:marking-as-sending-in-rsk': MarkingAsSendingInRSKMessage,
     'fastbtc:request-bitcoin-signature': RequestBitcoinSignatureMessage,
     'fastbtc:request-rsk-mined-signature': RequestRSKSendingSignatureMessage,
+    'fastbtc:marking-as-mined-in-rsk': MarkingAsMinedInRSKMessage,
     'fastbtc:sending-to-bitcoin': SendingToBitcoinMessage,
     'fastbtc:transfer-batch-complete': TransferBatchCompleteMessage,
     'fastbtc:purge-transfer-batch': PurgeTransferBatchMessage,
@@ -216,6 +222,12 @@ export class FastBTCNode {
 
         if (!transferBatch.isMarkedAsSendingInRsk()) {
             this.logger.throttledInfo('TransferBatch is not marked as sending in RSK');
+            await this.network.broadcast(
+                'fastbtc:marking-as-sending-in-rsk',
+                {
+                    transferBatchDto: transferBatch.getDto(),
+                }
+            );
             await this.bitcoinTransferService.markAsSendingInRsk(transferBatch);
             return;
         }
@@ -256,6 +268,12 @@ export class FastBTCNode {
 
         if(!transferBatch.isMarkedAsMinedInRsk()) {
             this.logger.throttledInfo('TransferBatch is not marked as mined in RSK');
+            await this.network.broadcast(
+                'fastbtc:marking-as-mined-in-rsk',
+                {
+                    transferBatchDto: transferBatch.getDto(),
+                }
+            );
             await this.bitcoinTransferService.markAsMinedInRsk(transferBatch);
             await this.network.broadcast(
                 'fastbtc:transfer-batch-complete',
@@ -342,12 +360,20 @@ export class FastBTCNode {
                 promise = this.onRequestBitcoinSignature(message.data, message.source);
                 break
             }
+            case 'fastbtc:marking-as-sending-in-rsk': {
+                promise = this.onMarkingAsSendingInRsk(message.data, message.source);
+                break
+            }
             case 'fastbtc:sending-to-bitcoin': {
                 promise = this.onSendingToBitcoin(message.data, message.source);
                 break
             }
             case 'fastbtc:request-rsk-mined-signature': {
                 promise = this.onRequestRskMinedSignature(message.data, message.source);
+                break
+            }
+            case 'fastbtc:marking-as-mined-in-rsk': {
+                promise = this.onMarkingAsMinedInRsk(message.data, message.source);
                 break
             }
             case 'fastbtc:transfer-batch-complete': {
@@ -402,6 +428,16 @@ export class FastBTCNode {
         });
     }
 
+    onMarkingAsSendingInRsk = async (data: MarkingAsSendingInRSKMessage, source: Node<FastBTCMessage>) => {
+        await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
+            // NOTE: the validation for this is the same as validating signing the Sending update
+            // The point is just to update our stored TransferBatch with a valid one, and to
+            // make sure we're not downgrading it.
+            await this.transferBatchValidator.validateForSigningRskSendingUpdate(transferBatch);
+            await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
+        });
+    }
+
     onRequestBitcoinSignature = async (data: RequestBitcoinSignatureMessage, source: Node<FastBTCMessage>) => {
         await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
             // This also validates it
@@ -434,6 +470,16 @@ export class FastBTCNode {
                 address,
                 signature
             });
+        });
+    }
+
+    onMarkingAsMinedInRsk = async (data: MarkingAsSendingInRSKMessage, source: Node<FastBTCMessage>) => {
+        await this.handleMessageFromInitiator(data, source, async (transferBatch) => {
+            // NOTE: the validation for this is the same as validating signing the Mined update
+            // The point is just to update our stored TransferBatch with a valid one, and to
+            // make sure we're not downgrading it.
+            await this.transferBatchValidator.validateForSigningRskMinedUpdate(transferBatch);
+            await this.bitcoinTransferService.updateStoredTransferBatch(transferBatch);
         });
     }
 
