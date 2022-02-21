@@ -13,6 +13,7 @@ import {BitcoinTransferService, TransferBatch, TransferBatchDTO, TransferBatchVa
 import {DBLogging} from "../db/dblogging";
 import {StatsD} from "hot-shots";
 import {TYPES} from "../stats";
+import StatusChecker from './statuschecker';
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -105,6 +106,7 @@ export class FastBTCNode {
         @inject(Config) private config: FastBTCNodeConfig,
         @inject(DBLogging) private dbLogging: DBLogging,
         @inject(TYPES.StatsD) private statsd: StatsD,
+        @inject(StatusChecker) private statusChecker: StatusChecker,
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger);
         network.onNodeAvailable(this.onNodeAvailable);
@@ -113,11 +115,14 @@ export class FastBTCNode {
     }
 
     async run() {
+        await this.statusChecker.waitUntilThisNodeIsAFederator();
         this.statsd.event('FastBTC node started');
         await this.networkUtil.enterMainLoop(this.runIteration);
     }
 
     runIteration = async () => {
+        await this.statusChecker.makeSureThatThisNodeIsStillAFederator();
+
         const newEvents = await this.eventScanner.scanNewEvents();
         if (newEvents.length) {
             this.logger.info(`scanned ${newEvents.length} new events`);
