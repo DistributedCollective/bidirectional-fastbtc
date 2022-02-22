@@ -52,7 +52,6 @@ export class EventScanner {
         // would be good to lock here so that this could not be run if it's already running
         // as of now, the caller is responsible for this
         const currentBlock = await this.ethersProvider.getBlockNumber();
-        this.logger.debug("Current rsk block is", currentBlock);
 
         let lastProcessedBlock = await this.dbConnection.transaction(async db => {
             const keyValuePairRepository = db.getCustomRepository(KeyValuePairRepository);
@@ -62,7 +61,8 @@ export class EventScanner {
             );
         });
 
-        this.logger.debug("Last processed block is", lastProcessedBlock);
+        this.logger.debug("Current rsk block: %s; last processed block: %s", currentBlock, lastProcessedBlock);
+
         let fromBlock = lastProcessedBlock + 1;
         const toBlock = currentBlock - this.requiredConfirmations;
         if (toBlock < fromBlock) {

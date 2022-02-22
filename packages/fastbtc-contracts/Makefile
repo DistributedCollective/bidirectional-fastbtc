@@ -11,3 +11,7 @@ artifacts: .flag-yarn-installed package.json tsconfig.json yarn.lock contracts h
 
 yarn.lock: package.json
 	yarn
+
+.PHONY: test
+test: build
+	yarn test

@@ -31,8 +31,8 @@ export async function getEvents(
     while (fromBlock <= toBlock) {
         const batchToBlock = Math.min(toBlock, fromBlock + batchSize - 1);
         // This could be improved by retrieving all events in a single call
+        console.debug(`Querying events from ${fromBlock} to ${batchToBlock} (up to ${toBlock})`);
         for (const filter of filters) {
-            console.debug(`Querying from ${fromBlock} to ${batchToBlock} (up to ${toBlock})`);
             let eventBatch: ethers.Event[] = [];
             let attempt = 0;
             while (true) {
