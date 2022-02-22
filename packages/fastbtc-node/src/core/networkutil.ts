@@ -50,13 +50,20 @@ export default class NetworkUtil<MessageTypes extends object = any> {
     // Successor / etc stuff
 
     public isThisNodeInitiator() {
-        return this.id === this.getPreferredInitiatorId();
+        return this.id === this.getInitiatorId();
     }
 
     public get id(): string {
         return this.network.networkId;
     }
 
+    // Get the actual initiator id
+    public getInitiatorId(): string | null {
+        return this.getPreferredInitiatorId();
+    }
+
+    // Get the initiator that would be voted by the network
+    // DEPRECATED
     public getPreferredInitiatorId(): string | null {
         const nodeIds = this.getSortedNodeIds();
         if (nodeIds.length === 0) {
