@@ -448,6 +448,15 @@ export class BitcoinMultisig {
     }
 
     /**
+     * Return the balance controlled by the multisig address
+     */
+    public async getMultisigBalance(): Promise<number> {
+        const myAddress = this.payoutScript.address;
+        const unspent: {amount: number}[] = await this.nodeWrapper.call('listunspent', [null, null, [myAddress]]);
+        return unspent.reduce((a, b) => (a + b.amount), 0);
+    }
+
+    /**
      * Return the health status (true = healthy) of the connection to the bitcoin rpc node.
      * In the future, this can be extended to also check that the multisig has been loaded, for example.
      */
@@ -463,17 +472,32 @@ export class BitcoinMultisig {
             throw new Error('Unknown network' + this.network.toString());
         }
         try {
-            const blockchaininfo = await this.nodeWrapper.call('getblockchaininfo', []);
-            if (blockchaininfo.chain !== expectedChain) {
+            const blockChainInfo = await this.nodeWrapper.call('getblockchaininfo', []);
+            if (blockChainInfo.chain !== expectedChain) {
                 this.logger.error(
-                    `Invalid chain from getblockchaininfo, expected ${expectedChain}, got ${blockchaininfo.chain}`
+                    `Invalid chain from getblockchaininfo, expected ${expectedChain}, got ${blockChainInfo.chain}`
                 );
                 return false;
             }
-            return true;
         } catch (e) {
             this.logger.error('Connection to the Bitcoin RPC cannot be established (getblockchaininfo failed)')
             return false;
         }
+
+        const myAddress = this.payoutScript.address;
+        try {
+            const addressInfo = await this.nodeWrapper.call('getaddressinfo', [myAddress]);
+            if (!addressInfo.solvable) {
+                this.logger.error(`Bitcoin node not set up correctly; cannot solve ${myAddress} - getaddressinfo returned:`
+                    + `\n${JSON.stringify(addressInfo, null, 4)})`);
+                return false;
+            }
+        }
+        catch (e) {
+            this.logger.error(`Unexpected exception while resolving (getaddressinfo ${myAddress} failed)`)
+            return false;
+        }
+
+        return true;
     }
 }
