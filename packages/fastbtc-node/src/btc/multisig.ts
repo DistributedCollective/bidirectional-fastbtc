@@ -442,9 +442,18 @@ export class BitcoinMultisig {
             return psbt.txOutputs[0].address == address;
         }
         catch (e) {
-            console.error(`Received invalid address ${address} (${e})`);
+            this.logger.exception(e, `Received invalid address ${address}`);
             return false;
         }
+    }
+
+    /**
+     * Return the balance controlled by the multisig address
+     */
+    public async getMultisigBalance(): Promise<number> {
+        const myAddress = this.payoutScript.address;
+        const unspent: {amount: number}[] = await this.nodeWrapper.call('listunspent', [null, null, [myAddress]]);
+        return unspent.reduce((a, b) => (a + b.amount), 0);
     }
 
     /**
@@ -463,17 +472,43 @@ export class BitcoinMultisig {
             throw new Error('Unknown network' + this.network.toString());
         }
         try {
-            const blockchaininfo = await this.nodeWrapper.call('getblockchaininfo', []);
-            if (blockchaininfo.chain !== expectedChain) {
+            const blockChainInfo = await this.nodeWrapper.call('getblockchaininfo', []);
+            if (blockChainInfo.chain !== expectedChain) {
                 this.logger.error(
-                    `Invalid chain from getblockchaininfo, expected ${expectedChain}, got ${blockchaininfo.chain}`
+                    `Invalid chain from getblockchaininfo, expected ${expectedChain}, got ${blockChainInfo.chain}`
                 );
                 return false;
             }
-            return true;
         } catch (e) {
-            this.logger.error('Connection to the Bitcoin RPC cannot be established (getblockchaininfo failed)')
+            this.logger.exception(e, 'Connection to the Bitcoin RPC cannot be established (getblockchaininfo failed)')
             return false;
         }
+
+        const myAddress = this.payoutScript.address;
+        try {
+            const addressInfo = await this.nodeWrapper.call('getaddressinfo', [myAddress]);
+            let addressInfoOk: boolean;
+            if (this.network === networks.regtest) {
+                // for regtest this is just the test suite, it is ok if it is not solvable...
+                addressInfoOk = addressInfo.iswatchonly;
+            }
+            else {
+                // require that the address is solvable for other cases.
+                // This is required for the descriptor to have been imported properly.
+                addressInfoOk = addressInfo.solvable;
+            }
+
+            if (! addressInfoOk) {
+                this.logger.error(`Bitcoin node not set up correctly; cannot solve ${myAddress} - getaddressinfo returned:`
+                    + `\n${JSON.stringify(addressInfo, null, 4)})`);
+                return false;
+            }
+        }
+        catch (e) {
+            this.logger.exception(e, `Unexpected exception while resolving (getaddressinfo ${myAddress} failed)`)
+            return false;
+        }
+
+        return true;
     }
 }
