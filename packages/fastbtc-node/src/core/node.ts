@@ -133,7 +133,7 @@ export class FastBTCNode {
             const multisigBalance = await this.btcMultisig.getMultisigBalance();
             this.statsd.gauge('fastbtc.pegout.multisig.balance', multisigBalance);
         } catch (e) {
-            console.error(`Failed to fetch multisig balance, got exception ${e}`);
+            this.logger.exception(e, `Failed to fetch multisig balance, got exception ${e}`);
         }
 
         const newEvents = await this.eventScanner.scanNewEvents();

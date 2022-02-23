@@ -442,7 +442,7 @@ export class BitcoinMultisig {
             return psbt.txOutputs[0].address == address;
         }
         catch (e) {
-            console.error(`Received invalid address ${address} (${e})`);
+            this.logger.exception(e, `Received invalid address ${address}`);
             return false;
         }
     }
@@ -480,7 +480,7 @@ export class BitcoinMultisig {
                 return false;
             }
         } catch (e) {
-            this.logger.error('Connection to the Bitcoin RPC cannot be established (getblockchaininfo failed)')
+            this.logger.exception(e, 'Connection to the Bitcoin RPC cannot be established (getblockchaininfo failed)')
             return false;
         }
 
@@ -494,7 +494,7 @@ export class BitcoinMultisig {
             }
         }
         catch (e) {
-            this.logger.error(`Unexpected exception while resolving (getaddressinfo ${myAddress} failed)`)
+            this.logger.exception(e, `Unexpected exception while resolving (getaddressinfo ${myAddress} failed)`)
             return false;
         }
 

@@ -49,7 +49,7 @@ export default class Logger {
         this.debuggers.error(message, ...optionalParams);
     }
 
-    exception(err: Error, message?: any, ...optionalParams: any[]) {
+    exception(err: any, message?: any, ...optionalParams: any[]) {
         if (message || optionalParams.length) {
             this.debuggers.error(message, ...optionalParams);
         }
