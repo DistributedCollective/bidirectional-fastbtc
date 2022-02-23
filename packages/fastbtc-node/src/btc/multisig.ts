@@ -487,7 +487,18 @@ export class BitcoinMultisig {
         const myAddress = this.payoutScript.address;
         try {
             const addressInfo = await this.nodeWrapper.call('getaddressinfo', [myAddress]);
-            if (!addressInfo.solvable) {
+            let addressInfoOk: boolean;
+            if (this.network === networks.regtest) {
+                // for regtest this is just the test suite, it is ok if it is not solvable...
+                addressInfoOk = addressInfo.iswatchonly;
+            }
+            else {
+                // require that the address is solvable for other cases.
+                // This is required for the descriptor to have been imported properly.
+                addressInfoOk = addressInfo.solvable;
+            }
+
+            if (! addressInfoOk) {
                 this.logger.error(`Bitcoin node not set up correctly; cannot solve ${myAddress} - getaddressinfo returned:`
                     + `\n${JSON.stringify(addressInfo, null, 4)})`);
                 return false;
