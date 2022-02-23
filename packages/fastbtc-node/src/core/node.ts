@@ -144,7 +144,7 @@ export class FastBTCNode {
         const numNodesOnline = this.networkUtil.getNumNodesOnline();
 
         // we could obtain consensus for the initiator, but it's not strictly required
-        const initiatorId = this.networkUtil.getPreferredInitiatorId();
+        const initiatorId = this.networkUtil.getInitiatorId();
         const isInitiator = this.networkUtil.id == initiatorId;
 
         this.logger.throttledInfo(
@@ -508,7 +508,7 @@ export class FastBTCNode {
         source: Node<FastBTCMessage>,
         callback: (transferBatch: TransferBatch, message: T) => Promise<void>
     ): Promise<void> => {
-        if (source.id !== this.networkUtil.getPreferredInitiatorId()) {
+        if (source.id !== this.networkUtil.getInitiatorId()) {
             this.logger.warning('Rejecting message from node', source, 'since it is not initiator');
             return;
         }

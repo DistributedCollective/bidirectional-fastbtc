@@ -1,17 +1,20 @@
 import {Network, Node} from 'ataraxia';
 import {sleep} from '../utils';
 import Logger from '../logger';
+import {InitiatorVoting} from './initiator';
 
 /**
  * Utility class for abstracting some common Ataraxia network tasks
  */
 export default class NetworkUtil<MessageTypes extends object = any> {
     private running = false;
+    private initiatorVoting: InitiatorVoting;
 
     public constructor(
         private network: Network<MessageTypes>,
         private logger: Logger = new Logger('network')
     ) {
+        this.initiatorVoting = new InitiatorVoting(network as Network);
     }
 
     // XXX: should maybe be elsewhere
@@ -26,7 +29,10 @@ export default class NetworkUtil<MessageTypes extends object = any> {
             this.running = false;
         }
         process.on('SIGINT', exitHandler);
+
         try {
+            await this.initiatorVoting.start();
+
             while (this.running) {
                 try {
                     await runIteration();
@@ -42,6 +48,7 @@ export default class NetworkUtil<MessageTypes extends object = any> {
         } finally {
             process.off('SIGINT', exitHandler);
             this.logger.log('waiting to leave network gracefully');
+            await this.initiatorVoting.stop();
             await this.network.leave();
             this.logger.log('network left');
         }
@@ -50,13 +57,21 @@ export default class NetworkUtil<MessageTypes extends object = any> {
     // Successor / etc stuff
 
     public isThisNodeInitiator() {
-        return this.id === this.getPreferredInitiatorId();
+        return this.id === this.getInitiatorId();
     }
 
     public get id(): string {
         return this.network.networkId;
     }
 
+    // Get the actual initiator id
+    public getInitiatorId(): string | null {
+        //return this.getPreferredInitiatorId();
+        return this.initiatorVoting.getInitiatorId();
+    }
+
+    // Get the initiator that would be voted by the network
+    // DEPRECATED
     public getPreferredInitiatorId(): string | null {
         const nodeIds = this.getSortedNodeIds();
         if (nodeIds.length === 0) {
