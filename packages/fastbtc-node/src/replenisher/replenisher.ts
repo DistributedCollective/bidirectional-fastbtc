@@ -1,0 +1,173 @@
+import {BitcoinMultisig, PartiallySignedBitcoinTransaction} from '../btc/multisig';
+import {inject} from 'inversify';
+import {P2PNetwork} from '../p2p/network';
+import {MessageUnion, Network} from 'ataraxia';
+import Logger from '../logger';
+import {ReplenisherMultisig} from './replenishermultisig';
+import {ReplenisherConfig} from './config';
+import {setExtend, setIntersection} from '../utils/sets';
+import {sleep} from '../utils';
+
+interface RequestReplenishSignatureMessage {
+    psbt: PartiallySignedBitcoinTransaction;
+}
+interface ReplenishSignatureResponseMessage {
+    psbt: PartiallySignedBitcoinTransaction;
+}
+interface BitcoinReplenisherMessage {
+    'fastbtc:request-replenish-signature': RequestReplenishSignatureMessage,
+    'fastbtc:replenish-signature-response': ReplenishSignatureResponseMessage,
+}
+
+export interface BitcoinReplenisher {
+    handleReplenisherIteration(): Promise<void>;
+}
+export const BitcoinReplenisher = Symbol.for('BitcoinReplenisher')
+
+
+export class ActualBitcoinReplenisher implements BitcoinReplenisher {
+    private logger = new Logger('replenisher');
+    private unsignedReplenishPsbt: PartiallySignedBitcoinTransaction|null = null;
+    private gatheredPsbts: PartiallySignedBitcoinTransaction[] = [];
+    private numRequiredSigners: number;
+    private isReplenisher: boolean;
+    private replenisherMultisig: ReplenisherMultisig;
+
+    constructor(
+        config: ReplenisherConfig,
+        private bitcoinMultisig: BitcoinMultisig,
+        private network: Network<BitcoinReplenisherMessage>,
+    ) {
+        this.numRequiredSigners = config.numRequiredSigners;
+        // It's possible that this node is not a replenisher though it can be the initiator
+        this.isReplenisher = !!config.secrets().masterPrivateKey;
+        this.replenisherMultisig = new ReplenisherMultisig(config, bitcoinMultisig);
+        network.onMessage(this.onMessage);
+    }
+
+    async handleReplenisherIteration() {
+        this.logger.info('Handling replenisher iteration');
+
+        if (! await this.replenisherMultisig.shouldReplenish()) {
+            this.logger.info('No replenishing is in order -- not doing anything');
+        }
+
+        if (!this.unsignedReplenishPsbt) {
+            this.unsignedReplenishPsbt = await this.replenisherMultisig.createReplenishPsbt();
+            this.gatheredPsbts = [];
+            await this.requestSignatures();
+            return;
+        }
+
+        const combinedPsbt = await this.gatherPsbts();
+        if (!combinedPsbt) {
+            this.logger.error('Could not get gathered psbt');
+            return;
+        }
+
+        if (combinedPsbt.signedPublicKeys.length < this.numRequiredSigners) {
+            this.logger.info('Not enough replenish signatures');
+            await this.requestSignatures();
+            return;
+        }
+
+        this.logger.info('Sending replenish transaction to the blockchain');
+        await this.replenisherMultisig.submitReplenishTransaction(combinedPsbt);
+        this.logger.info('Replenish transaction sent, waiting for confirmation');
+        await this.waitForTransaction(combinedPsbt);
+        this.logger.info('Replenish transaction confirmed successfully');
+        this.unsignedReplenishPsbt = null;
+        this.gatheredPsbts = [];
+    }
+
+    private onMessage = async (message: MessageUnion<BitcoinReplenisherMessage>) => {
+        switch (message.type) {
+            case 'fastbtc:request-replenish-signature':
+                const psbt = await this.replenisherMultisig.signReplenishPsbt(message.data.psbt);
+                await message.source.send('fastbtc:replenish-signature-response', {
+                    psbt,
+                })
+                return;
+            case 'fastbtc:replenish-signature-response':
+                this.gatheredPsbts.push(message.data.psbt);
+                return;
+        }
+    }
+
+    private async requestSignatures() {
+        if (!this.unsignedReplenishPsbt) {
+            this.logger.warning('No unsignedReplenishPsbt, cannot request signatures');
+            return;
+        }
+        await this.network.broadcast('fastbtc:request-replenish-signature', {
+            psbt: this.unsignedReplenishPsbt,
+        });
+
+    }
+
+    private async gatherPsbts(): Promise<PartiallySignedBitcoinTransaction|undefined> {
+        if (!this.unsignedReplenishPsbt) {
+            return;
+        }
+        const gatheredPsbts = [...this.gatheredPsbts];
+        this.gatheredPsbts = [];
+
+        const validPsbts: PartiallySignedBitcoinTransaction[] = [];
+        const seenPublicKeys = new Set<string>();
+
+        if (!seenPublicKeys.has(this.replenisherMultisig.getThisNodePublicKey())) {
+            const thisNodePsbt = await this.replenisherMultisig.signReplenishPsbt(this.unsignedReplenishPsbt);
+            validPsbts.push(thisNodePsbt);
+            setExtend(seenPublicKeys, thisNodePsbt.signedPublicKeys);
+        }
+
+        for (const psbt of gatheredPsbts) {
+            if (psbt.signedPublicKeys.length === 0) {
+                this.logger.info('empty psbt, skipping');
+                continue;
+            }
+
+            const seenIntersection = setIntersection(seenPublicKeys, new Set(psbt.signedPublicKeys));
+            if (seenIntersection.size) {
+                this.logger.info(`public keys ${[...seenIntersection]} have already signed`);
+                continue;
+            }
+
+            setExtend(seenPublicKeys, psbt.signedPublicKeys);
+
+            validPsbts.push(psbt);
+            if (seenPublicKeys.size === this.numRequiredSigners) {
+                break
+            }
+        }
+
+        if (validPsbts.length > 0) {
+            return await this.replenisherMultisig.combineReplenishPsbt([this.unsignedReplenishPsbt, ...validPsbts]);
+        }
+    }
+
+    private async waitForTransaction(psbt: PartiallySignedBitcoinTransaction) {
+        const requiredConfirmations = 1;
+        const maxIterations = 200;
+        const avgBlockTimeMs = 10 * 60 * 1000;
+        const overheadMultiplier = 2;
+        const sleepTimeMs = Math.round((avgBlockTimeMs * requiredConfirmations * overheadMultiplier) / maxIterations);
+        this.logger.info(`Waiting for ${requiredConfirmations} confirmations`);
+        for (let i = 0; i < maxIterations; i++) {
+            const chainTx = await this.replenisherMultisig.getBitcoinTransaction(psbt);
+            const confirmations = chainTx ? chainTx.confirmations : 0;
+            if (confirmations >= requiredConfirmations) {
+                break;
+            }
+            await sleep(sleepTimeMs);
+        }
+    }
+}
+
+export class NullBitcoinReplenisher implements BitcoinReplenisher {
+    private logger = new Logger('replenisher');
+
+    async handleReplenisherIteration() {
+        this.logger.warning('Replenisher config missing -- not handling iteration');
+    }
+}

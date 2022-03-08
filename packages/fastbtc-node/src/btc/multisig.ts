@@ -7,7 +7,7 @@ import {normalizeKey, xprvToPublic} from './utils';
 import getByteCount from './bytecount';
 import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
 import {BigNumber} from 'ethers';
-import {Config} from '../config';
+import {Config, ConfigSecrets} from '../config';
 import {script} from "bitcoinjs-lib";
 import Logger from '../logger';
 
@@ -30,15 +30,18 @@ export interface BitcoinRPCGetTransactionResponse {
     confirmations: number;
 }
 
+export type BitcoinMultisigSecrets = Pick<ConfigSecrets,'btcMasterPrivateKey' | 'btcMasterPublicKeys'>
 export type BitcoinMultisigConfig = Pick<Config,
-    'btcRpcUrl' | 'btcRpcUsername' | 'btcNetwork' | 'btcKeyDerivationPath' | 'numRequiredSigners' | 'secrets'
->
+    'btcKeyDerivationPath' | 'numRequiredSigners'
+> & {
+    secrets: () => BitcoinMultisigSecrets,
+}
 
 @injectable()
 export class BitcoinMultisig {
     private logger = new Logger('btc-multisig');
 
-    private readonly network: Network;
+    public readonly network: Network;
     private gasSatoshi = 10; // TODO: make variable/configurable
     private nodeWrapper: IBitcoinNodeWrapper;
     private readonly masterPrivateKey: () => string;

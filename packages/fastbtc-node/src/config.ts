@@ -3,6 +3,7 @@ import {readFileSync} from "fs";
 import * as process from "process";
 import * as express from "express";
 import {decryptSecrets} from "./utils/secrets";
+import {ReplenisherConfig, ReplenisherSecrets} from './replenisher/config';
 import {interfaces} from "inversify";
 import Context = interfaces.Context;
 
@@ -31,6 +32,7 @@ export interface Config {
     btcKeyDerivationPath: string;
     statsdUrl?: string;
     secrets: () => ConfigSecrets;
+    replenisherConfig: ReplenisherConfig|undefined;
 }
 
 const secretConfigKeys: Extract<keyof ConfigSecrets, string>[] = [
@@ -161,13 +163,58 @@ export const envConfigProviderFactory = async (
                     rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
                     dbUrl: env.FASTBTC_DB_URL!,
                 }
-            )
+            ),
+            replenisherConfig: getReplenisherConfig(env),
         };
     }
 
     const config = await resolve();
     return (context) => config;
 };
+
+function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | undefined {
+    const secrets: ReplenisherSecrets = {
+        rpcPassword: env.FASTBTC_REPLENISHER_RPC_PASSWORD ?? env.FASTBTC_BTC_RPC_PASSWORD,
+        masterPublicKeys: (env.FASTBTC_REPLENISHER_MASTER_PUBLIC_KEYS ?? '').split(',').map(s => s.trim()),
+        masterPrivateKey: env.FASTBTC_REPLENISHER_MASTER_PRIVATE_KEY,
+    }
+    let ret: ReplenisherConfig = {
+        btcNetwork: env.FASTBTC_BTC_NETWORK! as 'mainnet' | 'testnet' | 'regtest',
+        rpcUrl: env.FASTBTC_REPLENISHER_RPC_URL,
+        rpcUserName: env.FASTBTC_REPLENISHER_RPC_USERNAME ?? env.FASTBTC_BTC_RPC_USERNAME,
+        keyDerivationPath: env.FASTBTC_REPLENISHER_KEY_DERIVATION_PATH ?? env.FASTBTC_BTC_KEY_DERIVATION_PATH,
+        numRequiredSigners: parseInt(env.FASTBTC_REPLENISHER_REQUIRED_SIGNERS ?? '0'),
+        secrets: () => secrets,
+    };
+    const givenKeys: string[] = [];
+    const missingKeys: string[] = [];
+    for (const [key, value] of [...Object.entries(ret), ...Object.entries(secrets)]) {
+        if (key === 'masterPrivateKey') {
+            // This one can be left out
+            continue;
+        }
+        if (value && (!Array.isArray(value) || value.length > 0)) {
+            givenKeys.push(key);
+        } else {
+            missingKeys.push(key);
+        }
+    }
+    if (missingKeys.length > 0) {
+        if (givenKeys.length > 0) {
+            console.warn(
+                "Missing the following keys for BTC replenisher: " + missingKeys.join(",") +
+                " Even though other keys were given -- disabling it"
+            )
+        } else {
+            console.warn("BTC Replenisher disabled because config not given.")
+        }
+        return undefined;
+    }
+    if (!secrets.masterPrivateKey) {
+        console.info("BTC Replenisher master private key not given -- this node is not a replenisher.")
+    }
+    return ret;
+}
 
 function parseKnownPeers(raw: string) {
     const knownPeers = raw.split(',').map(s => s.trim()).filter(s => s);
