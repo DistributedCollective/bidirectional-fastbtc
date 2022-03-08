@@ -182,8 +182,8 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
         btcNetwork: env.FASTBTC_BTC_NETWORK! as 'mainnet' | 'testnet' | 'regtest',
         rpcUrl: env.FASTBTC_REPLENISHER_RPC_URL,
         rpcUserName: env.FASTBTC_REPLENISHER_RPC_USERNAME ?? env.FASTBTC_BTC_RPC_USERNAME,
-        keyDerivationPath: env.FASTBTC_REPLENISHER_KEY_DERIVATION_PATH ?? env.FASTBTC_BTC_KEY_DERIVATION_PATH,
-        numRequiredSigners: parseInt(env.FASTBTC_REPLENISHER_REQUIRED_SIGNERS ?? '0'),
+        keyDerivationPath: env.FASTBTC_REPLENISHER_KEY_DERIVATION_PATH ?? env.FASTBTC_BTC_KEY_DERIVATION_PATH ?? 'm/0/0/0',
+        numRequiredSigners: parseInt(env.FASTBTC_REPLENISHER_NUM_REQUIRED_SIGNERS ?? '0'),
         secrets: () => secrets,
     };
     const givenKeys: string[] = [];
