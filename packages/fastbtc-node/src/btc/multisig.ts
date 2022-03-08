@@ -67,7 +67,11 @@ export class BitcoinMultisig {
         this.cosigners = config.numRequiredSigners;
         const masterPrv = normalizeKey(config.secrets().btcMasterPrivateKey)
         this.masterPrivateKey = () => masterPrv;
-        this.masterPublicKey = xprvToPublic(this.masterPrivateKey(), this.network);
+        if (this.masterPrivateKey()) {
+            this.masterPublicKey = xprvToPublic(this.masterPrivateKey(), this.network);
+        } else {
+            this.masterPublicKey = '';
+        }
         this.masterPublicKeys = config.secrets().btcMasterPublicKeys;
 
         this.keyDerivationPath = config.btcKeyDerivationPath || '0/0/0';
@@ -354,6 +358,10 @@ export class BitcoinMultisig {
     }
 
     signTransaction(tx: PartiallySignedBitcoinTransaction): PartiallySignedBitcoinTransaction {
+        if (!this.masterPublicKey) {
+            throw new Error('No private key -- cannot sign');
+        }
+
         if (tx.signedPublicKeys.indexOf(this.masterPublicKey) !== -1) {
             throw new Error('already signed by this node');
         }

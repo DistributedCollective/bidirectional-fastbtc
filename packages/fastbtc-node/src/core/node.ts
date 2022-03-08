@@ -14,6 +14,7 @@ import {DBLogging} from "../db/dblogging";
 import {StatsD} from "hot-shots";
 import {TYPES} from "../stats";
 import StatusChecker from './statuschecker';
+import {BitcoinReplenisher} from '../replenisher/replenisher';
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -113,6 +114,7 @@ export class FastBTCNode {
         @inject(DBLogging) private dbLogging: DBLogging,
         @inject(TYPES.StatsD) private statsd: StatsD,
         @inject(StatusChecker) private statusChecker: StatusChecker,
+        @inject(BitcoinReplenisher) private replenisher: BitcoinReplenisher,
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger);
         network.onNodeAvailable(this.onNodeAvailable);
@@ -167,6 +169,12 @@ export class FastBTCNode {
                 `(currently ${numNodesOnline})`
             );
             return;
+        }
+
+        try {
+            await this.replenisher.handleReplenisherIteration();
+        } catch (e) {
+            this.logger.exception(e, 'Replenisher error');
         }
 
         let transferBatch = await this.bitcoinTransferService.getCurrentTransferBatch();
