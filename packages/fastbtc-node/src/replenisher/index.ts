@@ -7,7 +7,6 @@ import {P2PNetwork} from '../p2p/network';
 import {Network} from 'ataraxia';
 
 export function setupInversify(container: Container) {
-    container.bind<BitcoinMultisig>(BitcoinMultisig).toSelf().inSingletonScope();
     container.bind<BitcoinReplenisher>(BitcoinReplenisher).toDynamicValue(
         (context) => {
             const config = context.container.get<Config>(Config);
