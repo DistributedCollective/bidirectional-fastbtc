@@ -159,7 +159,7 @@ export const envConfigProviderFactory = async (
                 {
                     btcRpcPassword: env.FASTBTC_BTC_RPC_PASSWORD ?? '',
                     btcMasterPrivateKey: env.FASTBTC_BTC_MASTER_PRIVATE_KEY!,
-                    btcMasterPublicKeys: env.FASTBTC_BTC_MASTER_PUBLIC_KEYS!.split(',').map(x => x.trim()),
+                    btcMasterPublicKeys: env.FASTBTC_BTC_MASTER_PUBLIC_KEYS!.split(',').map(x => x.trim()).filter(s => s),
                     rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
                     dbUrl: env.FASTBTC_DB_URL!,
                 }
@@ -175,7 +175,7 @@ export const envConfigProviderFactory = async (
 function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | undefined {
     const secrets: ReplenisherSecrets = {
         rpcPassword: env.FASTBTC_REPLENISHER_RPC_PASSWORD ?? env.FASTBTC_BTC_RPC_PASSWORD,
-        masterPublicKeys: (env.FASTBTC_REPLENISHER_MASTER_PUBLIC_KEYS ?? '').split(',').map(s => s.trim()),
+        masterPublicKeys: (env.FASTBTC_REPLENISHER_MASTER_PUBLIC_KEYS ?? '').split(',').map(s => s.trim()).filter(s => s),
         masterPrivateKey: env.FASTBTC_REPLENISHER_MASTER_PRIVATE_KEY,
     }
     let ret: ReplenisherConfig = {

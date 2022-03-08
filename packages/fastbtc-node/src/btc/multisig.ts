@@ -65,11 +65,14 @@ export class BitcoinMultisig {
         this.nodeWrapper = nodeWrapper;
 
         this.cosigners = config.numRequiredSigners;
-        const masterPrv = normalizeKey(config.secrets().btcMasterPrivateKey)
-        this.masterPrivateKey = () => masterPrv;
-        if (this.masterPrivateKey()) {
+        // TODO: this part should be get rid of -- factor multisig.ts better to enable multisigs without private key
+        // but to not enable it in the multisig that handles the
+        if (config.secrets().btcMasterPrivateKey) {
+            const masterPrv = normalizeKey(config.secrets().btcMasterPrivateKey);
+            this.masterPrivateKey = () => masterPrv;
             this.masterPublicKey = xprvToPublic(this.masterPrivateKey(), this.network);
         } else {
+            this.masterPrivateKey = () => '';
             this.masterPublicKey = '';
         }
         this.masterPublicKeys = config.secrets().btcMasterPublicKeys;

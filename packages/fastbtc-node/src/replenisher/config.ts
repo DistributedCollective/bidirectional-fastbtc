@@ -12,4 +12,3 @@ export interface ReplenisherConfig {
     numRequiredSigners: number;
     secrets: () => ReplenisherSecrets;
 }
-

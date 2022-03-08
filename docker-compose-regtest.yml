@@ -48,6 +48,7 @@ services:
     environment:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
       - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
+      - FASTBTC_REPLENISHER_RPC_URL=http://bitcoin-regtest:18443/wallet/replenisher
     depends_on:
       - bitcoin-regtest
       - hardhat
@@ -56,6 +57,7 @@ services:
     environment:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
       - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
+      - FASTBTC_REPLENISHER_RPC_URL=http://bitcoin-regtest:18443/wallet/replenisher
     depends_on:
       - bitcoin-regtest
       - hardhat
@@ -72,6 +74,7 @@ services:
     environment:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
       - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
+      - FASTBTC_REPLENISHER_RPC_URL=http://bitcoin-regtest:18443/wallet/replenisher
     depends_on:
       - bitcoin-regtest
       - hardhat

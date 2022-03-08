@@ -76,8 +76,8 @@ export class ReplenisherMultisig {
     signReplenishPsbt(tx: PartiallySignedBitcoinTransaction): PartiallySignedBitcoinTransaction {
         const psbtUnserialized = Psbt.fromBase64(tx.serializedTransaction, {network: this.replenisherMultisig.network});
         // blah blah blah this is terrible
-        if (psbtUnserialized.txOutputs.length != 2) {
-            throw new Error(`Expected 2 outputs (one for nonce, one for replenish), got ${psbtUnserialized.txOutputs.length}`);
+        if (psbtUnserialized.txOutputs.length != 2 && psbtUnserialized.txOutputs.length != 3) {
+            throw new Error(`Expected 2 or 3 outputs (one for nonce, one for replenish and maybe one for change), got ${psbtUnserialized.txOutputs.length}`);
         }
         const output = psbtUnserialized.txOutputs[1];
         const multisigAddress = this.bitcoinMultisig.payoutScript.address;
