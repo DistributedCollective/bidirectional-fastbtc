@@ -29,8 +29,20 @@ bitcoin-cli createwallet multisig true true
 
 bitcoin-cli -rpcwallet=multisig importaddress "$MULTISIG_ADDRESS"
 
-echo "Generating 101 blocks (sending balance to multisig)..."
-bitcoin-cli -rpcwallet=multisig generatetoaddress 101 "$MULTISIG_ADDRESS" > /dev/null
+# Create replenisher multisig
+bitcoin-cli createwallet replenisher1 false true || true
+bitcoin-cli createwallet replenisher2 false true || true
+bitcoin-cli -rpcwallet=replenisher1 sethdseed true "$REPLENISHER1_HDSEED"
+bitcoin-cli -rpcwallet=replenisher2 sethdseed true "$REPLENISHER2_HDSEED"
+bitcoin-cli createmultisig 2 "$REPLENISHER_PUBKEYS" bech32  # probably not necessary
+bitcoin-cli createwallet replenisher true true
+bitcoin-cli -rpcwallet=replenisher importaddress "$REPLENISHER_ADDRESS"
+
+echo "Generating 101 blocks (sending balance to replenisher wallet, not directly to multisig)..."
+bitcoin-cli -rpcwallet=multisig generatetoaddress 101 "$REPLENISHER_ADDRESS" > /dev/null
+
+echo "Balance of replenisher:"
+bitcoin-cli -rpcwallet=replenisher getbalance
 
 echo "Balance of multisig:"
 bitcoin-cli -rpcwallet=multisig getbalance
@@ -38,7 +50,8 @@ bitcoin-cli -rpcwallet=multisig getbalance
 while true
 do
     #echo "Mine a block $(date '+%d/%m/%Y %H:%M:%S')"
-    bitcoin-cli generatetoaddress 1 "$MULTISIG_ADDRESS" > /dev/null
+    # Also sending to replenisher here, not multisig
+    bitcoin-cli generatetoaddress 1 "$REPLENISHER_ADDRESS" > /dev/null
     sleep 5
 done
 
