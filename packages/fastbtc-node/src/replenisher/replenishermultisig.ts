@@ -1,8 +1,8 @@
 import {BitcoinMultisig, BitcoinRPCGetTransactionResponse, PartiallySignedBitcoinTransaction} from '../btc/multisig';
-import BitcoinNodeWrapper from '../btc//nodewrapper';
+import BitcoinNodeWrapper from '../btc/nodewrapper';
 import Logger from '../logger';
 import {BigNumber} from 'ethers';
-import {Psbt} from 'bitcoinjs-lib';
+import {bip32, Network, networks, Psbt} from 'bitcoinjs-lib';
 import {ReplenisherConfig} from './config';
 
 export class ReplenisherMultisig {
@@ -14,6 +14,7 @@ export class ReplenisherMultisig {
     private replenishMinAmount = 1.0;
     private replenishMaxAmount = 5.0;
     private isReplenisher: boolean; // is this node a replenisher
+    private network: Network;
 
     constructor(
         config: ReplenisherConfig,
@@ -22,6 +23,8 @@ export class ReplenisherMultisig {
         this.numRequiredSigners = config.numRequiredSigners;
 
         this.isReplenisher = !!config.secrets().masterPrivateKey;
+        this.network = networks[config.btcNetwork === 'mainnet' ? 'bitcoin' : config.btcNetwork];
+
         this.replenisherMultisig = new BitcoinMultisig(
             {
                 btcKeyDerivationPath: config.keyDerivationPath,

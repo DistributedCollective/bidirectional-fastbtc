@@ -47,30 +47,6 @@ export function normalizeKey(key: string): string {
     return b58.encode(data);
 }
 
-//export function zpubToXpub(zpub: string): string {
-//    let prefixString = '0488b21e';
-//    if (zpub.startsWith('Vpub')) {
-//        // vpub to tpub...
-//        prefixString = '043587cf';
-//    }
-//    let data = b58.decode(zpub)
-//    data = data.slice(4)
-//    data = Buffer.concat([Buffer.from(prefixString, 'hex'), data])
-//    return b58.encode(data);
-//}
-//
-//export function zprvToXprv(zprv: string): string {
-//    let prefixString = '0488ade4';
-//    if (zprv.startsWith('Vprv')) {
-//        // vprv to tprv...
-//        prefixString = '04358394';
-//    }
-//    let data = b58.decode(zprv)
-//    data = data.slice(4)
-//    data = Buffer.concat([Buffer.from(prefixString, 'hex'), data])
-//    return b58.encode(data);
-//}
-
 export function xprvToPublic(xprv: string, network: Network): string {
     return  bip32.fromBase58(xprv, network).neutered().toBase58();
 }

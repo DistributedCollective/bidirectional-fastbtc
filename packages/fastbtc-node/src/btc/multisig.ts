@@ -51,6 +51,7 @@ export class BitcoinMultisig {
     private readonly maximumBatchSize = 40;
     public readonly payoutScript: Payment;
     private readonly cosigners: number;
+    private readonly masterKeyFingerPrint?: string;
 
     constructor(
         @inject(Config) config: BitcoinMultisigConfig,
@@ -65,12 +66,16 @@ export class BitcoinMultisig {
         this.nodeWrapper = nodeWrapper;
 
         this.cosigners = config.numRequiredSigners;
+
         // TODO: this part should be get rid of -- factor multisig.ts better to enable multisigs without private key
         // but to not enable it in the multisig that handles the
         if (config.secrets().btcMasterPrivateKey) {
             const masterPrv = normalizeKey(config.secrets().btcMasterPrivateKey);
             this.masterPrivateKey = () => masterPrv;
             this.masterPublicKey = xprvToPublic(this.masterPrivateKey(), this.network);
+            this.masterKeyFingerPrint = bip32.fromBase58(masterPrv, this.network).fingerprint.toString('hex');
+            this.logger.info("master private key fingerprint is %s", this.masterKeyFingerPrint);
+            this.masterPublicKey = xprvToPublic(masterPrv, this.network);
         } else {
             this.masterPrivateKey = () => '';
             this.masterPublicKey = '';
@@ -456,7 +461,7 @@ export class BitcoinMultisig {
             return psbt.txOutputs[0].address == address;
         }
         catch (e) {
-            this.logger.exception(e, `Received invalid address ${address}`);
+            this.logger.error(`Received invalid address ${address}: ${e}`);
             return false;
         }
     }
