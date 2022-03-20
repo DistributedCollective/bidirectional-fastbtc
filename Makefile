@@ -14,6 +14,16 @@ run-demo-regtest: packages/fastbtc-node/version.json
 show-node-logs:
 	@docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml logs -f node1 node2 node3
 
+.PHONY: build-regtest-bitcoin
+build-regtest-bitcoin:
+	@(cd integration_test/bitcoind-regtest \
+	  && docker build . -t containerregistry.sovryn.app/sovryn-bitcoind-base:latest -f Dockerfile.bitcoind-base)
+
+.PHONY: build-regtest-bitcoin-parallel
+build-regtest-bitcoin-parallel:
+	@(cd integration_test/bitcoind-regtest \
+	  && docker build . --build-arg BITCOIND_PARALLEL=-j8 -t containerregistry.sovryn.app/sovryn-bitcoind-base:latest -f Dockerfile.bitcoind-base)
+
 .PHONY: test-transfers
 test-transfers:
 	@cd packages/fastbtc-contracts && make
