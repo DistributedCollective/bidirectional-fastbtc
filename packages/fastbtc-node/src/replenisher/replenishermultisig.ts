@@ -44,13 +44,13 @@ export class ReplenisherMultisig {
     }
 
     async shouldReplenish(): Promise<boolean> {
-        const multisigBalance = await this.bitcoinMultisig.getMultisigBalance();
+        const multisigBalance = await this.bitcoinMultisig.getMultisigBalance(true);
         return multisigBalance < this.replenishThreshold;
         //const replenisherBalance = this.replenisherMultisig.getMultisigBalance();
     }
 
     async createReplenishPsbt(): Promise<PartiallySignedBitcoinTransaction|null> {
-        const multisigBalance = await this.bitcoinMultisig.getMultisigBalance();
+        const multisigBalance = await this.bitcoinMultisig.getMultisigBalance(true);
         if (multisigBalance >= this.replenishThreshold) {
             this.logger.info(
                 'Balance %s greater than threshold %s, not replenishing',
@@ -67,12 +67,13 @@ export class ReplenisherMultisig {
         return await this.replenisherMultisig.createPartiallySignedTransaction(
             [
                 {
-                    btcAddress: this.bitcoinMultisig.payoutScript.address!,
+                    btcAddress: this.bitcoinMultisig.changePayment.address!,
                     amountSatoshi: BigNumber.from(Math.floor(replenishAmount * 10**8)),
                     nonce,
                 }
             ],
-            false //this.isReplenisher // never sign self
+            false, //this.isReplenisher // never sign self
+            true, // use descriptor-based utxo scooping
         )
     }
 
@@ -83,7 +84,7 @@ export class ReplenisherMultisig {
             throw new Error(`Expected 2 or 3 outputs (one for nonce, one for replenish and maybe one for change), got ${psbtUnserialized.txOutputs.length}`);
         }
         const output = psbtUnserialized.txOutputs[1];
-        const multisigAddress = this.bitcoinMultisig.payoutScript.address;
+        const multisigAddress = this.bitcoinMultisig.changePayment.address;
         if(output.address != multisigAddress) {
             throw new Error(`Invalid address, got ${output.address}, expected multisig address ${multisigAddress}`);
         }

@@ -29,3 +29,7 @@ export function setIsSuperset<T>(set: Set<T>, subset: Set<T>): boolean {
     }
     return true;
 }
+
+export function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+    return a.size === b.size && [...a].every(value => b.has(value));
+}

@@ -2,20 +2,21 @@
  * Bitcoin multisig signature logic, Bitcoin transaction sending and reading data from the Bitcoin network
  */
 import {inject, injectable} from 'inversify';
-import {bip32, ECPair, Network, networks, Payment, payments, Psbt} from "bitcoinjs-lib";
+import {bip32, ECPair, Network, networks, Payment, payments, Psbt, script} from "bitcoinjs-lib";
 import {normalizeKey, xprvToPublic} from './utils';
 import getByteCount from './bytecount';
 import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
 import {BigNumber} from 'ethers';
 import {Config, ConfigSecrets} from '../config';
-import {script} from "bitcoinjs-lib";
 import Logger from '../logger';
+import {setsEqual} from "../utils/sets";
 
 
 export interface PartiallySignedBitcoinTransaction {
     serializedTransaction: string;
     signedPublicKeys: string[];
     requiredSignatures: number;
+    derivationPaths: string[];
 }
 
 export interface BtcTransfer {
@@ -28,6 +29,11 @@ export interface BtcTransfer {
 // this is only partially reflected here because we don't need everything
 export interface BitcoinRPCGetTransactionResponse {
     confirmations: number;
+}
+
+export interface ParsedDescriptor {
+    fingerprints: Set<string>;
+    derivationPath: string;
 }
 
 export type BitcoinMultisigSecrets = Pick<ConfigSecrets,'btcMasterPrivateKey' | 'btcMasterPublicKeys'>
@@ -49,9 +55,11 @@ export class BitcoinMultisig {
     private masterPublicKeys: string[];
     private readonly keyDerivationPath: string;
     private readonly maximumBatchSize = 40;
-    public readonly payoutScript: Payment;
+    // public readonly payoutScript: Payment;
     private readonly cosigners: number;
     private readonly masterKeyFingerPrint?: string;
+    private readonly masterKeyFingerPrints: Set<string>;
+    readonly changePayment: Payment;
 
     constructor(
         @inject(Config) config: BitcoinMultisigConfig,
@@ -81,18 +89,14 @@ export class BitcoinMultisig {
             this.masterPublicKey = '';
         }
         this.masterPublicKeys = config.secrets().btcMasterPublicKeys;
+        this.masterKeyFingerPrints = new Set(
+            this.masterPublicKeys.map(
+                k => bip32.fromBase58(k, this.network).fingerprint.toString('hex')
+            )
+        );
 
         this.keyDerivationPath = config.btcKeyDerivationPath || '0/0/0';
-
-        let childPublic: Buffer[] = this.deriveChildPublicKeys(this.keyDerivationPath);
-        this.payoutScript = payments.p2wsh({
-            network: this.network,
-            redeem: payments.p2ms({
-                m: this.cosigners,
-                pubkeys: childPublic,
-                network: this.network,
-            }),
-        });
+        this.changePayment = this.derivePayment(this.keyDerivationPath);
     }
 
     getBitcoinTransactionHash(signedBitcoinTransaction: PartiallySignedBitcoinTransaction): string {
@@ -175,9 +179,9 @@ export class BitcoinMultisig {
         }
     }
 
-    deriveChildPublicKeys(path: string): Buffer[] {
+    deriveChildPublicKeys(path: string = this.keyDerivationPath): Buffer[] {
         const childPublic: Buffer[] = this.masterPublicKeys.map((pubKey) =>
-            bip32.fromBase58(pubKey, this.network).derivePath(this.keyDerivationPath).publicKey,
+            bip32.fromBase58(pubKey, this.network).derivePath(path).publicKey,
         );
         childPublic.sort((a, b) => {
             return a.toString('hex') < b.toString('hex') ? -1 : 1;
@@ -185,17 +189,56 @@ export class BitcoinMultisig {
         return childPublic;
     }
 
-    async createPartiallySignedTransaction(transfers: BtcTransfer[], signSelf: boolean = false): Promise<PartiallySignedBitcoinTransaction> {
+    parseDescriptorKeys(
+            descriptor: string
+    ): ParsedDescriptor {
+        const re = /\[([^\/]+)\/([^\]]+)]/g;
+        const keys = descriptor.matchAll(re);
+        if (! keys) {
+            throw new Error("Unsolved descriptor");
+        }
+
+        const keySet: Set<string> = new Set();
+        const derivationPaths: Set<string> = new Set();
+        for (const k of keys) {
+            keySet.add(k[1]);
+            derivationPaths.add(k[2]);
+        }
+
+        console.log(keySet);
+        console.log(derivationPaths);
+        if (! setsEqual(keySet, this.masterKeyFingerPrints)) {
+            throw new Error("Key fingerprints not matching");
+        }
+
+        if (derivationPaths.size != 1) {
+            throw new Error("Derivation paths do not match");
+        }
+
+        return {
+            fingerprints: keySet,
+            derivationPath: [...derivationPaths][0]
+        }
+    }
+
+    async createPartiallySignedTransaction(
+            transfers: BtcTransfer[],
+            signSelf: boolean = false,
+            useDescriptors: boolean = false
+    ): Promise<PartiallySignedBitcoinTransaction> {
         if (transfers.length > this.maximumBatchSize) {
             throw new Error(`The number of transfers ${transfers.length} exceeds the maximum batch size ${this.maximumBatchSize}`);
         }
 
         const network = this.network;
         const inputType = `MULTISIG-P2WSH:${this.cosigners}-${this.masterPublicKeys.length}`;
-        const payment = this.payoutScript;
 
-        const response = await this.nodeWrapper.call("listunspent",
-            [1, 9999999, [payment.address]],  // !!!
+        let addressArg = null;
+        if (! useDescriptors) {
+            addressArg = [this.changePayment.address]
+        }
+        let response = await this.nodeWrapper.call("listunspent",
+            [1, 9999999, addressArg],  // !!!
         );
 
         response.sort((a: any, b: any) => {
@@ -207,6 +250,24 @@ export class BitcoinMultisig {
 
             return 0;
         });
+
+        let withDerivationPaths: any[] = [];
+        if (useDescriptors) {
+            for (const utxo of response) {
+                try {
+                    const parsed = this.parseDescriptorKeys(utxo.desc);
+                    withDerivationPaths.push({...utxo, derivationPath: parsed.derivationPath});
+                }
+                catch (e) {
+                    console.log("unable to parse descriptor:", e);
+                }
+            }
+        }
+        else {
+            withDerivationPaths = response.map((a: any) => ({...a, derivationPath: this.keyDerivationPath}))
+        }
+
+        response = withDerivationPaths;
 
         const amountSatoshi: BigNumber = transfers.map(t => t.amountSatoshi).reduce(
             (a, b) => a.add(b), BigNumber.from(0),
@@ -221,11 +282,15 @@ export class BitcoinMultisig {
             [inputType]: 0,
         };
 
+        const derivationPaths: Set<string> = new Set();
         let fee = BigNumber.from(0);
         for (const utxo of response) {
             const tx = await this.getRawTx(utxo.txid);
 
             if (tx && tx.hex) {
+                const payment = this.derivePayment(utxo.derivationPath);
+                derivationPaths.add(utxo.derivationPath);
+
                 const input = {
                     hash: utxo.txid,
                     index: utxo.vout,
@@ -279,7 +344,7 @@ export class BitcoinMultisig {
 
         // change money!
         psbt.addOutput({
-            address: payment.address!,
+            address: this.changePayment.address!,
             value: totalSum.sub(fee).sub(amountSatoshi).toNumber(),
         });
 
@@ -287,6 +352,7 @@ export class BitcoinMultisig {
             serializedTransaction: psbt.toBase64(),
             signedPublicKeys: [],
             requiredSignatures: this.cosigners,
+            derivationPaths: [...derivationPaths]
         };
         if (signSelf) {
             ret = this.signTransaction(ret);
@@ -324,8 +390,8 @@ export class BitcoinMultisig {
         }
 
         const changeOutput = psbtUnserialized.txOutputs[psbtUnserialized.txOutputs.length - 1];
-        if (! changeOutput.address || changeOutput.address !== this.payoutScript.address) {
-            throw new Error(`Proposed transaction is trying to pay change to ${changeOutput.address}, which does not match expected ${this.payoutScript.address}`);
+        if (! changeOutput.address || changeOutput.address !== this.changePayment.address) {
+            throw new Error(`Proposed transaction is trying to pay change to ${changeOutput.address}, which does not match expected ${this.changePayment.address}`);
         }
 
         // TODO: estimate the Bitcoin gas cost and make it sensible!
@@ -374,16 +440,19 @@ export class BitcoinMultisig {
             throw new Error('already signed by this node');
         }
 
-        const childPrivateKey = bip32.fromBase58(this.masterPrivateKey(), this.network).derivePath(this.keyDerivationPath);
-        const ecPair = ECPair.fromWIF(childPrivateKey.toWIF(), this.network);
-
         const psbtUnserialized = Psbt.fromBase64(tx.serializedTransaction, {network: this.network});
-        psbtUnserialized.signAllInputs(ecPair);
+        for (const dPath of tx.derivationPaths) {
+            const childPrivateKey = bip32.fromBase58(this.masterPrivateKey(), this.network).derivePath(dPath);
+            const ecPair = ECPair.fromWIF(childPrivateKey.toWIF(), this.network);
+            psbtUnserialized.signAllInputs(ecPair);
+        }
+
         const serializedTransaction = psbtUnserialized.toBase64();
         return {
             serializedTransaction,
             signedPublicKeys: [...tx.signedPublicKeys, this.masterPublicKey],
             requiredSignatures: tx.requiredSignatures,
+            derivationPaths: [...tx.derivationPaths],
         }
     }
 
@@ -418,6 +487,7 @@ export class BitcoinMultisig {
                 serializedTransaction: combined.toBase64(),
                 signedPublicKeys: [...result.signedPublicKeys, ...tx.signedPublicKeys],
                 requiredSignatures: tx.requiredSignatures,
+                derivationPaths: [...tx.derivationPaths],
             }
         }
         return result;
@@ -469,9 +539,9 @@ export class BitcoinMultisig {
     /**
      * Return the balance controlled by the multisig address
      */
-    public async getMultisigBalance(): Promise<number> {
-        const myAddress = this.payoutScript.address;
-        const unspent: {amount: number}[] = await this.nodeWrapper.call('listunspent', [null, null, [myAddress]]);
+    public async getMultisigBalance(changeOnly: boolean = true): Promise<number> {
+        const myAddressArg = changeOnly ? [this.changePayment.address]: null;
+        const unspent: {amount: number}[] = await this.nodeWrapper.call('listunspent', [null, null, myAddressArg]);
         return unspent.reduce((a, b) => (a + b.amount), 0);
     }
 
@@ -503,7 +573,7 @@ export class BitcoinMultisig {
             return false;
         }
 
-        const myAddress = this.payoutScript.address;
+        const myAddress = this.changePayment.address;
         try {
             const addressInfo = await this.nodeWrapper.call('getaddressinfo', [myAddress]);
             let addressInfoOk: boolean;
@@ -529,5 +599,17 @@ export class BitcoinMultisig {
         }
 
         return true;
+    }
+
+    private derivePayment(derivationPath: string) {
+        let childPublic: Buffer[] = this.deriveChildPublicKeys(derivationPath);
+        return payments.p2wsh({
+            network: this.network,
+            redeem: payments.p2ms({
+                m: this.cosigners,
+                pubkeys: childPublic,
+                network: this.network,
+            }),
+        });
     }
 }

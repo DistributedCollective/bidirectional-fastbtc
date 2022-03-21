@@ -55,12 +55,12 @@ bitcoin-cli -rpcwallet=multisig getbalance
 
 while true
 do
-    for i in $(bitcoin-cli deriveaddresses "$REPLENISHER_SOURCE_DESCRIPTOR" '[0,100]'|cut -f 2 -d '"'|grep bc)
+    for i in $(bitcoin-cli deriveaddresses "$REPLENISHER_SOURCE_DESCRIPTOR" '[5,100]'|cut -f 2 -d '"'|grep bc)
     do
         echo "Mine a block $(date '+%d/%m/%Y %H:%M:%S') for $i"
         # Also sending to replenisher here, not multisig
         bitcoin-cli -rpcwallet=replenisher generatetoaddress 101 "$i" > /dev/null
-        sleep 5
+        sleep 1
     done
 done
 
