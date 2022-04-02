@@ -1,6 +1,4 @@
 import {BitcoinMultisig, PartiallySignedBitcoinTransaction} from '../btc/multisig';
-import {inject} from 'inversify';
-import {P2PNetwork} from '../p2p/network';
 import {MessageUnion, Network} from 'ataraxia';
 import Logger from '../logger';
 import {ReplenisherMultisig} from './replenishermultisig';
@@ -31,17 +29,16 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     private gatheredPsbts: PartiallySignedBitcoinTransaction[] = [];
     private numRequiredSigners: number;
     private isReplenisher: boolean;
-    private replenisherMultisig: ReplenisherMultisig;
 
     constructor(
         config: ReplenisherConfig,
         private bitcoinMultisig: BitcoinMultisig,
         private network: Network<BitcoinReplenisherMessage>,
+        private replenisherMultisig: ReplenisherMultisig,
     ) {
         this.numRequiredSigners = config.numRequiredSigners;
         // It's possible that this node is not a replenisher though it can be the initiator
         this.isReplenisher = !!config.secrets().masterPrivateKey;
-        this.replenisherMultisig = new ReplenisherMultisig(config, bitcoinMultisig);
         network.onMessage(this.onMessage);
     }
 

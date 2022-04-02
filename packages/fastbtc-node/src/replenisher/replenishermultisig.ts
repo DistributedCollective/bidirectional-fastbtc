@@ -2,8 +2,9 @@ import {BitcoinMultisig, BitcoinRPCGetTransactionResponse, PartiallySignedBitcoi
 import BitcoinNodeWrapper from '../btc/nodewrapper';
 import Logger from '../logger';
 import {BigNumber} from 'ethers';
-import {bip32, Network, networks, Psbt} from 'bitcoinjs-lib';
+import {Network, networks, Psbt} from 'bitcoinjs-lib';
 import {ReplenisherConfig} from './config';
+import {StatsD} from 'hot-shots';
 
 export class ReplenisherMultisig {
     private logger = new Logger('replenisher');
@@ -19,6 +20,7 @@ export class ReplenisherMultisig {
     constructor(
         config: ReplenisherConfig,
         private bitcoinMultisig: BitcoinMultisig,
+        private statsd: StatsD,
     ) {
         this.numRequiredSigners = config.numRequiredSigners;
         if (config.replenishThreshold) {
@@ -48,7 +50,8 @@ export class ReplenisherMultisig {
                 btcNetwork: config.btcNetwork,
                 user: config.rpcUserName,
                 password: config.secrets().rpcPassword,
-            })
+            }),
+            statsd
         );
     }
 
