@@ -10,6 +10,8 @@ import {BigNumber} from 'ethers';
 import {Config, ConfigSecrets} from '../config';
 import Logger from '../logger';
 import {setsEqual} from "../utils/sets";
+import {TYPES} from "../stats";
+import {StatsD} from "hot-shots";
 
 
 export interface PartiallySignedBitcoinTransaction {
@@ -66,6 +68,7 @@ export class BitcoinMultisig {
     constructor(
         @inject(Config) config: BitcoinMultisigConfig,
         @inject(BitcoinNodeWrapper) nodeWrapper: IBitcoinNodeWrapper,
+        @inject(TYPES.StatsD) private statsd: StatsD,
     ) {
         // ensure that we don't even construct an instance if we
         // cannot calculate the transaction hashes from unsigned PSBTs
@@ -228,9 +231,15 @@ export class BitcoinMultisig {
             noChange: boolean = false,
     ): Promise<PartiallySignedBitcoinTransaction> {
         const estimateRawFeeOutput = await this.nodeWrapper.call('estimaterawfee', [2]);
-        const feeBtcPerKB = estimateRawFeeOutput.short.feerate;
+        let feeBtcPerKB = estimateRawFeeOutput.short.feerate;
         if (typeof feeBtcPerKB !== 'number') {
-            throw new Error(`Unable to deduce gas fee, got ${estimateRawFeeOutput} for response from estimaterawfee 2 from node`);
+            // estimateRawFee doesn't work on regtest
+            if (this.network === networks.regtest) {
+                feeBtcPerKB = 10 / 1e8 * 1000;
+            }
+            else {
+                throw new Error(`Unable to deduce gas fee, got ${estimateRawFeeOutput} for response from estimaterawfee 2 from node`);
+            }
         }
         // fee rate in sats/vB; add 5 % margin, convert from btc per KiB
         const feeRate = 1.05 * feeBtcPerKB / 1000 * 1e8;
@@ -384,6 +393,8 @@ export class BitcoinMultisig {
         if (signSelf) {
             ret = this.signTransaction(ret);
         }
+
+        this.statsd.gauge('fastbtc.pegout.fee_rate_sats_per_vb', feeRate);
         return ret;
     }
 
