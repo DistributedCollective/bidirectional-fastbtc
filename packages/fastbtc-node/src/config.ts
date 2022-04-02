@@ -186,6 +186,7 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
         numRequiredSigners: parseInt(env.FASTBTC_REPLENISHER_NUM_REQUIRED_SIGNERS ?? '0'),
         secrets: () => secrets,
     };
+
     const givenKeys: string[] = [];
     const missingKeys: string[] = [];
     for (const [key, value] of [...Object.entries(ret), ...Object.entries(secrets)]) {
@@ -199,6 +200,11 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
             missingKeys.push(key);
         }
     }
+
+    ret.replenishThreshold = parseConfigFloat(env, 'FASTBTC_REPLENISHER_THRESHOLD');
+    ret.replenishMaxAmount = parseConfigFloat(env, 'FASTBTC_REPLENISHER_MAX_AMOUNT');
+    ret.replenishMinAmount = parseConfigFloat(env, 'FASTBTC_REPLENISHER_MIN_AMOUNT');
+
     if (missingKeys.length > 0) {
         if (givenKeys.length > 0) {
             console.warn(
@@ -214,6 +220,19 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
         console.info("BTC Replenisher master private key not given -- this node is not a replenisher.")
     }
     return ret;
+}
+
+const parseConfigFloat = (env: Record<string, string>, key: string): number|undefined => {
+    const raw = env[key];
+    if (!raw) {
+        return undefined;
+    }
+    const floatValue = parseFloat(raw);
+    if (!floatValue) {
+        console.warn(`Cannot parse float from value given for ${key}: ${raw}; got ${floatValue}`)
+        return undefined;
+    }
+    return floatValue;
 }
 
 function parseKnownPeers(raw: string) {

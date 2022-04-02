@@ -11,4 +11,7 @@ export interface ReplenisherConfig {
     keyDerivationPath: string;
     numRequiredSigners: number;
     secrets: () => ReplenisherSecrets;
+    replenishThreshold?: number;
+    replenishMinAmount?: number;
+    replenishMaxAmount?: number;
 }

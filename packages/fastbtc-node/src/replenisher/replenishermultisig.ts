@@ -21,6 +21,15 @@ export class ReplenisherMultisig {
         private bitcoinMultisig: BitcoinMultisig,
     ) {
         this.numRequiredSigners = config.numRequiredSigners;
+        if (config.replenishThreshold) {
+            this.replenishThreshold = config.replenishThreshold;
+        }
+        if (config.replenishMinAmount) {
+            this.replenishMinAmount = config.replenishMinAmount;
+        }
+        if (config.replenishMaxAmount) {
+            this.replenishMaxAmount = config.replenishMaxAmount;
+        }
 
         this.isReplenisher = !!config.secrets().masterPrivateKey;
         this.network = networks[config.btcNetwork === 'mainnet' ? 'bitcoin' : config.btcNetwork];
