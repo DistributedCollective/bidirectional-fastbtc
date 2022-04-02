@@ -238,7 +238,8 @@ export class BitcoinMultisig {
                 feeBtcPerKB = 10 / 1e8 * 1000;
             }
             else {
-                throw new Error(`Unable to deduce gas fee, got ${estimateRawFeeOutput} for response from estimaterawfee 2 from node`);
+                const response = JSON.stringify(estimateRawFeeOutput);
+                throw new Error(`Unable to deduce gas fee, got ${response} for response from estimaterawfee 2 from node`);
             }
         }
         // fee rate in sats/vB; add 5 % margin, convert from btc per KiB
