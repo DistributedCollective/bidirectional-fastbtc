@@ -230,7 +230,8 @@ export class BitcoinMultisig {
         const estimateRawFeeOutput = await this.nodeWrapper.call('estimaterawfee', [2]);
         const feeBtcPerKB = estimateRawFeeOutput.short.feerate;
         if (typeof feeBtcPerKB !== 'number') {
-            throw new Error(`Unable to deduce gas fee, got ${estimateRawFeeOutput} for response from estimaterawfee 2 from node`);
+            const errorMessage = JSON.stringify(estimateRawFeeOutput, null, 2);
+            throw new Error(`Unable to deduce gas fee, got ${errorMessage} for response from estimaterawfee 2 from node`);
         }
         // fee rate in sats/vB; add 5 % margin, convert from btc per KiB
         const feeRate = 1.05 * feeBtcPerKB / 1000 * 1e8;
