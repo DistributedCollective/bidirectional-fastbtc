@@ -76,25 +76,41 @@ export class ReplenisherMultisig {
             ],
             false, //this.isReplenisher // never sign self
             true, // use descriptor-based utxo scooping
+            true,
         )
     }
 
     signReplenishPsbt(tx: PartiallySignedBitcoinTransaction): PartiallySignedBitcoinTransaction {
         const psbtUnserialized = Psbt.fromBase64(tx.serializedTransaction, {network: this.replenisherMultisig.network});
         // blah blah blah this is terrible
-        if (psbtUnserialized.txOutputs.length != 2 && psbtUnserialized.txOutputs.length != 3) {
+        const nOutputs = psbtUnserialized.txOutputs.length;
+        if (nOutputs < 2 || nOutputs > 3) {
             throw new Error(`Expected 2 or 3 outputs (one for nonce, one for replenish and maybe one for change), got ${psbtUnserialized.txOutputs.length}`);
         }
+
+        if (psbtUnserialized.locktime !== 0) {
+            throw new Error(`The replenishment transaction has invalid lock time ${psbtUnserialized.locktime}, should be zero`);
+        }
+
         const output = psbtUnserialized.txOutputs[1];
         const multisigAddress = this.bitcoinMultisig.changePayment.address;
-        if(output.address != multisigAddress) {
+        if (output.address != multisigAddress) {
             throw new Error(`Invalid address, got ${output.address}, expected multisig address ${multisigAddress}`);
+        }
+
+        if (nOutputs == 3) {
+            if (tx.noChange) {
+                throw new Error('No change but 3 outputs');
+            } else if (psbtUnserialized.txOutputs[2].address !== this.replenisherMultisig.changePayment.address) {
+                throw new Error('Change paid to wrong address');
+            }
         }
 
         if (!this.isReplenisher) {
             this.logger.warning('Not replenisher, cannot sign');
             return tx;
         }
+
         return this.replenisherMultisig.signTransaction(tx);
     }
 

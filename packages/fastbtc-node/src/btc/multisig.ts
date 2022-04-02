@@ -17,6 +17,7 @@ export interface PartiallySignedBitcoinTransaction {
     signedPublicKeys: string[];
     requiredSignatures: number;
     derivationPaths: string[];
+    noChange: boolean;
 }
 
 export interface BtcTransfer {
@@ -49,6 +50,7 @@ export class BitcoinMultisig {
 
     public readonly network: Network;
     private gasSatoshi = 10; // TODO: make variable/configurable
+    private readonly maxGasSatoshi = 5000;
     private nodeWrapper: IBitcoinNodeWrapper;
     private readonly masterPrivateKey: () => string;
     private readonly masterPublicKey: string;
@@ -205,8 +207,6 @@ export class BitcoinMultisig {
             derivationPaths.add(k[2]);
         }
 
-        //console.log(keySet);
-        //console.log(derivationPaths);
         if (! setsEqual(keySet, this.masterKeyFingerPrints)) {
             throw new Error("Key fingerprints not matching");
         }
@@ -224,8 +224,18 @@ export class BitcoinMultisig {
     async createPartiallySignedTransaction(
             transfers: BtcTransfer[],
             signSelf: boolean = false,
-            useDescriptors: boolean = false
+            useDescriptors: boolean = false,
+            noChange: boolean = false,
     ): Promise<PartiallySignedBitcoinTransaction> {
+        const estimateRawFeeOutput = await this.nodeWrapper.call('estimaterawfee', [2]);
+        const feeBtcPerKB = estimateRawFeeOutput.short.feerate;
+        if (typeof feeBtcPerKB !== 'number') {
+            throw new Error(`Unable to deduce gas fee, got ${estimateRawFeeOutput} for response from estimaterawfee 2 from node`);
+        }
+        // fee rate in sats/vB; add 5 % margin, convert from btc per KiB
+        const feeRate = 1.05 * feeBtcPerKB / 1000 * 1e8;
+        this.logger.info(`Using fee rate ${feeRate} per vB`);
+
         if (transfers.length > this.maximumBatchSize) {
             throw new Error(`The number of transfers ${transfers.length} exceeds the maximum batch size ${this.maximumBatchSize}`);
         }
@@ -303,13 +313,15 @@ export class BitcoinMultisig {
                 totalSum = totalSum.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
 
                 fee = BigNumber.from(
-                    getByteCount(
-                        inputCounts,
-                        outputCounts,
-                        transfers.map(t => t.btcAddress),
-                        this.network
+                    Math.round(
+                        getByteCount(
+                            inputCounts,
+                            outputCounts,
+                            transfers.map(t => t.btcAddress),
+                            this.network
+                        )
+                        * feeRate
                     )
-                    * this.gasSatoshi
                 );
                 if (totalSum.gte(amountSatoshi.add(fee))) {
                     break;
@@ -335,24 +347,39 @@ export class BitcoinMultisig {
             value: 0,
         });
 
-        for (let transfer of transfers) {
+        // ordinary transfer
+        if (! noChange) {
+            for (let transfer of transfers) {
+                psbt.addOutput({
+                    address: transfer.btcAddress,
+                    value: transfer.amountSatoshi.toNumber(),
+                });
+            }
+
+            // change money!
             psbt.addOutput({
-                address: transfer.btcAddress,
-                value: transfer.amountSatoshi.toNumber(),
+                address: this.changePayment.address!,
+                value: totalSum.sub(fee).sub(amountSatoshi).toNumber(),
             });
         }
+        else {
+            // replenisher transfer without change
+            if (transfers.length !== 1) {
+                throw new Error("noChange=true transaction must have only one transfer");
+            }
 
-        // change money!
-        psbt.addOutput({
-            address: this.changePayment.address!,
-            value: totalSum.sub(fee).sub(amountSatoshi).toNumber(),
-        });
+            psbt.addOutput({
+                address: transfers[0].btcAddress,
+                value: totalSum.sub(fee).toNumber()
+            });
+        }
 
         let ret: PartiallySignedBitcoinTransaction = {
             serializedTransaction: psbt.toBase64(),
             signedPublicKeys: [],
             requiredSignatures: this.cosigners,
-            derivationPaths: [...derivationPaths]
+            derivationPaths: [...derivationPaths],
+            noChange: Boolean(noChange),
         };
         if (signSelf) {
             ret = this.signTransaction(ret);
@@ -362,12 +389,28 @@ export class BitcoinMultisig {
 
     getTransactionTransfers(tx: PartiallySignedBitcoinTransaction): BtcTransfer[] {
         const psbtUnserialized = Psbt.fromBase64(tx.serializedTransaction, {network: this.network});
-        const transferLength = psbtUnserialized.txOutputs.length - 2;
-        if (transferLength < 1) {
-            throw new Error(
-                `The partial transaction does not have enough outputs, ` +
-                `should have at least 3 outputs, has ${transferLength + 2}`);
+        let end;
+        let transferLength;
+
+        if (tx.noChange) {
+            end = undefined;
+            transferLength = psbtUnserialized.txOutputs.length - 1;
+            if (transferLength < 1) {
+                throw new Error(
+                    `The partial no-change transaction does not have enough outputs, ` +
+                    `should have at least 2 outputs, has ${transferLength + 1}`);
+            }
         }
+        else {
+            end = -1;
+            transferLength = psbtUnserialized.txOutputs.length - 2;
+            if (transferLength < 1) {
+                throw new Error(
+                    `The partial transaction does not have enough outputs, ` +
+                    `should have at least 3 outputs, has ${transferLength + 2}`);
+            }
+        }
+
 
         const dataOutput = psbtUnserialized.txOutputs[0];
         if (dataOutput.value != 0) {
@@ -389,9 +432,11 @@ export class BitcoinMultisig {
             throw new Error("The OP_RETURN embedded data size does not match the number of transfers!");
         }
 
-        const changeOutput = psbtUnserialized.txOutputs[psbtUnserialized.txOutputs.length - 1];
-        if (! changeOutput.address || changeOutput.address !== this.changePayment.address) {
-            throw new Error(`Proposed transaction is trying to pay change to ${changeOutput.address}, which does not match expected ${this.changePayment.address}`);
+        if (! tx.noChange) {
+            const changeOutput = psbtUnserialized.txOutputs[psbtUnserialized.txOutputs.length - 1];
+            if (! changeOutput.address || changeOutput.address !== this.changePayment.address) {
+                throw new Error(`Proposed transaction is trying to pay change to ${changeOutput.address}, which does not match expected ${this.changePayment.address}`);
+            }
         }
 
         // TODO: estimate the Bitcoin gas cost and make it sensible!
@@ -402,8 +447,8 @@ export class BitcoinMultisig {
         // - the output has address
         // - that the output address is a bech32 address for this network
         // - that the nonce is valid (i.e. not 255 and that we do not suddenly get negative ones...
-        // - that the address/nonce pair is not being spent *twice* in this transaction
-        return psbtUnserialized.txOutputs.slice(1, -1).map((output, i) => {
+        // - that the address/nonce pair is not being spent *twice* in *this transaction*
+        return psbtUnserialized.txOutputs.slice(1, end).map((output, i) => {
             if (!output.address) {
                 throw new Error(`Transaction output ${output.script} does not have address!`);
             }
@@ -416,8 +461,10 @@ export class BitcoinMultisig {
 
             const key = `${output.address}/${nonce}`;
             if (alreadyTransferred.has(key)) {
-                throw new Error(`${output.address}/${nonce} is spent twice!`);
+                throw new Error(`${key} has two outputs in the transaction!`);
             }
+
+            alreadyTransferred.add(key);
 
             return {
                 btcAddress: output.address!,
@@ -453,6 +500,7 @@ export class BitcoinMultisig {
             signedPublicKeys: [...tx.signedPublicKeys, this.masterPublicKey],
             requiredSignatures: tx.requiredSignatures,
             derivationPaths: [...tx.derivationPaths],
+            noChange: Boolean(tx.noChange),
         }
     }
 
@@ -488,6 +536,7 @@ export class BitcoinMultisig {
                 signedPublicKeys: [...result.signedPublicKeys, ...tx.signedPublicKeys],
                 requiredSignatures: tx.requiredSignatures,
                 derivationPaths: [...tx.derivationPaths],
+                noChange: Boolean(tx.noChange),
             }
         }
         return result;
