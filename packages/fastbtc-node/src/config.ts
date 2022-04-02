@@ -202,7 +202,6 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
     }
 
     ret.replenishThreshold = parseConfigFloat(env, 'FASTBTC_REPLENISHER_THRESHOLD');
-    ret.replenishMaxAmount = parseConfigFloat(env, 'FASTBTC_REPLENISHER_MAX_AMOUNT');
     ret.replenishMinAmount = parseConfigFloat(env, 'FASTBTC_REPLENISHER_MIN_AMOUNT');
 
     if (missingKeys.length > 0) {

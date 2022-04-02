@@ -13,7 +13,6 @@ export class ReplenisherMultisig {
     private numRequiredSigners;
     private replenishThreshold = 1.0;
     private replenishMinAmount = 1.0;
-    private replenishMaxAmount = 5.0;
     private isReplenisher: boolean; // is this node a replenisher
     private network: Network;
 
@@ -28,9 +27,6 @@ export class ReplenisherMultisig {
         }
         if (config.replenishMinAmount) {
             this.replenishMinAmount = config.replenishMinAmount;
-        }
-        if (config.replenishMaxAmount) {
-            this.replenishMaxAmount = config.replenishMaxAmount;
         }
 
         this.isReplenisher = !!config.secrets().masterPrivateKey;
@@ -72,9 +68,8 @@ export class ReplenisherMultisig {
             return null;
         }
 
-        let replenishAmount = multisigBalance - this.replenishThreshold;
+        let replenishAmount = this.replenishThreshold - multisigBalance;
         replenishAmount = Math.max(replenishAmount, this.replenishMinAmount);
-        replenishAmount = Math.min(replenishAmount, this.replenishMaxAmount);
         // We end up sending multiple transactions with nonce 0, but since the nonce is not checked against
         // previous bitcoin transactions by the multisig, this should be ok.
         const nonce = 0;

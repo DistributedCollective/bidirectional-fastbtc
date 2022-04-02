@@ -13,5 +13,4 @@ export interface ReplenisherConfig {
     secrets: () => ReplenisherSecrets;
     replenishThreshold?: number;
     replenishMinAmount?: number;
-    replenishMaxAmount?: number;
 }
