@@ -63,7 +63,9 @@ export class ReplenisherMultisig {
         let replenishAmount = multisigBalance - this.replenishThreshold;
         replenishAmount = Math.max(replenishAmount, this.replenishMinAmount);
         replenishAmount = Math.min(replenishAmount, this.replenishMaxAmount);
-        const nonce = 0; // This ensures we can only send once lol
+        // We end up sending multiple transactions with nonce 0, but since the nonce is not checked against
+        // previous bitcoin transactions by the multisig, this should be ok.
+        const nonce = 0;
         return await this.replenisherMultisig.createPartiallySignedTransaction(
             [
                 {
