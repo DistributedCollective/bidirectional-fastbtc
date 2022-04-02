@@ -43,11 +43,12 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     }
 
     async handleReplenisherIteration() {
-        this.logger.info('Handling replenisher iteration');
-
         if (!await this.replenisherMultisig.shouldReplenish()) {
-            this.logger.info('No replenishing is in order -- not doing anything');
+            this.logger.throttledInfo('No replenishing is in order -- not doing anything');
+            return;
         }
+
+        this.logger.info('Handling replenisher iteration');
 
         if (!this.unsignedReplenishPsbt) {
             this.unsignedReplenishPsbt = await this.replenisherMultisig.createReplenishPsbt();
