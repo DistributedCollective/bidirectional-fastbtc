@@ -205,8 +205,8 @@ export class BitcoinMultisig {
             derivationPaths.add(k[2]);
         }
 
-        console.log(keySet);
-        console.log(derivationPaths);
+        //console.log(keySet);
+        //console.log(derivationPaths);
         if (! setsEqual(keySet, this.masterKeyFingerPrints)) {
             throw new Error("Key fingerprints not matching");
         }
