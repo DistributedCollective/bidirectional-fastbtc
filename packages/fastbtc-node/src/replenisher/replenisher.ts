@@ -80,6 +80,10 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     private onMessage = async (message: MessageUnion<BitcoinReplenisherMessage>) => {
         switch (message.type) {
             case 'fastbtc:request-replenish-signature':
+                if (!this.isReplenisher) {
+                    // Don't bother signing if we're not a replenisher
+                    return;
+                }
                 const psbt = await this.replenisherMultisig.signReplenishPsbt(message.data.psbt);
                 await message.source.send('fastbtc:replenish-signature-response', {
                     psbt,
