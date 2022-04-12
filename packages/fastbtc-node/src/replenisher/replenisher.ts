@@ -8,6 +8,8 @@ import {sleep} from '../utils';
 
 interface RequestReplenishSignatureMessage {
     psbt: PartiallySignedBitcoinTransaction;
+    periodIndex: number;
+    timesReplenishedDuringPeriod: number;
 }
 interface ReplenishSignatureResponseMessage {
     psbt: PartiallySignedBitcoinTransaction;
@@ -88,7 +90,10 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         if (!this.unsignedReplenishPsbt) {
             this.unsignedReplenishPsbt = await this.replenisherMultisig.createReplenishPsbt();
             this.gatheredPsbts = [];
-            await this.requestSignatures();
+            await this.requestSignatures({
+                periodIndex,
+                timesReplenishedDuringPeriod,
+            });
             return;
         }
 
@@ -100,7 +105,10 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
 
         if (combinedPsbt.signedPublicKeys.length < this.numRequiredSigners) {
             this.logger.info('Not enough replenish signatures');
-            await this.requestSignatures();
+            await this.requestSignatures({
+                periodIndex,
+                timesReplenishedDuringPeriod,
+            });
             return;
         }
 
@@ -124,7 +132,16 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
                     // Don't bother signing if we're not a replenisher
                     return;
                 }
-                const psbt = await this.replenisherMultisig.signReplenishPsbt(message.data.psbt);
+                const {
+                    psbt: originalPsbt,
+                    periodIndex,
+                    timesReplenishedDuringPeriod
+                } = message.data;
+                // We just trust the initiator for these limits
+                if (timesReplenishedDuringPeriod !== 0) {  // don't store 0 needlessly
+                    this.timesReplenishedPerPeriod[periodIndex] = timesReplenishedDuringPeriod;
+                }
+                const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
                 await message.source.send('fastbtc:replenish-signature-response', {
                     psbt,
                 })
@@ -135,15 +152,22 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         }
     }
 
-    private async requestSignatures() {
+    private async requestSignatures({
+        periodIndex,
+        timesReplenishedDuringPeriod
+    }: {
+        periodIndex: number,
+        timesReplenishedDuringPeriod: number
+    }) {
         if (!this.unsignedReplenishPsbt) {
             this.logger.warning('No unsignedReplenishPsbt, cannot request signatures');
             return;
         }
         await this.network.broadcast('fastbtc:request-replenish-signature', {
             psbt: this.unsignedReplenishPsbt,
+            periodIndex,
+            timesReplenishedDuringPeriod,
         });
-
     }
 
     private async gatherPsbts(): Promise<PartiallySignedBitcoinTransaction|undefined> {
