@@ -30,6 +30,13 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     private numRequiredSigners: number;
     private isReplenisher: boolean;
 
+    // Limit replenishments to N per period as a security measure
+    private readonly maxReplenishmentsDuringPeriod: number = 2;
+    private readonly replenishPeriod: number = 24 * 60 * 60 * 1000; // 1 day
+    // Keeping all replenishment periods in a record will in theory leak memory,
+    // but replenishments should be rare enough for this not to matter
+    private timesReplenishedPerPeriod: Record<number, number> = {};
+
     constructor(
         config: ReplenisherConfig,
         private bitcoinMultisig: BitcoinMultisig,
@@ -39,16 +46,39 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         this.numRequiredSigners = config.numRequiredSigners;
         // It's possible that this node is not a replenisher though it can be the initiator
         this.isReplenisher = !!config.secrets().masterPrivateKey;
+        if (config.maxReplenishmentsDuringPeriod !== undefined) {
+            this.maxReplenishmentsDuringPeriod = config.maxReplenishmentsDuringPeriod;
+        }
+        if (config.replenishPeriod !== undefined) {
+            this.replenishPeriod = config.replenishPeriod;
+        }
         network.onMessage(this.onMessage);
     }
 
     async handleReplenisherIteration() {
+        const periodIndex = Math.floor(+new Date() / this.replenishPeriod);
+        let timesReplenishedDuringPeriod = this.timesReplenishedPerPeriod[periodIndex] ?? 0
+
         if (!await this.replenisherMultisig.shouldReplenish()) {
-            this.logger.throttledInfo('No replenishing is in order -- not doing anything');
+            this.logger.throttledInfo(
+                'No replenishing is in order -- not doing anything ' +
+                `(replenished ${timesReplenishedDuringPeriod} times during period)`
+            );
             return;
         }
 
-        this.logger.info('Handling replenisher iteration');
+        if (timesReplenishedDuringPeriod >= this.maxReplenishmentsDuringPeriod) {
+            this.logger.warning(
+                `We have already replenished ${timesReplenishedDuringPeriod} times -- ` +
+                `must wait until next period for further replenishments.`
+            );
+            return;
+        }
+
+        this.logger.info(
+            'Handling replenisher iteration ' +
+            `(replenished ${timesReplenishedDuringPeriod} times during period)`
+        );
 
         if (!this.unsignedReplenishPsbt) {
             this.unsignedReplenishPsbt = await this.replenisherMultisig.createReplenishPsbt();
@@ -74,6 +104,10 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         this.logger.info('Replenish transaction sent, waiting for confirmation');
         await this.waitForTransaction(combinedPsbt);
         this.logger.info('Replenish transaction confirmed successfully');
+
+        // load this value again to be extra safe with race conditions
+        timesReplenishedDuringPeriod = this.timesReplenishedPerPeriod[periodIndex] ?? 0
+        this.timesReplenishedPerPeriod[periodIndex] = timesReplenishedDuringPeriod + 1;
         this.unsignedReplenishPsbt = null;
         this.gatheredPsbts = [];
     }

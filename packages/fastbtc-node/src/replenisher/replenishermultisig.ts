@@ -52,6 +52,7 @@ export class ReplenisherMultisig {
     }
 
     async shouldReplenish(): Promise<boolean> {
+        // TODO: should maybe move this to replenisher.ts
         const multisigBalance = await this.bitcoinMultisig.getMultisigBalance(true);
         return multisigBalance < this.replenishThreshold;
         //const replenisherBalance = this.replenisherMultisig.getMultisigBalance();
