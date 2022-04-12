@@ -56,6 +56,14 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     }
 
     async handleReplenisherIteration() {
+        if (!await this.replenisherMultisig.shouldReplenish()) {
+            this.logger.throttledInfo(
+                'No replenishing is in order -- not doing anything ',
+                10 * 60
+            );
+            return;
+        }
+
         const periodIndex = Math.floor(+new Date() / this.replenishPeriod);
         let timesReplenishedDuringPeriod = this.timesReplenishedPerPeriod[periodIndex] ?? 0
         const periodStart = new Date(periodIndex * this.replenishPeriod);
@@ -64,14 +72,6 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
             `(replenished ${timesReplenishedDuringPeriod} times during period ` +
             `${periodStart.toJSON()}-${periodEnd.toJSON()})`
         )
-
-        if (!await this.replenisherMultisig.shouldReplenish()) {
-            this.logger.throttledInfo(
-                'No replenishing is in order -- not doing anything ',
-                10 * 60
-            );
-            return;
-        }
 
         if (timesReplenishedDuringPeriod >= this.maxReplenishmentsDuringPeriod) {
             this.logger.warning(
