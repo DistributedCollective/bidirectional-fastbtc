@@ -63,23 +63,31 @@ After the startup is done, you can run an example script that sends a mixture of
 ```
 $ make test-transfers
 ... some yarn/hardhat logs about building ...
-User balance before: 0.00000000 BTC
+User balance before:        0.00000000 BTC
+Multisig balance before:    0.00000000 BTC
+Replenisher balance before: 550.00000000 BTC
+
 Sending 5 rBTC (5000000000000000000 wei) to 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8
 tx hash: 0xd3873623deb510a2c6552b9d5f76952aebae9ac55982e5d1b1b8a32df876e3b9
 Sending 0.15 rBTC from 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8 to BTC address bcrt1qq8zjw66qrgmynrq3gqdx79n7fcchtaudq4rrf2 4 times
 ...
 4 invalid transfers sent, followed by 4 transfers to proper addresses. They should be visible in a couple of minutes
 Polling balances, Ctrl-C to exit
-User balance: 0.00000000 BTC
-User balance: 0.00000000 BTC
-User balance: 0.00000000 BTC
+User: 0.00000000  Multisig: 0.00000000  Replenisher: 1100.00000000
+User: 0.00000000  Multisig: 0.00000000  Replenisher: 1600.00000000
+User: 0.00000000  Multisig: 0.00000000  Replenisher: 2100.00000000
 ...
-User balance: 0.00000000 BTC
-User balance: 0.59992000 BTC
-User balance: 0.59992000 BTC
-User balance: 0.59992000 BTC
-User balance: 0.59992000 BTC
+User: 0.00000000  Multisig: 49.99997522  Replenisher: 5650.00000000
+User: 0.59992000  Multisig: 49.40002110  Replenisher: 6200.00000000
+User: 0.59992000  Multisig: 49.40002110  Replenisher: 6700.00000000
+User: 0.59992000  Multisig: 49.40002110  Replenisher: 7200.00000000
+User: 0.59992000  Multisig: 49.40002110  Replenisher: 7550.00002478
 ```
+
+When the user balance increases, it indicates that the transfers went through properly.
+When the multisig balance icreases, it indicates that the multisig was replenished correctly from the replenisher
+multisig.
+The replenisher balance will increase every block.
 
 Hit Ctrl-C to quit it.
 

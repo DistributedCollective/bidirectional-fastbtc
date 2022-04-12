@@ -203,6 +203,22 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
 
     ret.replenishThreshold = parseConfigFloat(env, 'FASTBTC_REPLENISHER_THRESHOLD');
     ret.replenishMinAmount = parseConfigFloat(env, 'FASTBTC_REPLENISHER_MIN_AMOUNT');
+    ret.replenishPeriod = parseConfigNumber(
+        env,
+        'FASTBTC_REPLENISHER_PERIOD',
+        {
+            allowZero: false,
+            parser: parseInt,
+        }
+    );
+    ret.maxReplenishmentsDuringPeriod = parseConfigNumber(
+        env,
+        'FASTBTC_REPLENISHER_MAX_REPLENISHMENTS_DURING_PERIOD',
+        {
+            allowZero: true,
+            parser: parseInt,
+        }
+    );
 
     if (missingKeys.length > 0) {
         if (givenKeys.length > 0) {
@@ -222,16 +238,39 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
 }
 
 const parseConfigFloat = (env: Record<string, string>, key: string): number|undefined => {
+    return parseConfigNumber(env, key, { allowZero: false, parser: parseFloat })
+}
+
+function parseConfigNumber(
+    env: Record<string, string>,
+    key: string,
+    opts: {
+        allowZero?: boolean,
+        parser?: (raw: string) => number,
+    } = {}
+): number|undefined {
+    const {
+        allowZero,
+        parser = parseFloat,
+    } = opts;
     const raw = env[key];
     if (!raw) {
         return undefined;
     }
-    const floatValue = parseFloat(raw);
-    if (!floatValue) {
-        console.warn(`Cannot parse float from value given for ${key}: ${raw}; got ${floatValue}`)
+
+    const value = parser(raw);
+    if (value === 0) {
+        if (!allowZero) {
+            console.warn(
+                `Got 0 when parsing number from value given for ${key}: ${raw}, but that's not allowed`
+            );
+            return undefined;
+        }
+    } else if (!value) {
+        console.warn(`Cannot parse number from value given for ${key}: ${raw}; got ${value}`)
         return undefined;
     }
-    return floatValue;
+    return value;
 }
 
 function parseKnownPeers(raw: string) {
