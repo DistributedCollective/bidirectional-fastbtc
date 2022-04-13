@@ -100,6 +100,11 @@ export class BitcoinMultisig {
             )
         );
 
+        if (this.masterPublicKey && this.masterPublicKeys.indexOf(this.masterPublicKey) == -1) {
+            throw new Error(`The public key ${this.masterPublicKey} derived from the private key is` +
+                ` not in the public key listing ${JSON.stringify(this.masterPublicKeys)}`);
+        }
+
         this.keyDerivationPath = config.btcKeyDerivationPath || '0/0/0';
         this.changePayment = this.derivePayment(this.keyDerivationPath);
     }
@@ -242,6 +247,7 @@ export class BitcoinMultisig {
                 throw new Error(`Unable to deduce gas fee, got ${response} for response from estimaterawfee 2 from node`);
             }
         }
+
         // fee rate in sats/vB; add 5 % margin, convert from btc per KiB
         const feeRate = 1.05 * feeBtcPerKB / 1000 * 1e8;
         this.logger.info(`Using fee rate ${feeRate} per vB`);
@@ -279,7 +285,7 @@ export class BitcoinMultisig {
                     withDerivationPaths.push({...utxo, derivationPath: parsed.derivationPath});
                 }
                 catch (e) {
-                    console.log("unable to parse descriptor:", e);
+                    this.logger.error("unable to parse descriptor:", e);
                 }
             }
         }
