@@ -387,7 +387,7 @@ export class BitcoinTransferService {
         const updateHash = await getUpdateHashForMined(this.fastBtcBridge, transferBatch);
         for(const {address, signature} of signaturesAndAddresses) {
             const existingSigners = transferBatch.rskMinedSigners.map(a => a.toLowerCase());
-            if (existingSigners.indexOf(address) !== -1) {
+            if (existingSigners.indexOf(address.toLowerCase()) !== -1) {
                 this.logger.info(`address ${address} has already signed`);
                 continue;
             }
