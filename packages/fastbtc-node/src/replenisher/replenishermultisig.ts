@@ -115,7 +115,7 @@ export class ReplenisherMultisig {
         }
 
         if (!this.isReplenisher) {
-            this.logger.warning('Not replenisher, cannot sign');
+            this.logger.info('Not replenisher, cannot sign');
             return tx;
         }
 
