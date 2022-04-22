@@ -64,11 +64,18 @@ export class RSKKeyedAuth implements AuthProvider {
 
     private readonly signer: ethers.Signer;
     private readonly getPeerAddresses: () => Promise<string[]>;
+    private cachedPeerAddresses: string[]|undefined = undefined;
 
     public constructor(options: RSKKeyedAuthOptions) {
         this.signer = options.signer;
-        // TODO: we could enable some caching for this
-        this.getPeerAddresses = options.getPeerAddresses;
+
+        // Cache this forever for now
+        this.getPeerAddresses = async (): Promise<string[]> => {
+            if (!this.cachedPeerAddresses) {
+                this.cachedPeerAddresses = await options.getPeerAddresses();
+            }
+            return this.cachedPeerAddresses;
+        }
     }
 
     public createClientFlow(context: AuthContext): AuthClientFlow {
