@@ -129,19 +129,21 @@ export class FastBTCNode {
     }
 
     runIteration = async () => {
+        this.logger.throttledInfo("running iteration");
         await this.statusChecker.makeSureThatThisNodeIsStillAFederator();
 
         try {
             const multisigBalance = await this.btcMultisig.getMultisigBalance();
             this.statsd.gauge('fastbtc.pegout.multisig.balance', multisigBalance);
         } catch (e) {
-            this.logger.exception(e, `Failed to fetch multisig balance, got exception ${e}`);
+            this.logger.exception(e, `failed to fetch multisig balance, got exception ${e}`);
         }
 
         const newEvents = await this.eventScanner.scanNewEvents();
         if (newEvents.length) {
             this.logger.info(`scanned ${newEvents.length} new events`);
         }
+
         const numTransfers = await this.eventScanner.getNumTransfers();
         const numNodesOnline = this.networkUtil.getNumNodesOnline();
 
