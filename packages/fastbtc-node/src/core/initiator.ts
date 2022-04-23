@@ -159,23 +159,27 @@ export class InitiatorVoting {
     }
 
     private onMessage = async (message: MessageUnion<InitiatorVotingMessage>) => {
-        switch (message.type) {
-            case 'fastbtc:initiator:sync-request':
-                this.nodeInitiatorIds.setNodeValue(message.source.id, message.data.initiatorId);
-                // Maybe it's good to communicate the null case too
-                //if (this.localInitiatorId === null) {
-                //    return;
-                //}
-                await message.source.send(
-                    'fastbtc:initiator:sync-response',
-                    {
-                        initiatorId: this.nodeInitiatorIds.getNodeValue(this.id),
-                    }
-                );
-                break
-            case 'fastbtc:initiator:sync-response':
-                this.nodeInitiatorIds.setNodeValue(message.source.id, message.data.initiatorId);
-                break;
+        try {
+            switch (message.type) {
+                case 'fastbtc:initiator:sync-request':
+                    this.nodeInitiatorIds.setNodeValue(message.source.id, message.data.initiatorId);
+                    // Maybe it's good to communicate the null case too
+                    //if (this.localInitiatorId === null) {
+                    //    return;
+                    //}
+                    await message.source.send(
+                        'fastbtc:initiator:sync-response',
+                        {
+                            initiatorId: this.nodeInitiatorIds.getNodeValue(this.id),
+                        }
+                    );
+                    break
+                case 'fastbtc:initiator:sync-response':
+                    this.nodeInitiatorIds.setNodeValue(message.source.id, message.data.initiatorId);
+                    break;
+            }
+        } catch (err) {
+            this.logger.exception(err, 'Error in InitiatorVoting onMessage');
         }
     }
 
