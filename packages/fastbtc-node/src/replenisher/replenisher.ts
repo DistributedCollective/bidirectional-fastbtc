@@ -127,18 +127,18 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
 
     private onMessage = async (message: MessageUnion<BitcoinReplenisherMessage>) => {
         const logMessage = () => {
-            let dataRepr;
-            try {
-                dataRepr = JSON.stringify(message.data);
-            } catch(e) {
-                this.logger.exception(e, 'Error creating replenisher message repr (ignored)')
-                dataRepr = '(failed to create repr)'
-            }
+            //let dataRepr;
+            //try {
+            //    dataRepr = JSON.stringify(message.data);
+            //} catch(e) {
+            //    this.logger.exception(e, 'Error creating replenisher message repr (ignored)')
+            //    dataRepr = '(failed to create repr)'
+            //}
             this.logger.info(
                 'Received replenisher message, from: %s, type: %s, data: %s',
                 message.source.id,
                 message.type,
-                dataRepr,
+                '(message data redacted)',
             );
         }
         try {
@@ -159,10 +159,14 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
                     if (timesReplenishedDuringPeriod !== 0) {  // don't store 0 needlessly
                         this.timesReplenishedPerPeriod[periodIndex] = timesReplenishedDuringPeriod;
                     }
+
+                    console.log("Signing replenish PSBT");
                     const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
+                    console.log("Signed replenish PSBT, sending response");
                     await message.source.send('fastbtc:replenish-signature-response', {
                         psbt,
                     })
+                    console.log("Response sent");
                     return;
                 case 'fastbtc:replenish-signature-response':
                     logMessage();
