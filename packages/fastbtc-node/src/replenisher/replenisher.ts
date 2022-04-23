@@ -160,13 +160,15 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
                         this.timesReplenishedPerPeriod[periodIndex] = timesReplenishedDuringPeriod;
                     }
 
-                    console.log("Signing replenish PSBT");
-                    const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
-                    console.log("Signed replenish PSBT, sending response");
-                    await message.source.send('fastbtc:replenish-signature-response', {
-                        psbt,
-                    })
-                    console.log("Response sent");
+                    // TODO: re-enable replenishments
+                    this.logger.info("The replenisher is temporarily disabled");
+                    //console.log("Signing replenish PSBT");
+                    //const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
+                    //console.log("Signed replenish PSBT, sending response");
+                    //await message.source.send('fastbtc:replenish-signature-response', {
+                    //    psbt,
+                    //})
+                    //console.log("Response sent");
                     return;
                 case 'fastbtc:replenish-signature-response':
                     logMessage();
