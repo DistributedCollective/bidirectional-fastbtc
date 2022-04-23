@@ -126,29 +126,51 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     }
 
     private onMessage = async (message: MessageUnion<BitcoinReplenisherMessage>) => {
-        switch (message.type) {
-            case 'fastbtc:request-replenish-signature':
-                if (!this.isReplenisher) {
-                    // Don't bother signing if we're not a replenisher
+        const logMessage = () => {
+            let dataRepr;
+            try {
+                dataRepr = JSON.stringify(message.data);
+            } catch(e) {
+                this.logger.exception(e, 'Error creating replenisher message repr (ignored)')
+                dataRepr = '(failed to create repr)'
+            }
+            this.logger.info(
+                'Received replenisher message, from: %s, type: %s, data: %s',
+                message.source.id,
+                message.type,
+                dataRepr,
+            );
+        }
+        try {
+            switch (message.type) {
+                case 'fastbtc:request-replenish-signature':
+                    logMessage();
+                    if (!this.isReplenisher) {
+                        // Don't bother signing if we're not a replenisher
+                        return;
+                    }
+
+                    const {
+                        psbt: originalPsbt,
+                        periodIndex,
+                        timesReplenishedDuringPeriod
+                    } = message.data;
+                    // We just trust the initiator for these limits
+                    if (timesReplenishedDuringPeriod !== 0) {  // don't store 0 needlessly
+                        this.timesReplenishedPerPeriod[periodIndex] = timesReplenishedDuringPeriod;
+                    }
+                    const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
+                    await message.source.send('fastbtc:replenish-signature-response', {
+                        psbt,
+                    })
                     return;
-                }
-                const {
-                    psbt: originalPsbt,
-                    periodIndex,
-                    timesReplenishedDuringPeriod
-                } = message.data;
-                // We just trust the initiator for these limits
-                if (timesReplenishedDuringPeriod !== 0) {  // don't store 0 needlessly
-                    this.timesReplenishedPerPeriod[periodIndex] = timesReplenishedDuringPeriod;
-                }
-                const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
-                await message.source.send('fastbtc:replenish-signature-response', {
-                    psbt,
-                })
-                return;
-            case 'fastbtc:replenish-signature-response':
-                this.gatheredPsbts.push(message.data.psbt);
-                return;
+                case 'fastbtc:replenish-signature-response':
+                    logMessage();
+                    this.gatheredPsbts.push(message.data.psbt);
+                    return;
+            }
+        } catch(err) {
+            this.logger.exception(err, 'Error in replenisher onMessage');
         }
     }
 
