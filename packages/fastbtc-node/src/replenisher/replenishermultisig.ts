@@ -13,6 +13,7 @@ export class ReplenisherMultisig {
     private numRequiredSigners;
     private replenishThreshold = 1.0;
     private replenishMinAmount = 1.0;
+    private maxReplenishTxInputs = 100;
     private isReplenisher: boolean; // is this node a replenisher
     private network: Network;
 
@@ -85,7 +86,8 @@ export class ReplenisherMultisig {
             false, //this.isReplenisher // never sign self
             true, // use descriptor-based utxo scooping
             true,
-        )
+            this.maxReplenishTxInputs,
+        );
     }
 
     signReplenishPsbt(tx: PartiallySignedBitcoinTransaction): PartiallySignedBitcoinTransaction {
@@ -98,6 +100,14 @@ export class ReplenisherMultisig {
 
         if (psbtUnserialized.locktime !== 0) {
             throw new Error(`The replenishment transaction has invalid lock time ${psbtUnserialized.locktime}, should be zero`);
+        }
+
+        if (psbtUnserialized.inputCount > this.maxReplenishTxInputs) {
+            this.logger.warning(
+                `Refusing to sign replenish tx with more than ${this.maxReplenishTxInputs} inputs ` +
+                `as that might hang the node.`
+            );
+            return tx;
         }
 
         const output = psbtUnserialized.txOutputs[1];

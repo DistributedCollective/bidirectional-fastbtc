@@ -230,11 +230,13 @@ export class BitcoinMultisig {
     }
 
     async createPartiallySignedTransaction(
-            transfers: BtcTransfer[],
-            signSelf: boolean = false,
-            useDescriptors: boolean = false,
-            noChange: boolean = false,
+        transfers: BtcTransfer[],
+        signSelf: boolean = false,
+        useDescriptors: boolean = false,
+        noChange: boolean = false,
+        maxInputs: number|undefined = undefined,
     ): Promise<PartiallySignedBitcoinTransaction> {
+        // TODO: this method is a mess. Too many ifs because of the replenisher stuff.
         const estimateRawFeeOutput = await this.nodeWrapper.call('estimaterawfee', [2]);
         let feeBtcPerKB = estimateRawFeeOutput.short.feerate;
         if (typeof feeBtcPerKB !== 'number') {
@@ -254,6 +256,12 @@ export class BitcoinMultisig {
 
         if (transfers.length > this.maximumBatchSize) {
             throw new Error(`The number of transfers ${transfers.length} exceeds the maximum batch size ${this.maximumBatchSize}`);
+        }
+
+        if (maxInputs) {
+            if (!noChange) {
+                throw new Error('maxInputs can only be specified for the special replenishment PSBT with noChange=true');
+            }
         }
 
         const network = this.network;
@@ -310,6 +318,7 @@ export class BitcoinMultisig {
 
         const derivationPaths: Set<string> = new Set();
         let fee = BigNumber.from(0);
+        let totalInputCount = 0;
         for (const utxo of response) {
             const tx = await this.getRawTx(utxo.txid);
 
@@ -326,6 +335,7 @@ export class BitcoinMultisig {
 
                 psbt.addInput(input);
                 inputCounts[inputType]++;
+                totalInputCount++;
                 totalSum = totalSum.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
 
                 fee = BigNumber.from(
@@ -342,15 +352,27 @@ export class BitcoinMultisig {
                 if (totalSum.gte(amountSatoshi.add(fee))) {
                     break;
                 }
+                if (maxInputs && totalInputCount >= maxInputs) {
+                    break;
+                }
             }
         }
 
         const transferSumIncludingFee = amountSatoshi.add(fee);
         if (totalSum.lt(transferSumIncludingFee)) {
-            throw new Error(
-                `balance is too low (can only send up to ${totalSum.toString()} satoshi out of ` +
-                `${transferSumIncludingFee.toString()} required)`
-            );
+            if (maxInputs && totalInputCount >= maxInputs && response.length > maxInputs) {
+                this.logger.warning(
+                    `Number of inputs is capped at ${maxInputs} -- can only send ` +
+                    `${totalSum.toString()} satoshi out of ${transferSumIncludingFee.toString()} satoshi wanted. ` +
+                    `(But that's ok for a replenish tx.)`
+                )
+
+            } else {
+                throw new Error(
+                    `balance is too low (can only send up to ${totalSum.toString()} satoshi out of ` +
+                    `${transferSumIncludingFee.toString()} required)`
+                );
+            }
         }
 
         const dataPayload: number[] = transfers.map((e) => e.nonce);
