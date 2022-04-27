@@ -10,6 +10,12 @@ run-demo-regtest: packages/fastbtc-node/version.json
 	@docker-compose -f docker-compose-base.yml down --remove-orphans && \
 		docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml up --build --force-recreate
 
+
+.PHONY: run-demo-regtest-replenisher-tests
+run-demo-regtest-replenisher-tests: packages/fastbtc-node/version.json
+	@export TEST_VERY_SMALL_REPLENISHER_COINS=true && docker-compose -f docker-compose-base.yml down --remove-orphans && \
+		docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml up --build --force-recreate
+
 .PHONY: show-node-logs
 show-node-logs:
 	@docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml logs -f node1 node2 node3

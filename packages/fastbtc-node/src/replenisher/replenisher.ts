@@ -160,15 +160,16 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
                         this.timesReplenishedPerPeriod[periodIndex] = timesReplenishedDuringPeriod;
                     }
 
-                    // TODO: re-enable replenishments
-                    this.logger.info("The replenisher is temporarily disabled");
-                    //console.log("Signing replenish PSBT");
-                    //const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
-                    //console.log("Signed replenish PSBT, sending response");
-                    //await message.source.send('fastbtc:replenish-signature-response', {
-                    //    psbt,
-                    //})
-                    //console.log("Response sent");
+                    // We previously got errors where the signing would take too long (with 1000 inputs),
+                    // hence we have some extra logging here.
+                    console.log("Signing replenish PSBT");
+                    const timestampBefore = +new Date();
+                    const psbt = await this.replenisherMultisig.signReplenishPsbt(originalPsbt);
+                    console.log("Signing replenish PSBT took %s s", ((+new Date()) - timestampBefore) / 1000);
+                    await message.source.send('fastbtc:replenish-signature-response', {
+                        psbt,
+                    })
+                    console.log("Replenisher response sent");
                     return;
                 case 'fastbtc:replenish-signature-response':
                     logMessage();
