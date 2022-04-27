@@ -26,6 +26,8 @@ services:
      - REPLENISHER1_XPRV=tprv8ZgxMBicQKsPdn254GKf2bYkZkX7qYSTfp1Nd1cZ8mTVsd12ni2K9CmredbD7FY6UvJTfBXG3uJiF24hen5vycv1TUmS9g9MSGLbht9g8FK
      - REPLENISHER2_XPRV=tprv8ZgxMBicQKsPevFzbHT9BG3m1m7ZtjniHW5UzECpbAPPMUdSisBVVBSJtZzJLWWJ4157NG9wrFqSKbsYBEhj5pWvBuncJANC2EuLi8oRawM
      - REPLENISHER_ADDRESS=bcrt1qh0j5lcsvezdnrljsfcuetwrg7xen4a6ydmx9pt363e27rph2mntslwp447
+     # Extra test vars
+     - TEST_VERY_SMALL_REPLENISHER_COINS
 
     ports:
       - 18443:18443
