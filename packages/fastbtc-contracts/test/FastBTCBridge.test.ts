@@ -402,65 +402,63 @@ describe("FastBTCBridge", function() {
             });
         });
 
-        // No reclamations supported now
-        //
-        // describe('#reclaimTransfer', () => {
-        //     const requiredBlocks = 10;
-        //     let transfer: any;
-        //     let reclaimableBlock: number;
-        //
-        //     beforeEach(async () => {
-        //         transfer = await fastBtcBridge.getTransferByTransferId(transferId);
-        //         await fastBtcBridge.setRequiredBlocksBeforeReclaim(requiredBlocks)
-        //         reclaimableBlock = transfer.blockNumber + requiredBlocks;
-        //     });
-        //
-        //     it("doesn't reclaim transfers when not enough blocks have passed", async () => {
-        //         await expect(
-        //             fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
-        //         ).to.be.revertedWith("Not enough blocks passed before reclaim");
-        //         // next block will be the block we mine to +1, so we mine to -2
-        //         await mineToBlock(reclaimableBlock - 2);
-        //         await expect(
-        //             fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
-        //         ).to.be.revertedWith("Not enough blocks passed before reclaim");
-        //     });
-        //
-        //     it('reclaims transfer when enough block have passed', async () => {
-        //         expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
-        //         await mineToBlock(reclaimableBlock - 1);
-        //         await expect(
-        //             await fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
-        //         ).to.changeEtherBalances(
-        //             [anotherAccount, fastBtcBridge],
-        //             [transferAmount, transferAmount.mul(-1)]
-        //         );
-        //         transfer = await fastBtcBridge.getTransferByTransferId(transferId);
-        //         expect(transfer.status).to.equal(TRANSFER_STATUS_RECLAIMED);
-        //
-        //         // cannot reclaim again
-        //         await expect(
-        //             fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
-        //         ).to.be.reverted;
-        //     });
-        //
-        //     it('emits events', async () => {
-        //         await mineToBlock(reclaimableBlock);
-        //         await expect(
-        //             fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
-        //         ).to.emit(fastBtcBridgeFromFederator, 'BitcoinTransferStatusUpdated').withArgs(
-        //             transferId,
-        //             TRANSFER_STATUS_RECLAIMED
-        //         );
-        //     });
-        //
-        //     it('only allows reclaiming own transfers', async () => {
-        //         await mineToBlock(reclaimableBlock);
-        //         await expect(
-        //             fastBtcBridge.reclaimTransfer(transferId)
-        //         ).to.be.revertedWith("Can only reclaim own transfers");
-        //     });
-        // });
+        describe('#reclaimTransfer', () => {
+            const requiredBlocks = 10;
+            let transfer: any;
+            let reclaimableBlock: number;
+
+            beforeEach(async () => {
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                await fastBtcBridge.setRequiredBlocksBeforeReclaim(requiredBlocks)
+                reclaimableBlock = transfer.blockNumber + requiredBlocks;
+            });
+
+            it("doesn't reclaim transfers when not enough blocks have passed", async () => {
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.revertedWith("Not enough blocks passed before reclaim");
+                // next block will be the block we mine to +1, so we mine to -2
+                await mineToBlock(reclaimableBlock - 2);
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.revertedWith("Not enough blocks passed before reclaim");
+            });
+
+            it('reclaims transfer when enough block have passed', async () => {
+                expect(transfer.status).to.equal(TRANSFER_STATUS_NEW);
+                await mineToBlock(reclaimableBlock - 1);
+                await expect(
+                    await fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.changeEtherBalances(
+                    [anotherAccount, fastBtcBridge],
+                    [transferAmount, transferAmount.mul(-1)]
+                );
+                transfer = await fastBtcBridge.getTransferByTransferId(transferId);
+                expect(transfer.status).to.equal(TRANSFER_STATUS_RECLAIMED);
+
+                // cannot reclaim again
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.be.reverted;
+            });
+
+            it('emits events', async () => {
+                await mineToBlock(reclaimableBlock);
+                await expect(
+                    fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId)
+                ).to.emit(fastBtcBridgeFromFederator, 'BitcoinTransferStatusUpdated').withArgs(
+                    transferId,
+                    TRANSFER_STATUS_RECLAIMED
+                );
+            });
+
+            it('only allows reclaiming own transfers', async () => {
+                await mineToBlock(reclaimableBlock);
+                await expect(
+                    fastBtcBridge.reclaimTransfer(transferId)
+                ).to.be.revertedWith("Can only reclaim own transfers");
+            });
+        });
     });
 
     describe('#getTransferId', () => {

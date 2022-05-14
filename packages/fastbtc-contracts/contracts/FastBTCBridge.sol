@@ -24,8 +24,8 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         SENDING,        // the federators have approved this transfer
                         // as part of a transfer batch
         MINED,          // the transfer was confirmedly mined in Bitcoin blockchain
-        REFUNDED        // the transfer was refunded
-        //, RECLAIMED       // the transfer was reclaimed by the user; not in use in this version of the contract
+        REFUNDED,       // the transfer was refunded
+        RECLAIMED       // the transfer was reclaimed by the user
     }
 
     /// @dev An rBTC-to-BTC transfer.
@@ -108,7 +108,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     /// that is unusable because after that nextNonces would roll over
     uint8 public constant MAXIMUM_VALID_NONCE = 254;
 
-    // uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30; // TODO: adjust this as needed
+    /// @dev Maximum possible number for required blocks before reclaiming
+    uint256 public constant MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM = 7 * 24 * 60 * 60 / 30;
+
     mapping(bytes32 => BitcoinTransfer) public transfers;
 
     /// @dev The next nonce to be used for each Bitcoin address
@@ -127,6 +129,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     uint8  public currentFeeStructureIndex;
     uint16 public dynamicFee;
     uint32 public baseFeeSatoshi;
+
+    uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
+
 
     /// @dev Constructor.
     /// @param accessControl            Address of the FastBTCAccessControl contract.
@@ -238,33 +243,31 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         });
     }
 
-// Reclamations are not yet supported!
-//
-//    function reclaimTransfer(
-//        bytes32 transferId
-//    )
-//    external
-//    nonReentrant
-//    {
-//        BitcoinTransfer storage transfer = transfers[transferId];
-//        // decide if it should be possible to also reclaim sent transfers
-//        require(
-//            transfer.status == BitcoinTransferStatus.NEW,
-//            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
-//        );
-//        require(
-//            transfer.rskAddress == msg.sender,
-//            "Can only reclaim own transfers"
-//        );
-//        require(
-//            block.number - transfer.blockNumber >= requiredBlocksBeforeReclaim,
-//            "Not enough blocks passed before reclaim"
-//        );
-//
-//        // ordering!
-//        _updateTransferStatus(transferId, transfer, BitcoinTransferStatus.RECLAIMED);
-//        _refundTransferRbtc(transfer);
-//    }
+    function reclaimTransfer(
+        bytes32 transferId
+    )
+    external
+    nonReentrant
+    {
+        BitcoinTransfer storage transfer = transfers[transferId];
+        // decide if it should be possible to also reclaim sent transfers
+        require(
+            transfer.status == BitcoinTransferStatus.NEW,
+            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
+        );
+        require(
+            transfer.rskAddress == msg.sender,
+            "Can only reclaim own transfers"
+        );
+        require(
+            block.number - transfer.blockNumber >= requiredBlocksBeforeReclaim,
+            "Not enough blocks passed before reclaim"
+        );
+
+        // ordering!
+        _updateTransferStatus(transferId, transfer, BitcoinTransferStatus.RECLAIMED);
+        _refundTransferRbtc(transfer);
+    }
 
     // FEDERATOR API
     // ==============
@@ -737,18 +740,18 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         maxTransferSatoshi = uint40(newMaxTransferSatoshi);
     }
 
-//    function setRequiredBlocksBeforeReclaim(
-//        uint256 newRequiredBlocksBeforeReclaim
-//    )
-//    external
-//    onlyAdmin
-//    {
-//        require(
-//            newRequiredBlocksBeforeReclaim <= MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM,
-//            "Required blocks before reclaim too large"
-//        );
-//        requiredBlocksBeforeReclaim = uint32(newRequiredBlocksBeforeReclaim);
-//    }
+    function setRequiredBlocksBeforeReclaim(
+        uint256 newRequiredBlocksBeforeReclaim
+    )
+    external
+    onlyAdmin
+    {
+        require(
+            newRequiredBlocksBeforeReclaim <= MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM,
+            "Required blocks before reclaim too large"
+        );
+        requiredBlocksBeforeReclaim = uint32(newRequiredBlocksBeforeReclaim);
+    }
 
     // TODO: figure out if we want to lock this so that only fees can be retrieved
     /// @dev Withdraw rBTC from the contract.
