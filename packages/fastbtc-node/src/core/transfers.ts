@@ -80,6 +80,10 @@ export class TransferBatch {
         }
     }
 
+    toJson(): string {
+        return JSON.stringify(this.getDto());
+    }
+
     copy(): TransferBatch {
         return new TransferBatch(
             deepcopy(this.environment),

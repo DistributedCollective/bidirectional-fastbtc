@@ -184,7 +184,7 @@ export class FastBTCNode {
         this.logger.throttledInfo(`transfers queued: ${transferBatch.transfers.length}`);
 
         if (transferBatch.transfers.length !== 0) {
-            this.logger.info('TransferBatch:', transferBatch);
+            this.logger.info('TransferBatch:', transferBatch.toJson());
         }
 
         this.statsd.gauge('fastbtc.pegout.batch.queued_transfers', transferBatch.transfers.length);
@@ -418,7 +418,7 @@ export class FastBTCNode {
             this.logger.debug('received message:');
             this.logger.debug('type  ', message.type);
             this.logger.debug('source', message.source);
-            this.logger.debug('data  ', JSON.stringify(message.data, null, 2));
+            this.logger.debug('data  ', JSON.stringify(message.data));
 
             promise.catch(err => {
                 if (err.isValidationError) {

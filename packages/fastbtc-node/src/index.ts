@@ -14,7 +14,7 @@ async function main() {
     let container = await bootstrap();
 
     const config = await container.get<Config>(Config);
-    rootLogger.log('My config is', getCensoredConfig(config));
+    rootLogger.log('My config is', JSON.stringify(getCensoredConfig(config)));
 
     const btcMultisig = container.get<BitcoinMultisig>(BitcoinMultisig);
     if (!await btcMultisig.healthCheck()) {
