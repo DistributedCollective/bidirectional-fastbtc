@@ -186,6 +186,32 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         _transferToBtc(btcAddress, rskAddress, msg.value);
     }
 
+    function reclaimTransfer(
+        bytes32 transferId
+    )
+    external
+    nonReentrant
+    {
+        BitcoinTransfer storage transfer = transfers[transferId];
+        // decide if it should be possible to also reclaim sent transfers
+        require(
+            transfer.status == BitcoinTransferStatus.NEW,
+            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
+        );
+        require(
+            transfer.rskAddress == msg.sender,
+            "Can only reclaim own transfers"
+        );
+        require(
+            block.number - transfer.blockNumber >= requiredBlocksBeforeReclaim,
+            "Not enough blocks passed before reclaim"
+        );
+
+        // ordering!
+        _updateTransferStatus(transferId, transfer, BitcoinTransferStatus.RECLAIMED);
+        _refundTransferRbtc(transfer);
+    }
+
     // PRIVATE METHODS USED BY PUBLIC API
     // ==================================
 
@@ -241,32 +267,6 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
             feeSatoshi: feeSatoshi,
             rskAddress: rskAddress
         });
-    }
-
-    function reclaimTransfer(
-        bytes32 transferId
-    )
-    external
-    nonReentrant
-    {
-        BitcoinTransfer storage transfer = transfers[transferId];
-        // decide if it should be possible to also reclaim sent transfers
-        require(
-            transfer.status == BitcoinTransferStatus.NEW,
-            "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
-        );
-        require(
-            transfer.rskAddress == msg.sender,
-            "Can only reclaim own transfers"
-        );
-        require(
-            block.number - transfer.blockNumber >= requiredBlocksBeforeReclaim,
-            "Not enough blocks passed before reclaim"
-        );
-
-        // ordering!
-        _updateTransferStatus(transferId, transfer, BitcoinTransferStatus.RECLAIMED);
-        _refundTransferRbtc(transfer);
     }
 
     // FEDERATOR API
