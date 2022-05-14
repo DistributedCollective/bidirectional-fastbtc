@@ -35,6 +35,11 @@ test-transfers:
 	@cd packages/fastbtc-contracts && make
 	@integration_test/scripts/test_example_transfer.sh
 
+.PHONY: test-reclaiming
+test-reclaiming:
+	@cd packages/fastbtc-contracts && make
+	@integration_test/scripts/test_user_reclaiming.sh
+
 .PHONY: run-testnet
 run-testnet:
 	@docker-compose -f docker-compose-base.yml -f docker-compose-testnet.yml up --build

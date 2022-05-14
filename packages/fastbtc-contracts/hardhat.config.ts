@@ -51,7 +51,6 @@ task("federators", "Prints the list of federators", async (args, hre) => {
     }
 });
 
-
 task("show-transfer", "Show transfer details")
     .addPositionalParam('btcAddressOrTransferId')
     .addOptionalPositionalParam('nonce')
@@ -142,6 +141,47 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
         }
     });
 
+task("reclaim-transfer", "Reclaim a transfer")
+    .addPositionalParam("privateKey", "Private key of address to send free money from")
+    .addPositionalParam('btcAddressOrTransferId')
+    .addOptionalPositionalParam('nonce')
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ privateKey, btcAddressOrTransferId, nonce, bridgeAddress }, hre) => {
+        const provider = hre.ethers.provider;
+        const wallet = new hre.ethers.Wallet(privateKey, provider);
+
+        let contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+        );
+        contract = contract.connect(wallet);
+
+        let transferId;
+        if (nonce === undefined) {
+            console.log('Nonce not given, treat', btcAddressOrTransferId, 'as transferId');
+            transferId = btcAddressOrTransferId;
+        } else {
+            console.log('Nonce given, treat', btcAddressOrTransferId, 'as btcAddress');
+            transferId = await contract.getTransferId(btcAddressOrTransferId, nonce);
+        }
+
+        const tx = await contract.reclaimTransfer(transferId);
+        console.log('tx hash:', tx.hash, 'waiting...');
+        await tx.wait()
+    });
+
+task("get-next-nonce", "Get the next nonce for a BTC address")
+    .addPositionalParam('btcAddress')
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ btcAddress, bridgeAddress }, hre) => {
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+        );
+
+        const nonce = await contract.getNextNonce(btcAddress);
+        console.log(nonce);
+    });
 
 task("add-federator", "Add federator")
     .addVariadicPositionalParam("address", "RSK address to add")
@@ -311,16 +351,24 @@ task("set-limits", "Set min/max transfer limits")
 
         if (minBtc) {
             const newMinSatoshi = parseUnits(minBtc, 8);
-            console.log('Setting minimum to: %s BTC (%s sat)', minBtc, newMinSatoshi.toString());
-            const receipt = await contract.setMinTransferSatoshi(newMinSatoshi);
-            console.log('tx hash:', receipt.hash);
+            if (currentMin === newMinSatoshi) {
+                console.log("Min amount unchanged");
+            } else {
+                console.log('Setting minimum to: %s BTC (%s sat)', minBtc, newMinSatoshi.toString());
+                const receipt = await contract.setMinTransferSatoshi(newMinSatoshi);
+                console.log('tx hash:', receipt.hash);
+            }
         }
 
         if (maxBtc) {
             const newMaxSatoshi = parseUnits(maxBtc, 8);
-            console.log('Setting maximum to: %s BTC (%s sat)', maxBtc, newMaxSatoshi.toString());
-            const receipt = await contract.setMaxTransferSatoshi(newMaxSatoshi);
-            console.log('tx hash:', receipt.hash);
+            if (currentMax === newMaxSatoshi) {
+                console.log("Max amount unchanged");
+            } else {
+                console.log('Setting maximum to: %s BTC (%s sat)', maxBtc, newMaxSatoshi.toString());
+                const receipt = await contract.setMaxTransferSatoshi(newMaxSatoshi);
+                console.log('tx hash:', receipt.hash);
+            }
         }
     });
 
@@ -455,7 +503,36 @@ task("fees", "View and manage fees")
         }
     });
 
+task("set-required-blocks-before-reclaim", "Self-explanatory")
+    .addOptionalPositionalParam(
+        'numBlocks',
+        'If unset, just show current. If 0, allow reclaiming immediately',
+        undefined,
+        types.int
+    )
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ numBlocks, bridgeAddress }, hre) => {
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+        );
 
+        const currentValue = await contract.requiredBlocksBeforeReclaim(); // returns number since it's uint32
+        console.log('Current required blocks before reclaim', currentValue);
+
+        if (typeof numBlocks !== 'undefined') {
+            if (currentValue === numBlocks) {
+                console.log('Value not changed.');
+                return;
+            }
+            console.log('Setting to', numBlocks);
+            const tx = await contract.setRequiredBlocksBeforeReclaim(numBlocks);
+            console.log('tx hash:', tx.hash, 'waiting...');
+            await tx.wait();
+        }
+    });
+
+// For testing
 task('set-mining-interval', "Set mining interval")
     .addPositionalParam('ms', 'Mining interval as milliseconds (0 for automine)', undefined, types.int)
     .setAction(async ({ ms }, hre) => {
@@ -470,6 +547,15 @@ task('set-mining-interval', "Set mining interval")
         }
     });
 
+
+// For testing
+task("get-rbtc-balance", "Show formatted rBTC balance of address")
+    .addPositionalParam('address')
+    .setAction(async ({ address }, hre) => {
+        const { ethers: { provider, utils } } = hre;
+        const balance = await provider.getBalance(address);
+        console.log(utils.formatEther(balance));
+    });
 
 const btcAddressValidatorReadVars = [
     'bech32MinLength',
