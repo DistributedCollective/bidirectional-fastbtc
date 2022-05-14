@@ -91,6 +91,15 @@ The replenisher balance will increase every block.
 
 Hit Ctrl-C to quit it.
 
+There's also another script to test user reclaiming (semi-manually).
+Run it (after starting `make run-demo-regtest`) with:
+
+```
+$ make test-reclaiming
+```
+
+And observe the output.
+
 ### Advanced details
 
 The test setup (launched with `make run-demo-regtest`) will expose the Hardhat RPC server at `http://localhost:18545`
