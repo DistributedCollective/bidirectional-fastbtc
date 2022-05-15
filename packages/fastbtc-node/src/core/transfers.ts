@@ -669,6 +669,7 @@ export class BitcoinTransferService {
             await result.wait(numRequiredConfirmations);
         } catch(e: any) {
             this.logger.exception(e, `RSK transaction ${result.hash} failed.`)
+            throw e;
         }
         return result;
     }
