@@ -551,9 +551,10 @@ task('set-mining-interval', "Set mining interval")
 // For testing
 task("get-rbtc-balance", "Show formatted rBTC balance of address")
     .addPositionalParam('address')
-    .setAction(async ({ address }, hre) => {
+    .addOptionalPositionalParam('blockTag')
+    .setAction(async ({ address, blockTag }, hre) => {
         const { ethers: { provider, utils } } = hre;
-        const balance = await provider.getBalance(address);
+        const balance = await provider.getBalance(address, blockTag);
         console.log(utils.formatEther(balance));
     });
 

@@ -7,6 +7,7 @@ cd ../../packages/fastbtc-contracts
 DOCKER_COMPOSE="docker-compose -f ../../docker-compose-base.yml -f ../../docker-compose-regtest.yml"
 NUM_TRANSFERS=4
 TRANSFER_AMOUNT=1
+TRANSFER_AMOUNT_AFTER_FEES=0.999895
 REQUIRED_RBTC=$(echo "$NUM_TRANSFERS * $TRANSFER_AMOUNT" | bc)
 
 echo "Testing user reclaiming"
@@ -28,7 +29,7 @@ echo "$NUM_TRANSFERS transfers were sent"
 
 echo ""
 echo "User BTC balance after:   $($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance) BTC"
-RBTC_BALANCE=$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8)
+RBTC_BALANCE=$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8 pending)
 echo "User rBTC balance after:  $RBTC_BALANCE rBTC"
 let "FIRST_RECLAIMED_NONCE = FIRST_NONCE + 1"
 let "SECOND_RECLAIMED_NONCE = FIRST_NONCE + 2"
@@ -69,7 +70,7 @@ while true ; do
     sleep 1
 done
 
-EXPECTED_FINAL_BTC_BALANCE=$(echo "($NUM_TRANSFERS - 2) * $TRANSFER_AMOUNT + $BTC_BALANCE" | bc)
+EXPECTED_FINAL_BTC_BALANCE=$(echo "($NUM_TRANSFERS - 2) * $TRANSFER_AMOUNT_AFTER_FEES + $BTC_BALANCE" | bc)
 
 echo "Polling balances and waiting for the right moment to reclaim the second one. Ctrl-C to exit"
 while true ; do
