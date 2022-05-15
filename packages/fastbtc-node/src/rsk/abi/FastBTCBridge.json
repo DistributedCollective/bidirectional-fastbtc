@@ -208,6 +208,19 @@
     },
     {
         "inputs": [],
+        "name": "MAX_REQUIRED_BLOCKS_BEFORE_RECLAIM",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
         "name": "SATOSHI_DIVISOR",
         "outputs": [
             {
@@ -921,6 +934,19 @@
     {
         "inputs": [
             {
+                "internalType": "bytes32",
+                "name": "transferId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "reclaimTransfer",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "bytes32[]",
                 "name": "transferIds",
                 "type": "bytes32[]"
@@ -934,6 +960,19 @@
         "name": "refundTransfers",
         "outputs": [],
         "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "requiredBlocksBeforeReclaim",
+        "outputs": [
+            {
+                "internalType": "uint32",
+                "name": "",
+                "type": "uint32"
+            }
+        ],
+        "stateMutability": "view",
         "type": "function"
     },
     {
@@ -984,6 +1023,19 @@
             }
         ],
         "name": "setMinTransferSatoshi",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "newRequiredBlocksBeforeReclaim",
+                "type": "uint256"
+            }
+        ],
+        "name": "setRequiredBlocksBeforeReclaim",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"

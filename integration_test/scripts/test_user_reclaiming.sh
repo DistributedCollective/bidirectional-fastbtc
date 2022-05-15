@@ -8,16 +8,16 @@ DOCKER_COMPOSE="docker-compose -f ../../docker-compose-base.yml -f ../../docker-
 NUM_TRANSFERS=4
 TRANSFER_AMOUNT=1
 TRANSFER_AMOUNT_AFTER_FEES=0.999895
-REQUIRED_RBTC=$(echo "$NUM_TRANSFERS * $TRANSFER_AMOUNT" | bc)
+REQUIRED_RBTC="$(echo "$NUM_TRANSFERS * $TRANSFER_AMOUNT" | bc)"
 
 echo "Testing user reclaiming"
 npx hardhat --network integration-test set-required-blocks-before-reclaim 0
 #npx hardhat --network integration-test set-limits --max-btc 2  # Not needed, it's already like this
 npx hardhat --network integration-test free-money 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8 $REQUIRED_RBTC
 echo ""
-BTC_BALANCE=$($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance)
+BTC_BALANCE="$($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance)"
 echo "User BTC balance before:  $BTC_BALANCE BTC"
-RBTC_BALANCE=$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8)
+RBTC_BALANCE="$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8 pending)"
 echo "User rBTC balance before: $RBTC_BALANCE rBTC"
 FIRST_NONCE=$(npx hardhat --network integration-test get-next-nonce bcrt1qq8zjw66qrgmynrq3gqdx79n7fcchtaudq4rrf0)
 echo "First transfer nonce:     $FIRST_NONCE"
@@ -29,7 +29,7 @@ echo "$NUM_TRANSFERS transfers were sent"
 
 echo ""
 echo "User BTC balance after:   $($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance) BTC"
-RBTC_BALANCE=$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8 pending)
+RBTC_BALANCE="$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8 pending)"
 echo "User rBTC balance after:  $RBTC_BALANCE rBTC"
 let "FIRST_RECLAIMED_NONCE = FIRST_NONCE + 1"
 let "SECOND_RECLAIMED_NONCE = FIRST_NONCE + 2"
@@ -39,7 +39,7 @@ echo "Second nonce to reclaim:  $SECOND_RECLAIMED_NONCE"
 echo "First reclaiming"
 npx hardhat --network integration-test reclaim-transfer 0xc1daad254b7005eca65780d47213d3de15bd92fcce83777487c5082c6d27600a bcrt1qq8zjw66qrgmynrq3gqdx79n7fcchtaudq4rrf0 $FIRST_RECLAIMED_NONCE
 EXPECTED_RBTC_BALANCE=$(echo "$RBTC_BALANCE + $TRANSFER_AMOUNT" | bc)
-RBTC_BALANCE=$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8)
+RBTC_BALANCE="$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8)"
 echo "rBTC balance after reclaim: $RBTC_BALANCE"
 echo "^-- should be close to:     $EXPECTED_RBTC_BALANCE (not exactly because of gas fees)"
 
@@ -47,12 +47,12 @@ sleep 5
 
 echo "Polling balances and waiting for the right moment to reclaim the second one."
 while true ; do
-    RBTC_BALANCE=$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8)
-    BTC_BALANCE=$($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance)
+    RBTC_BALANCE="$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8)"
+    BTC_BALANCE="$($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance)"
 
     # This is stupid and frail but whatever
     #MATCHED_LOGS="$($DOCKER_COMPOSE logs --tail 100 node1 node2 node3 | grep -ie 'Gathered .* RSK sending signatures' || true)"
-    MATCHED_LOGS="$($DOCKER_COMPOSE logs --tail 100 node1 node2 node3 | grep -ie 'TransferBatch does not have enough RSK sending signatures' || true)"
+    MATCHED_LOGS="$($DOCKER_COMPOSE logs --tail 50 node1 node2 node3 | grep -ie 'TransferBatch does not have enough RSK sending signatures' || true)"
 
     if [ -z "$MATCHED_LOGS" ] ; then
         echo "rbtc: $RBTC_BALANCE, btc: $BTC_BALANCE, not reclaiming yet"
@@ -67,7 +67,7 @@ while true ; do
         break
     fi
 
-    sleep 1
+    sleep 0.5
 done
 
 EXPECTED_FINAL_BTC_BALANCE=$(echo "($NUM_TRANSFERS - 2) * $TRANSFER_AMOUNT_AFTER_FEES + $BTC_BALANCE" | bc)
@@ -75,7 +75,7 @@ EXPECTED_FINAL_BTC_BALANCE=$(echo "($NUM_TRANSFERS - 2) * $TRANSFER_AMOUNT_AFTER
 echo "Polling balances and waiting for the right moment to reclaim the second one. Ctrl-C to exit"
 while true ; do
     RBTC_BALANCE=$(npx hardhat --network integration-test get-rbtc-balance 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8)
-    BTC_BALANCE=$($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance)
+    BTC_BALANCE="$($THIS_DIR/bitcoin-cli.sh -rpcwallet=user getbalance)"
     echo "rbtc: $RBTC_BALANCE, btc: $BTC_BALANCE, eventual expected btc balance: $EXPECTED_FINAL_BTC_BALANCE"
 
     sleep 10

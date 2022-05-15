@@ -232,6 +232,17 @@ export type BitcoinTransferServiceConfig = Pick<
     'numRequiredSigners' | 'maxPassedBlocksInBatch' | 'maxTransfersInBatch' | 'rskRequiredConfirmations' | 'btcRequiredConfirmations'
 >
 
+export interface ReclaimedTransfersFoundResult {
+    reclaimedTransfersFound: true;
+    reclaimedTransferIds: string[];
+    purgedDto: TransferBatchDTO;
+    newTransferBatch?: TransferBatch;
+}
+export interface ReclaimedTransfersNotFoundResult {
+    reclaimedTransfersFound: false;
+}
+export type HandleReclaimedTransfersResult = ReclaimedTransfersFoundResult | ReclaimedTransfersNotFoundResult;
+
 /**
  * The main business logic service. Contains methods to manipulate and create TransferBatches, sign actions (RSK or
  * Bitcoin transactions) and so on.
@@ -259,22 +270,7 @@ export class BitcoinTransferService {
             }
 
             const transfers = await this.getNextBatchTransfers(transaction);
-            // we don't really need to create the PSBT every time, but the overhead doesn't really matter
-            const initialSignedBtcTransaction = await this.btcMultisig.createPartiallySignedTransaction(transfers);
-            const bitcoinTxHash = this.btcMultisig.getBitcoinTransactionHash(
-                initialSignedBtcTransaction
-            );
-            return new TransferBatch(
-                await this.getTransferBatchEnvironment(bitcoinTxHash),  // could also null here since it is not in blockchain
-                transfers,
-                [],
-                [],
-                bitcoinTxHash,
-                initialSignedBtcTransaction,
-                undefined,
-                [],
-                [],
-            );
+            return await this.createTransferBatch(transfers);
         });
     }
 
@@ -315,7 +311,9 @@ export class BitcoinTransferService {
     }
 
     async purgeTransferBatch(transferBatch: TransferBatch): Promise<void> {
-        if (transferBatch.hasValidTransferState()) {
+        // allow purging if blockchain state does not match
+        const isValid = await this.validator.hasValidState(transferBatch);
+        if (isValid) {
             throw new Error('refusing to purge a valid transfer batch');
         }
         await this.dbConnection.transaction(async transaction => {
@@ -325,6 +323,67 @@ export class BitcoinTransferService {
                 await transferBatchRepository.remove(storedBatch);
             }
         });
+    }
+
+    /**
+     * If TransferBatch contains transfers that are reclaimed in the latest block of the blockchain, purge the batch.
+     * and create (and store) a new batch with those transfers removed, if there are other valid transfers in the batch.
+     *
+     * We continue with the same TransferBatch with just those transfers removed, if possible, to prevent griefing
+     * attacks where someone constantly creates and reclaims transfers. This could otherwise halt the system if we
+     * were to take in other transfers to the batch (though I'm not 100% sure if that's a real issue).
+     *
+     * Return an object that describes what was done here, and that can be used to communicate the purging to other
+     * clients.
+     */
+    async handleReclaimedTransfers(transferBatch: TransferBatch): Promise<HandleReclaimedTransfersResult> {
+        const originalTransferIds = transferBatch.transfers.map(t => t.transferId);
+        const blockchainTransfers: RskTransferInfo[] = await this.fastBtcBridge.getTransfersByTransferId(originalTransferIds);
+
+        const reclaimedTransfers = [];
+        const validTransfers = [];
+
+        for (let i = 0; i < blockchainTransfers.length; i++) {
+            const transfer = transferBatch.transfers[i];
+            const blockchainTransfer = blockchainTransfers[i];
+
+            if (blockchainTransfer.status === TransferStatus.Reclaimed) {
+                reclaimedTransfers.push(transfer);
+            } else {
+                validTransfers.push(transfer);
+            }
+        }
+
+        if (!reclaimedTransfers.length) {
+            return {
+                reclaimedTransfersFound: false,
+            };
+        }
+
+        const reclaimedTransferIds = reclaimedTransfers.map(t => t.transferId);
+        this.logger.info( 'TransferBatch has reclaimed transfers:', reclaimedTransferIds);
+
+        const ret: ReclaimedTransfersFoundResult = {
+            reclaimedTransfersFound: true,
+            purgedDto: transferBatch.getDto(),
+            reclaimedTransferIds,
+        }
+
+        this.logger.info('Purging the TransferBatch');
+        await this.purgeTransferBatch(transferBatch);
+
+        if (validTransfers.length === 0) {
+            this.logger.info(
+                'No valid transfers in TransferBatch after removing the reclaimed ones'
+            );
+            return ret;
+        }
+
+        this.logger.info('Creating and storing a new TransferBatch based on the existing transfers');
+        const newBatch = await this.createTransferBatch(validTransfers);
+        await this.updateStoredTransferBatch(newBatch);
+        ret.newTransferBatch = newBatch;
+        return ret;
     }
 
     private async storeTransferBatch(transferBatch: TransferBatch, entityManager: EntityManager): Promise<void> {
@@ -593,6 +652,25 @@ export class BitcoinTransferService {
         return {signature, address};
     };
 
+    private async createTransferBatch(transfers: Transfer[]): Promise<TransferBatch> {
+        // we don't really need to create the PSBT every time, but the overhead doesn't really matter
+        const initialSignedBtcTransaction = await this.btcMultisig.createPartiallySignedTransaction(transfers);
+        const bitcoinTxHash = this.btcMultisig.getBitcoinTransactionHash(
+            initialSignedBtcTransaction
+        );
+        return new TransferBatch(
+            await this.getTransferBatchEnvironment(bitcoinTxHash),  // could also null here since it is not in blockchain
+            transfers,
+            [],
+            [],
+            bitcoinTxHash,
+            initialSignedBtcTransaction,
+            undefined,
+            [],
+            [],
+        );
+    }
+
     private async getTransferBatchEnvironment(bitcoinTransactionHash: string|null): Promise<TransferBatchEnvironment> {
         const currentBlockNumber = await this.ethersProvider.getBlockNumber();
         let bitcoinOnChainTransaction = undefined;
@@ -668,7 +746,8 @@ export class BitcoinTransferService {
         try {
             await result.wait(numRequiredConfirmations);
         } catch(e: any) {
-            this.logger.exception(e, `RSK transaction ${result.hash} failed.`)
+            //this.logger.exception(e, `RSK transaction ${result.hash} failed.`)
+            this.logger.error(`RSK transaction ${result.hash} failed.`)
             throw e;
         }
         return result;
@@ -788,6 +867,40 @@ export class TransferBatchValidator {
             )
             return false;
         }
+        return true;
+    }
+
+    /**
+     * Validate both local TransferBatch state and the state of the transfers on blockchain
+     */
+    public async hasValidState(
+        transferBatch: TransferBatch,
+        allowEmpty: boolean = false
+    ): Promise<boolean> {
+        if (transferBatch.transfers.length === 0 && !allowEmpty) {
+            return false;
+        }
+        if (!transferBatch.hasValidTransferState()) {
+            return false;
+        }
+
+        if (transferBatch.transfers.length > 0) {
+            const transferIds = transferBatch.getTransferIds();
+            const transferInfos: RskTransferInfo[] = await this.fastBtcBridge.getTransfersByTransferId(transferIds);
+            for (let i = 0; i < transferInfos.length; i++) {
+                const batchTransfer = transferBatch.transfers[i];
+                const batchStatus = batchTransfer.status;
+                const blockchainStatus = transferInfos[i].status;
+                if (batchStatus !== blockchainStatus) {
+                    this.logger.info(
+                        "hasValidState: status from blockchain %s doesn't match stored status %s for transfer %s",
+                        blockchainStatus, batchStatus, batchTransfer.transferId
+                    );
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 

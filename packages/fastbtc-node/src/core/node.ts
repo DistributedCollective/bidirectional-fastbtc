@@ -226,6 +226,30 @@ export class FastBTCNode {
             return;
         }
 
+        if (!transferBatch.isMarkedAsSendingInRsk()) {
+            // Check for reclaimed transfers
+            const result = await this.bitcoinTransferService.handleReclaimedTransfers(transferBatch);
+            if (result.reclaimedTransfersFound) {
+                await this.network.broadcast(
+                    'fastbtc:purge-transfer-batch',
+                    {
+                        transferBatchDto: result.purgedDto,
+                    }
+                );
+                this.statsd.increment('fastbtc.pegout.purged_batches');
+                if (result.newTransferBatch) {
+                    transferBatch = result.newTransferBatch;
+                    this.transientInitiatorData = getEmptyTransientInitiatorData(transferBatch);
+                } else {
+                    // XXX: if there are no non-reclaimed transfers in the queue, the node will go
+                    // to this part until there is one, or until the status gets updated by event scanner.
+                    // Probably not a huge issue.
+                    this.logger.info('No new TransferBatch, continuing with the next iteration.')
+                    return;
+                }
+            }
+        }
+
         if(!transferBatch.isMarkedAsSendingInRsk() && !transferBatch.hasEnoughRskSendingSignatures()) {
             this.logger.throttledInfo('TransferBatch does not have enough RSK sending signatures');
             await this.network.broadcast(
@@ -424,7 +448,13 @@ export class FastBTCNode {
                 if (err.isValidationError) {
                     this.logger.warning('Validation error:', err.message, 'when processing message:', message);
                 } else {
-                    this.logger.exception(err, 'error processing message:', message);
+                    this.logger.exception(
+                        err,
+                        'error processing message type %s, source %s, data %s:',
+                        message.type,
+                        message.source,
+                        JSON.stringify(message.data)
+                    );
                 }
             });
         }
