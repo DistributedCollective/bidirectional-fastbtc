@@ -655,4 +655,128 @@ describe("FastBTCBridge", function() {
             );
         });
     });
+
+    describe('#withdrawTokens', () => {
+        const amount1 = parseEther('0.1');
+        const amount2 = parseEther('0.05');
+        const transferBtcAddress = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+        let transferId1: string;
+        let transferId2: string;
+        let transfer1: any;
+        let transfer2: any;
+
+        const markTransfersAsSending = async (transferIds: string[]) => {
+            // Fake tx hash
+            const btcTxHash = '0x6162636465666768696a6b6c6d6e6f707172737475767778797a414243444546';
+            const updateHash = await fastBtcBridge.getTransferBatchUpdateHashWithTxHash(
+                btcTxHash,
+                transferIds,
+                TRANSFER_STATUS_SENDING
+            );
+            const updateHashBytes = ethers.utils.arrayify(updateHash);
+            const signatures = [
+                await federators[0].signMessage(updateHashBytes),
+                await federators[1].signMessage(updateHashBytes),
+            ];
+            await fastBtcBridgeFromFederator.markTransfersAsSending(
+                btcTxHash,
+                transferIds,
+                signatures
+            );
+        }
+
+        beforeEach(async () => {
+            transferId1 = await createExampleTransfer(
+                anotherAccount,
+                amount1,
+                transferBtcAddress,
+            );
+            transfer1 = await fastBtcBridge.getTransferByTransferId(transferId1);
+            transferId2 = await createExampleTransfer(
+                anotherAccount,
+                amount2,
+                transferBtcAddress,
+            );
+            transfer2 = await fastBtcBridge.getTransferByTransferId(transferId2);
+        });
+
+        it('cannot withdraw unsent rBTC', async () => {
+            await expect(
+                fastBtcBridge.withdrawRbtc(amount1, ownerAddress)
+            ).to.be.reverted;
+        });
+
+        it('can withdraw up to sent rBTC', async () => {
+            await markTransfersAsSending([transferId1]);
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(amount1.add(1), ownerAddress)
+            ).to.be.reverted;
+
+            await expect(
+                await fastBtcBridge.withdrawRbtc(amount1, ownerAddress)
+            ).to.changeEtherBalance(ownerAccount, amount1);
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(1, ownerAddress)
+            ).to.be.reverted;
+
+            await markTransfersAsSending([transferId2]);
+            await expect(
+                await fastBtcBridge.withdrawRbtc(amount2, ownerAddress)
+            ).to.changeEtherBalance(ownerAccount, amount2);
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(1, ownerAddress)
+            ).to.be.reverted;
+        });
+
+        it('can withdraw up to sent rBTC 2', async () => {
+            await markTransfersAsSending([transferId1]);
+
+            await expect(
+                await fastBtcBridge.withdrawRbtc(amount1.div(2), ownerAddress)
+            ).to.changeEtherBalance(ownerAccount, amount1.div(2));
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(amount1.div(2).add(1), ownerAddress)
+            ).to.be.reverted;
+
+            await markTransfersAsSending([transferId2]);
+
+            await expect(
+                await fastBtcBridge.withdrawRbtc(amount1.div(2).add(1), ownerAddress)
+            ).to.changeEtherBalance(ownerAccount, amount1.div(2).add(1));
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(amount2, ownerAddress)
+            ).to.be.reverted;
+
+            await expect(
+                await fastBtcBridge.withdrawRbtc(amount2.sub(1), ownerAddress)
+            ).to.changeEtherBalance(ownerAccount, amount2.sub(1));
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(1, ownerAddress)
+            ).to.be.reverted;
+        });
+
+        it('cannot withdraw reclaimed transfers', async () => {
+            await fastBtcBridge.setRequiredBlocksBeforeReclaim(0)
+            await markTransfersAsSending([transferId1]);
+            await fastBtcBridge.connect(anotherAccount).reclaimTransfer(transferId2);
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(amount1.add(1), ownerAddress)
+            ).to.be.reverted;
+
+            await expect(
+                await fastBtcBridge.withdrawRbtc(amount1, ownerAddress)
+            ).to.changeEtherBalance(ownerAccount, amount1);
+
+            await expect(
+                fastBtcBridge.withdrawRbtc(1, ownerAddress)
+            ).to.be.reverted;
+        });
+    });
 });

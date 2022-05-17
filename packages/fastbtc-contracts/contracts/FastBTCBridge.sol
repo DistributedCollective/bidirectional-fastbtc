@@ -131,6 +131,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     uint32 public baseFeeSatoshi;
 
     uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
+    uint256 public totalAdminWithdrawableRbtc = 0;
 
 
     /// @dev Constructor.
@@ -304,6 +305,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
                     "Invalid existing BitcoinTransfer status or BitcoinTransfer not found"
                 );
 
+                totalAdminWithdrawableRbtc += transfer.totalAmountSatoshi * SATOSHI_DIVISOR;
                 _updateTransferStatus(transferIds[i], transfer, BitcoinTransferStatus.SENDING);
             }
         }
@@ -766,6 +768,11 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     onlyAdmin
     {
+        require(
+            amount <= totalAdminWithdrawableRbtc,
+            "Can only withdraw unsent transfers"
+        );
+        totalAdminWithdrawableRbtc -= amount;
         receiver.sendValue(amount);
     }
 
