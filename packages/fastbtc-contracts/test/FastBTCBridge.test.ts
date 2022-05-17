@@ -458,6 +458,14 @@ describe("FastBTCBridge", function() {
                     fastBtcBridge.reclaimTransfer(transferId)
                 ).to.be.revertedWith("Can only reclaim own transfers");
             });
+
+            it('does not reclaim when frozen', async () => {
+                await fastBtcBridge.freeze();
+                await mineToBlock(reclaimableBlock);
+                await expect(
+                    fastBtcBridge.reclaimTransfer(transferId)
+                ).to.be.revertedWith("Freezable: frozen");
+            });
         });
     });
 

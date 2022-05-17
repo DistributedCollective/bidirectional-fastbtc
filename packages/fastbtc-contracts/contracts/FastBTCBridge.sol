@@ -191,6 +191,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     )
     external
     nonReentrant
+    whenNotFrozen
     {
         BitcoinTransfer storage transfer = transfers[transferId];
         // decide if it should be possible to also reclaim sent transfers
