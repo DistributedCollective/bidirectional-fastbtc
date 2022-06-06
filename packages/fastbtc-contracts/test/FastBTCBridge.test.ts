@@ -460,7 +460,7 @@ describe("FastBTCBridge", function() {
             });
 
             it('does not reclaim when frozen', async () => {
-                await fastBtcBridge.freeze();
+                await fastBtcBridge.connect(ownerAccount).freeze();
                 await mineToBlock(reclaimableBlock);
                 await expect(
                     fastBtcBridge.reclaimTransfer(transferId)
@@ -777,6 +777,47 @@ describe("FastBTCBridge", function() {
             await expect(
                 fastBtcBridge.withdrawRbtc(1, ownerAddress)
             ).to.be.reverted;
+        });
+    });
+
+    describe.only('#setNodeConfigValue', () => {
+        const key1 = '0x1234567812345678123456781234567812345678123456781234567812345678';
+        const key2 = '0x8765432112345678123456781234567812345678123456781234567812345678';
+        const value1 = '0x1234';
+        const value2 = '0x4321';
+
+        it('is not allowed for arbitrary account', async () => {
+            await expect(
+                fastBtcBridge.connect(anotherAccount).setNodeConfigValue(key1, value1)
+            ).to.be.reverted;
+        });
+
+        it('is allowed for owner', async () => {
+            await fastBtcBridge.setNodeConfigValue(key1, value1);
+        });
+
+        it('sets keys separately', async () => {
+            await fastBtcBridge.setNodeConfigValue(key1, value1);
+            await fastBtcBridge.setNodeConfigValue(key2, value2);
+            expect(await fastBtcBridge.nodeConfig(key1)).to.equal(value1);
+            expect(await fastBtcBridge.nodeConfig(key2)).to.equal(value2);
+            await fastBtcBridge.setNodeConfigValue(key2, value1);
+            expect(await fastBtcBridge.nodeConfig(key2)).to.equal(value1);
+        });
+
+        it('is allowed for arbitrary account after grant and not after revoke', async () => {
+            await accessControl.addConfigAdmin(anotherAccount.getAddress());
+            await fastBtcBridge.connect(anotherAccount).setNodeConfigValue(key1, value1);
+            await accessControl.removeConfigAdmin(anotherAccount.getAddress());
+            await expect(fastBtcBridge.connect(anotherAccount).setNodeConfigValue(key1, value1)).to.be.reverted;
+        });
+
+        it('can be deleted only by authorized', async () => {
+            await fastBtcBridge.setNodeConfigValue(key1, value1);
+            await expect(fastBtcBridge.connect(anotherAccount).deleteNodeConfigValue(key1)).to.be.reverted;
+            await accessControl.addConfigAdmin(anotherAccount.getAddress());
+            await fastBtcBridge.connect(anotherAccount).deleteNodeConfigValue(key1);
+            expect(await fastBtcBridge.nodeConfig(key1)).to.equal('0x');
         });
     });
 });

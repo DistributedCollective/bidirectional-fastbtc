@@ -40,4 +40,10 @@ abstract contract FastBTCAccessControllable {
         accessControl.checkGuard(msg.sender);
         _;
     }
+
+    /// @dev A modifier that ensures only a configuration admin can call a function.
+    modifier onlyConfigAdmin() {
+        accessControl.checkConfigAdmin(msg.sender);
+        _;
+    }
 }

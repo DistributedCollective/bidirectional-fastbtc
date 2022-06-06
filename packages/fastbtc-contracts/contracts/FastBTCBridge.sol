@@ -133,6 +133,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
     uint256 public totalAdminWithdrawableRbtc = 0;
 
+    // @dev Non-critical configuration settings for federator nodes that can be changed
+    // by admin online without having to administer each node separately.
+    mapping(bytes32 => bytes) public nodeConfig;
 
     /// @dev Constructor.
     /// @param accessControl            Address of the FastBTCAccessControl contract.
@@ -825,5 +828,21 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     function unfreeze() external onlyGuard {
         _unfreeze();
         //_unpause(); // it's best to have the option unpause separately
+    }
+
+    // CONFIG API
+    // ==========
+
+    // @dev set a configuration key to a value
+    // @param key  The key to set the value to. Likely keccak256 of the string key
+    // @param value  The value to set.
+    function setNodeConfigValue(bytes32 key, bytes memory value) external onlyConfigAdmin {
+        nodeConfig[key] = value;
+    }
+
+    // @dev Delete a value for a configuration key.
+    // @param key  The key to delete the value from.
+    function deleteNodeConfigValue(bytes32 key) external onlyConfigAdmin {
+        delete nodeConfig[key];
     }
 }

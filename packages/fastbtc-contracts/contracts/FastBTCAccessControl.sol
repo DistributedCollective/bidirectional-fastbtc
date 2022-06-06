@@ -7,7 +7,7 @@ import "./interfaces/IFastBTCAccessControl.sol";
 
 /// @title The contract that handles the role-based access control of the other bi-directional FastBTC contracts.
 contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable {
-    /// @dev The role that has admin priviliges on the contract, with permissions to manage other roles and call
+    /// @dev The role that has admin privileges on the contract, with permissions to manage other roles and call
     /// admin-only functions.
     bytes32 public constant ROLE_ADMIN = DEFAULT_ADMIN_ROLE;
 
@@ -21,11 +21,14 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     /// pausing the contracts.
     bytes32 public constant ROLE_GUARD = keccak256("GUARD");
 
+    /// @dev The role given to configuration admins. Configuration admins can change the online configuration
+    /// key-value pair that affect certain federator node behaviour.
+    bytes32 public constant ROLE_CONFIG_ADMIN = keccak256("CONFIG_ADMIN");
+
+
     /// @dev The constructor.
     constructor() {
-        _setupRole(ROLE_ADMIN, msg.sender);
-        _setupRole(ROLE_PAUSER, msg.sender);
-        _setupRole(ROLE_GUARD, msg.sender);
+        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
 
     /// @dev Make sure that the given address is an admin, else revert.
@@ -47,7 +50,7 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     external
     view
     {
-       if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, addressToCheck)) {
             _checkRole(ROLE_PAUSER, addressToCheck);
         }
     }
@@ -60,8 +63,21 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     external
     view
     {
-        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, addressToCheck)) {
             _checkRole(ROLE_GUARD, addressToCheck);
+        }
+    }
+
+    /// @dev Make sure that the given address is a configuration admin, else revert.
+    /// @param addressToCheck   The address to check.
+    function checkConfigAdmin(
+        address addressToCheck
+    )
+    external
+    view
+    {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, addressToCheck)) {
+            _checkRole(ROLE_CONFIG_ADMIN, addressToCheck);
         }
     }
 
@@ -154,7 +170,7 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     }
 
     /// @dev Add a new federator to the system. Can only be called by admins.
-    /// @param account  The address to grant federator role to.
+    /// @param account  the address to grant the federator role to.
     function addFederator(
         address account
     )
@@ -164,7 +180,7 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     }
 
     /// @dev Remove federator from the system. Can only be called by admins.
-    /// @param account  The address to remove the federator role from.
+    /// @param account  The address to revoke the federator role from.
     function removeFederator(
         address account
     )
@@ -174,7 +190,7 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     }
 
     /// @dev Add a new pauser to the system. Can only be called by admins.
-    /// @param account  The address to grant pauser role to.
+    /// @param account  the address to grant the pauser role to.
     function addPauser(
         address account
     )
@@ -184,7 +200,7 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     }
 
     /// @dev Remove pauser from the system. Can only be called by admins.
-    /// @param account  The address to remove the pauser role from.
+    /// @param account  The address to revoke the pauser role from.
     function removePauser(
         address account
     )
@@ -194,7 +210,7 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     }
 
     /// @dev Add a new guard to the system. Can only be called by admins.
-    /// @param account  The address to grant guard role to.
+    /// @param account  the address to grant the guard role to.
     function addGuard(
         address account
     )
@@ -204,12 +220,32 @@ contract FastBTCAccessControl is IFastBTCAccessControl, AccessControlEnumerable 
     }
 
     /// @dev Remove guard from the system. Can only be called by admins.
-    /// @param account  The address to remove the guard role from.
+    /// @param account  The address to revoke the guard role from.
     function removeGuard(
         address account
     )
     external
     {
         revokeRole(ROLE_GUARD, account); // enforces onlyAdmin
+    }
+
+    /// @dev Add a new configuration admin to the system. Can only be called by admins.
+    /// @param account  the address to grant the configuration admin role to.
+    function addConfigAdmin(
+        address account
+    )
+    external
+    {
+        grantRole(ROLE_CONFIG_ADMIN, account); // enforces onlyAdmin
+    }
+
+    /// @dev Remove a configuration admin from the system. Can only be called by admins.
+    /// @param account  The address to revoke the guard role from.
+    function removeConfigAdmin(
+        address account
+    )
+    external
+    {
+        revokeRole(ROLE_CONFIG_ADMIN, account); // enforces onlyAdmin
     }
 }
