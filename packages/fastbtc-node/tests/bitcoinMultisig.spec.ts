@@ -50,9 +50,9 @@ xit("should work", async function () {
     const multiSig = new BitcoinMultisig({
             btcKeyDerivationPath: '0/0',
             numRequiredSigners: 2,
-            btcNetwork: 'regtest',
-            btcRpcUrl: 'http://host.invalid:18333',
-            btcRpcUsername: 'bar',
+            //btcNetwork: 'regtest',
+            //btcRpcUrl: 'http://host.invalid:18333',
+            //btcRpcUsername: 'bar',
             secrets: () => ({
                 // NOTE: these are test secrets that are supposed to be there. Do not consider them as leaked
                 btcRpcPassword: 'foo',
@@ -67,10 +67,11 @@ xit("should work", async function () {
             }),
         },
         nodeWrapper,
+        {} as any, // STATSD
     );
 
-    await nodeWrapper.call("importaddress", [multiSig.payoutScript.address!, '', true, false]);
-    await nodeWrapper.generateToAddress(multiSig.payoutScript.address!, 101);
+    await nodeWrapper.call("importaddress", [multiSig.changePayment.address!, '', true, false]);
+    await nodeWrapper.generateToAddress(multiSig.changePayment.address!, 101);
 
     const outputs = [
         {btcAddress: randomBech32(), nonce: 42, amountSatoshi: BigNumber.from(100)},

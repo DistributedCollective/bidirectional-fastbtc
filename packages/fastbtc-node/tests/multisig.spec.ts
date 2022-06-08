@@ -26,7 +26,7 @@ describe('BitcoinMultisig', () => {
             // do not send actual funds to them.
             const fauxMainnetConfig : BitcoinMultisigConfig = {
                 ...fauxBaseConfig,
-                'btcNetwork': 'mainnet',
+                //'btcNetwork': 'mainnet',
                 secrets: () => ({
                     ...fauxBaseSecrets,
                     'btcMasterPrivateKey': 'xprv9tviSb99cQK1ZSZBUJV3YMsD1eXujJr8P6FH8JB2WZF2TgZSMSfpZjjKbsp5sEnX53ufPE8QjQwCuNaZ8hnZm9iWLxoampf8x8xVzZwd27N',
@@ -37,7 +37,7 @@ describe('BitcoinMultisig', () => {
             };
             const fauxTestnetConfig : BitcoinMultisigConfig = {
                 ...fauxBaseConfig,
-                'btcNetwork': 'testnet',
+                //'btcNetwork': 'testnet',
                 secrets: () => ({
                     ...fauxBaseSecrets,
                     'btcMasterPrivateKey': 'tprv8bbfDvTV1g96AFni8sLYi1VCKmx7xpt8ieAPzibUzXjWFHJXLp1a5V6mX3yjscAqSVSSPKkAtmX1NE8JFv8WaCz6sc1tSBPBsEhvSHE7S3b',
@@ -53,14 +53,16 @@ describe('BitcoinMultisig', () => {
             };
             mainnetMultisig = new BitcoinMultisig(
                 fauxMainnetConfig,
-                fauxMainnetNodeWrapper
+                fauxMainnetNodeWrapper,
+                {} as any, // StatsD
             );
             testnetMultisig = new BitcoinMultisig(
                 fauxTestnetConfig,
                 {
                     ...fauxMainnetNodeWrapper,
                     network: networks.testnet,
-                }
+                },
+                {} as any, // StatsD
             );
 
         });
