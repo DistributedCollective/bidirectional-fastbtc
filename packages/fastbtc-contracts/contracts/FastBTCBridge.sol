@@ -130,7 +130,10 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     uint16 public dynamicFee;
     uint32 public baseFeeSatoshi;
 
+    /// @dev Require this many blocks to pass from a transfer before allowing reclaim.
     uint32 public requiredBlocksBeforeReclaim = 72 * 60 * 60 / 30;
+
+    /// @dev The amount of rBTC that is sent to Bitcoin and can thus be withdrawn by admins.
     uint256 public totalAdminWithdrawableRbtc = 0;
 
     // @dev Non-critical configuration settings for federator nodes that can be changed
