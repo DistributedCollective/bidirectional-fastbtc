@@ -5,7 +5,7 @@ FROM node:14-alpine AS fastbtc-hardhat-base
 
 RUN apk update
 # Requirements for libsodium/gyp/etc
-RUN apk add -t build-dependencies libtool autoconf automake gcc g++ make python2 python3
+RUN apk add -t build-dependencies libtool autoconf automake gcc g++ make python3
 RUN apk add git
 
 
