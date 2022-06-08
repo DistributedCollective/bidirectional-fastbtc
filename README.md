@@ -19,6 +19,20 @@ High-level data flow
 
 ![high-level data flow](static/high-level-data-flow.svg)
 
+User reclaiming
+---------------
+
+Users can reclaim sent rBTC back directly from the smart contract, as long as the transfer is still in the `NEW`
+state. Transfers in the `SENDING` state are potentially already sent to the Bitcoin network and thus cannot be
+reclaimed.
+
+There's a configuration variable `requiredBlocksBeforeReclaim` that can be set to optionally require that a number of
+blocks have passed before reclaiming is possible. This is capped to max ~one week worth of RSK blocks (with 30s average
+block time).
+
+Admins cannot withdraw rBTC still in the `NEW` state from the contract, but they can initiate a refund to the user.
+
+
 Unit tests
 ----------
 

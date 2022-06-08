@@ -759,7 +759,6 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         requiredBlocksBeforeReclaim = uint32(newRequiredBlocksBeforeReclaim);
     }
 
-    // TODO: figure out if we want to lock this so that only fees can be retrieved
     /// @dev Withdraw rBTC from the contract.
     /// Can only be called by admins.
     /// @param amount   The amount of rBTC to withdraw (in wei).

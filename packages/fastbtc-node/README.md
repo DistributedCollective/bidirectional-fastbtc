@@ -78,6 +78,13 @@ Data flow
 ![fastbtc-node data flow](../../static/fastbtc-node-data-flow.svg)
 
 
+Replenishment
+-------------
+
+The node can be configured to automatically replenish the BTC multisig from another BTC multisig (ie. the one used
+for the BTC->RSK side of FastBTC). See `config.ts` and `replenisher/config.ts`.
+
+
 Development
 -----------
 

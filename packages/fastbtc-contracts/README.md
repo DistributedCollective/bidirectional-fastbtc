@@ -19,6 +19,7 @@ The main contracts are:
       (as well as participate in the P2P network)
     - `PAUSER`: can pause the FastBTCBridge contract, which disables new transfers.
     - `GUARD`: can freeze the FastBTCBridge contract, which disables federator actions as well as pausing it.
+    - `CONFIG_ADMIN`: can set configuration values that can be read by nodes (upcoming feature)
 - [BTCAddressValidator](contracts/BTCAddressValidator.sol): Contains Bitcoin address validation logic.
 
 There are also a couple of utility contracts
@@ -28,6 +29,7 @@ There are also a couple of utility contracts
   control. Inherited contract.
 
 All contracts build heavily on top of industry-standard OpenZeppelin contracts.
+
 
 Building
 --------
