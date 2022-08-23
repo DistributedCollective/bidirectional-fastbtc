@@ -4,7 +4,7 @@
 import {inject, injectable, LazyServiceIdentifer} from 'inversify';
 import {BitcoinMultisig, BitcoinRPCGetTransactionResponse, PartiallySignedBitcoinTransaction} from '../btc/multisig';
 import {EthersProvider, EthersSigner, FastBtcBridgeContract} from '../rsk/base';
-import {Contract, ethers} from 'ethers';
+import {BigNumber, Contract, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
 import {Connection, EntityManager} from 'typeorm';
 import {Config} from '../config';
@@ -14,6 +14,10 @@ import {sleep} from '../utils';
 import {setExtend, setIntersection} from "../utils/sets";
 import {toNumber} from '../rsk/utils';
 import {Satoshis} from '../btc/types';
+
+// For lack of a better place, just have these here
+export const MAX_BTC_IN_BATCH = 5.0;
+export const MAX_SATOSHI_IN_BATCH = BigNumber.from(MAX_BTC_IN_BATCH * 1e8);
 
 type TransactionResponse = ethers.providers.TransactionResponse;
 
@@ -690,7 +694,7 @@ export class BitcoinTransferService {
 
     private async getNextBatchTransfers(entityManager: EntityManager): Promise<Transfer[]> {
         const transferRepository = entityManager.getRepository(Transfer);
-        return await transferRepository
+        const allPossibleTransfers = await transferRepository
             .createQueryBuilder("transfer")
             .where({
                 status: TransferStatus.New,
@@ -700,6 +704,24 @@ export class BitcoinTransferService {
             .addOrderBy('rsk_log_index', 'ASC')
             .take(this.config.maxTransfersInBatch)
             .getMany();
+
+        let totalSatoshiInBatch = BigNumber.from(0);
+        const filteredTransfers: Transfer[] = [];
+        for(let transfer of allPossibleTransfers) {
+            // NOTE: to account for fees, we sum totalAmountSatoshi and not amountSatoshi
+            let totalSatoshiInBatchWithTransfer = totalSatoshiInBatch.add(transfer.totalAmountSatoshi);
+            if (totalSatoshiInBatchWithTransfer.gt(MAX_SATOSHI_IN_BATCH)) {
+                this.logger.info(
+                    `Adding transfer ${transfer.transferId} to the batch would bring the total batch satoshi ` +
+                    `to ${totalSatoshiInBatchWithTransfer.toString()}, which is over the limit ${MAX_SATOSHI_IN_BATCH.toString()}. ` +
+                    `Cutting the batch short (with ${totalSatoshiInBatch.toString()} sat).`
+                );
+                break;
+            }
+            totalSatoshiInBatch = totalSatoshiInBatchWithTransfer;
+            filteredTransfers.push(transfer);
+        }
+        return filteredTransfers;
     }
 
     private async getPendingTransferBatch(entityManager: EntityManager): Promise<TransferBatch|undefined> {

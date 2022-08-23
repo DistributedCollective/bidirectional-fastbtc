@@ -5,14 +5,15 @@ import {BigNumber} from 'ethers';
 import {Network, networks, Psbt} from 'bitcoinjs-lib';
 import {ReplenisherConfig} from './config';
 import {StatsD} from 'hot-shots';
+import {MAX_BTC_IN_BATCH} from '../core/transfers';
 
 export class ReplenisherMultisig {
     private logger = new Logger('replenisher');
 
     private replenisherMultisig: BitcoinMultisig;
     private numRequiredSigners;
-    private replenishThreshold = 5.0;
-    private replenishMinAmount = 5.0;
+    private replenishThreshold = MAX_BTC_IN_BATCH;
+    private replenishMinAmount = MAX_BTC_IN_BATCH;
     private maxReplenishTxInputs = 100;
     private isReplenisher: boolean; // is this node a replenisher
     private network: Network;
