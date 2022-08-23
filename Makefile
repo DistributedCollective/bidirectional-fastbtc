@@ -10,11 +10,13 @@ run-demo-regtest: packages/fastbtc-node/version.json
 	@docker-compose -f docker-compose-base.yml down --remove-orphans && \
 		docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml up --build --force-recreate
 
-
-.PHONY: run-demo-regtest-replenisher-tests
-run-demo-regtest-replenisher-tests: packages/fastbtc-node/version.json
-	@export TEST_VERY_SMALL_REPLENISHER_COINS=true && docker-compose -f docker-compose-base.yml down --remove-orphans && \
-		docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml up --build --force-recreate
+# NOTE: when adding new test cases with env vars, remember to re-export them in docker-compose-regtest.yml
+.PHONY: run-demo-regtest-replenisher-very-small-coins
+run-demo-regtest-replenisher-very-small-coins: packages/fastbtc-node/version.json
+	@export TEST_VERY_SMALL_REPLENISHER_COINS=true && make run-demo-regtest
+.PHONY: run-demo-regtest-replenisher-limits
+run-demo-regtest-replenisher-limits: packages/fastbtc-node/version.json
+	@export TEST_REPLENISHER_LIMITS=true && make run-demo-regtest
 
 .PHONY: show-node-logs
 show-node-logs:

@@ -28,6 +28,7 @@ services:
      - REPLENISHER_ADDRESS=bcrt1qh0j5lcsvezdnrljsfcuetwrg7xen4a6ydmx9pt363e27rph2mntslwp447
      # Extra test vars
      - TEST_VERY_SMALL_REPLENISHER_COINS
+     - TEST_REPLENISHER_LIMITS
 
     ports:
       - 18443:18443

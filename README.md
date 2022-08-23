@@ -103,7 +103,12 @@ When the multisig balance icreases, it indicates that the multisig was replenish
 multisig.
 The replenisher balance will increase every block.
 
-Hit Ctrl-C to quit it.
+Hit Ctrl-C to quit it (it doesn't quit automatically).
+
+
+### Other integration test cases
+
+#### Reclaiming
 
 There's also another script to test user reclaiming (semi-manually).
 Run it (after starting `make run-demo-regtest`) with:
@@ -112,7 +117,38 @@ Run it (after starting `make run-demo-regtest`) with:
 $ make test-reclaiming
 ```
 
-And observe the output.
+Observe the output, quit with Ctrl-C (it doesn't quit automatically).
+
+#### Very small utxos in replenisher wallet
+
+This test tests the case where the replenisher wallet has very small utxos, which would cause a replenisher transaction
+with 1000+ inputs if no special logic is applied.
+
+```
+# In one tab:
+$ make run-demo-regtest-replenisher-very-small-coins
+# In another tab
+$ make test-transfers
+```
+
+Observe the output, quit with Ctrl-C (it doesn't quit automatically).
+
+#### Replenisher limit edge cases
+
+This test tests the case where the multisig has enough funds for the replenisher not to trigger, but not
+enough funds to send a naively-created TransferBatch, causing the whole system to get stuck.
+
+Unlike the other test cases, this test requires ZSH to run and will quit automatically if it succeeds
+(otherwise it will go on forever).
+
+```
+# In one tab:
+$ make run-demo-regtest-replenisher-limits
+# In another tab
+$ make test-transfers-big-amounts
+```
+
+Observe the output, quit with Ctrl-C if wanted (though it quits automatically on success).
 
 ### Advanced details
 

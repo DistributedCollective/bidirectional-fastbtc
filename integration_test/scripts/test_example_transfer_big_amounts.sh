@@ -19,7 +19,6 @@ echo "Replenisher balance before:  $($THIS_DIR/bitcoin-cli.sh -rpcwallet=repleni
 npx hardhat --network integration-test free-money 0xB3b77A8Bc6b6fD93D591C0F34f202eC02e9af2e8 $TOTAL_TRANSFERRED
 echo "Setting max limit to $SINGLE_TRANSFER_AMOUNT BTC"
 npx hardhat --network integration-test set-limits --max-btc $SINGLE_TRANSFER_AMOUNT
-sleep 1
 npx hardhat --network integration-test transfer-rbtc-to-btc 0xc1daad254b7005eca65780d47213d3de15bd92fcce83777487c5082c6d27600a bcrt1qq8zjw66qrgmynrq3gqdx79n7fcchtaudq4rrf0 $SINGLE_TRANSFER_AMOUNT --bridge-address 0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9 --repeat $NUM_TRANSFERS
 
 echo "$NUM_TRANSFERS transfers sent, totaling $TOTAL_TRANSFERRED BTC. They should be visible in a couple of minutes"
