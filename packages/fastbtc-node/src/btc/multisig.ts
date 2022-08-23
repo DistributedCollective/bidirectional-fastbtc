@@ -237,7 +237,7 @@ export class BitcoinMultisig {
         maxInputs: number|undefined = undefined,
     ): Promise<PartiallySignedBitcoinTransaction> {
         // TODO: this method is a mess. Too many ifs because of the replenisher stuff.
-        const estimateRawFeeOutput = await this.nodeWrapper.call('estimaterawfee', [2]);
+        const estimateRawFeeOutput = await this.nodeWrapper.call('estimaterawfee', [1]);
         let feeBtcPerKB = estimateRawFeeOutput.short.feerate;
         if (typeof feeBtcPerKB !== 'number') {
             // estimateRawFee doesn't work on regtest
@@ -247,7 +247,7 @@ export class BitcoinMultisig {
             else {
                 const response = JSON.stringify(estimateRawFeeOutput);
                 throw new Error(
-                    `Unable to deduce gas fee, got ${response} for response from estimaterawfee 2 from node`
+                    `Unable to deduce gas fee, got ${response} for response from estimaterawfee 1 from node`
                 );
             }
         }
