@@ -113,7 +113,25 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         }
 
         this.logger.info('Sending replenish transaction to the blockchain');
-        await this.replenisherMultisig.submitReplenishTransaction(combinedPsbt);
+        try {
+            await this.replenisherMultisig.submitReplenishTransaction(combinedPsbt);
+        } catch (e: any) {
+            // Sometimes we get 'bad-txns-inputs-missingorspent', which probably indicates that we planned to use
+            // utxos in the replenish psbt that got used before we managed to send the tx.
+            // In this case, let's try to redo the replenish psbt.
+            if (e.message === 'bad-txns-inputs-missingorspent') {
+                this.logger.exception(
+                    e,
+                    '\'bad-txns-inputs-missingorspent\' replenisher error -- recreating replenish tx'
+                );
+                this.unsignedReplenishPsbt = null;
+                this.gatheredPsbts = [];
+                return;
+            } else {
+                // catch this upstream
+                throw e;
+            }
+        }
         this.logger.info('Replenish transaction sent, waiting for confirmation');
         await this.waitForTransaction(combinedPsbt);
         this.logger.info('Replenish transaction confirmed successfully');
