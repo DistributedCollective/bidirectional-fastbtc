@@ -96,12 +96,13 @@ task("free-money", "Sends free money to address")
 
         const accounts = await hre.ethers.getSigners();
 
-        const receipt = await accounts[0].sendTransaction({
+        const tx = await accounts[0].sendTransaction({
             to: address,
             value: rbtcAmountWei,
         })
 
-        console.log('tx hash:', receipt.hash);
+        console.log('tx hash:', tx.hash, 'waiting for tx...');
+        await tx.wait();
     });
 
 task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
@@ -139,6 +140,7 @@ task("transfer-rbtc-to-btc", "Transfers RBTC to BTC")
                 {value: rbtcAmountWei}
             );
             console.log('tx hash:', receipt.hash);
+            // NOTE: don't wait here, we want to possibly get these to the same block
         }
     });
 
@@ -356,8 +358,9 @@ task("set-limits", "Set min/max transfer limits")
                 console.log("Min amount unchanged");
             } else {
                 console.log('Setting minimum to: %s BTC (%s sat)', minBtc, newMinSatoshi.toString());
-                const receipt = await contract.setMinTransferSatoshi(newMinSatoshi);
-                console.log('tx hash:', receipt.hash);
+                const tx = await contract.setMinTransferSatoshi(newMinSatoshi);
+                console.log('tx hash:', tx.hash, 'waiting for tx...');
+                await tx.wait();
             }
         }
 
@@ -367,8 +370,9 @@ task("set-limits", "Set min/max transfer limits")
                 console.log("Max amount unchanged");
             } else {
                 console.log('Setting maximum to: %s BTC (%s sat)', maxBtc, newMaxSatoshi.toString());
-                const receipt = await contract.setMaxTransferSatoshi(newMaxSatoshi);
-                console.log('tx hash:', receipt.hash);
+                const tx = await contract.setMaxTransferSatoshi(newMaxSatoshi);
+                console.log('tx hash:', tx.hash, 'waiting for tx...');
+                await tx.wait();
             }
         }
     });
