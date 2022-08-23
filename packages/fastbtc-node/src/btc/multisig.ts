@@ -246,7 +246,9 @@ export class BitcoinMultisig {
             }
             else {
                 const response = JSON.stringify(estimateRawFeeOutput);
-                throw new Error(`Unable to deduce gas fee, got ${response} for response from estimaterawfee 2 from node`);
+                throw new Error(
+                    `Unable to deduce gas fee, got ${response} for response from estimaterawfee 2 from node`
+                );
             }
         }
 

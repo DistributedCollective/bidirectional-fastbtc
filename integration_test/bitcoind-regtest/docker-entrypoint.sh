@@ -67,7 +67,7 @@ echo "TEST_VERY_SMALL_REPLENISHER_COINS=$TEST_VERY_SMALL_REPLENISHER_COINS"
 echo "TEST_REPLENISHER_LIMITS=$TEST_REPLENISHER_LIMITS"
 
 # We need a temporary address for both of these cases, because we need to send amounts smaller than the block reward.
-if [ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ] | [ "$TEST_REPLENISHER_LIMITS" = "true" ]
+if [[ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ||  "$TEST_REPLENISHER_LIMITS" = "true" ]]
 then
     echo "Creating temporary wallet address"
     bitcoin-cli createwallet temporary
@@ -83,7 +83,7 @@ else
     TEMPORARY_ADDRESS="temporary_address_not_created_because_not_TEST_VERY_SMALL_REPLENISHER_COINS_or_TEST_REPLENISHER_LIMITS"
 fi
 
-if [ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ]
+if [[ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ]]
 then
     # This is here to test the case where the replenisher wanted to sign a TX with 1000 inputs.
     # This doesn't play well with bitcoin-cli
@@ -102,7 +102,7 @@ then
         done
     done
     echo "Small coins sent"
-elif [ "$TEST_REPLENISHER_LIMITS" = "true" ]
+elif [[ "$TEST_REPLENISHER_LIMITS" = "true" ]]
 then
     echo "Sending 5.5 BTC to the multisig (should be just over the threshold)..."
     bitcoin-cli -rpcwallet=temporary sendtoaddress "$MULTISIG_ADDRESS" 5.5 > /dev/null
@@ -133,12 +133,12 @@ do
     for i in $(bitcoin-cli deriveaddresses "$REPLENISHER_SOURCE_DESCRIPTOR" '[5,100]'|cut -f 2 -d '"'|grep bc)
     do
         echo "Mine a block $(date '+%d/%m/%Y %H:%M:%S') for $i"
-        if [ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ]
+        if [[ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ]]
         then
             # generating to temporary address and then sending to replenisher
             bitcoin-cli -rpcwallet=replenisher generatetoaddress 1 "$TEMPORARY_ADDRESS" > /dev/null
             bitcoin-cli -rpcwallet=temporary sendtoaddress "$i" 0.001 > /dev/null
-        elif [ "$TEST_REPLENISHER_LIMITS" = "true" ]
+        elif [[ "$TEST_REPLENISHER_LIMITS" = "true" ]]
         then
             # Mine to temporary address, send 5 btc to the replenisher
             bitcoin-cli -rpcwallet=replenisher generatetoaddress 1 "$TEMPORARY_ADDRESS" > /dev/null
