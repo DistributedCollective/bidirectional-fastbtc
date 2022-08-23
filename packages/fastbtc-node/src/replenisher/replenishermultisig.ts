@@ -12,7 +12,7 @@ export class ReplenisherMultisig {
     private replenisherMultisig: BitcoinMultisig;
     private numRequiredSigners;
     private replenishThreshold = 5.0;
-    private replenishMinAmount = 1.0;
+    private replenishMinAmount = 5.0;
     private maxReplenishTxInputs = 100;
     private isReplenisher: boolean; // is this node a replenisher
     private network: Network;

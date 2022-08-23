@@ -33,7 +33,7 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     private isReplenisher: boolean;
 
     // Limit replenishments to N per period as a security measure
-    private readonly maxReplenishmentsDuringPeriod: number = 2;
+    private readonly maxReplenishmentsDuringPeriod: number = 3;
     private readonly replenishPeriod: number = 24 * 60 * 60 * 1000; // 1 day
     // Keeping all replenishment periods in a record will in theory leak memory,
     // but replenishments should be rare enough for this not to matter
