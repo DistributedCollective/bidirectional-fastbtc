@@ -35,6 +35,11 @@ test-transfers:
 	@cd packages/fastbtc-contracts && make
 	@integration_test/scripts/test_example_transfer.sh
 
+.PHONY: test-transfers-big-amounts
+test-transfers-big-amounts:
+	@cd packages/fastbtc-contracts && make
+	@integration_test/scripts/test_example_transfer_big_amounts.sh
+
 .PHONY: test-reclaiming
 test-reclaiming:
 	@cd packages/fastbtc-contracts && make
