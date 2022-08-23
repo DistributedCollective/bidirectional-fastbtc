@@ -48,12 +48,6 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         this.numRequiredSigners = config.numRequiredSigners;
         // It's possible that this node is not a replenisher though it can be the initiator
         this.isReplenisher = !!config.secrets().masterPrivateKey;
-        if (config.maxReplenishmentsDuringPeriod !== undefined) {
-            this.maxReplenishmentsDuringPeriod = config.maxReplenishmentsDuringPeriod;
-        }
-        if (config.replenishPeriod !== undefined) {
-            this.replenishPeriod = config.replenishPeriod;
-        }
         network.onMessage(this.onMessage);
     }
 

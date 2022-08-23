@@ -24,12 +24,6 @@ export class ReplenisherMultisig {
         private statsd: StatsD,
     ) {
         this.numRequiredSigners = config.numRequiredSigners;
-        if (config.replenishThreshold) {
-            this.replenishThreshold = config.replenishThreshold;
-        }
-        if (config.replenishMinAmount) {
-            this.replenishMinAmount = config.replenishMinAmount;
-        }
 
         this.isReplenisher = !!config.secrets().masterPrivateKey;
         this.network = networks[config.btcNetwork === 'mainnet' ? 'bitcoin' : config.btcNetwork];

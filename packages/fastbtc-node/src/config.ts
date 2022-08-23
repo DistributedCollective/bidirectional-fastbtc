@@ -201,25 +201,6 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
         }
     }
 
-    ret.replenishThreshold = parseConfigFloat(env, 'FASTBTC_REPLENISHER_THRESHOLD');
-    ret.replenishMinAmount = parseConfigFloat(env, 'FASTBTC_REPLENISHER_MIN_AMOUNT');
-    ret.replenishPeriod = parseConfigNumber(
-        env,
-        'FASTBTC_REPLENISHER_PERIOD',
-        {
-            allowZero: false,
-            parser: parseInt,
-        }
-    );
-    ret.maxReplenishmentsDuringPeriod = parseConfigNumber(
-        env,
-        'FASTBTC_REPLENISHER_MAX_REPLENISHMENTS_DURING_PERIOD',
-        {
-            allowZero: true,
-            parser: parseInt,
-        }
-    );
-
     if (missingKeys.length > 0) {
         if (givenKeys.length > 0) {
             console.warn(
