@@ -360,7 +360,7 @@ export class BitcoinMultisig {
 
         const transferSumIncludingFee = amountSatoshi.add(fee);
         if (totalSum.lt(transferSumIncludingFee)) {
-            if (maxInputs && totalInputCount >= maxInputs && response.length > maxInputs) {
+            if (maxInputs && noChange && !totalSum.isZero()) {
                 this.logger.warning(
                     `Number of inputs is capped at ${maxInputs} -- can only send ` +
                     `${totalSum.toString()} satoshi out of ${transferSumIncludingFee.toString()} satoshi wanted. ` +
