@@ -6,6 +6,7 @@ import {bip32, ECPair, Network, networks, Payment, payments, Psbt, script} from 
 import {normalizeKey, xprvToPublic} from './utils';
 import getByteCount from './bytecount';
 import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
+import {BTCFeeEstimator} from './fees';
 import {BigNumber} from 'ethers';
 import {Config, ConfigSecrets} from '../config';
 import Logger from '../logger';
@@ -51,9 +52,8 @@ export class BitcoinMultisig {
     private logger = new Logger('btc-multisig');
 
     public readonly network: Network;
-    private gasSatoshi = 10; // TODO: make variable/configurable
-    private readonly maxGasSatoshi = 5000;
     private nodeWrapper: IBitcoinNodeWrapper;
+    private feeEstimator: BTCFeeEstimator;
     private readonly masterPrivateKey: () => string;
     private readonly masterPublicKey: string;
     private masterPublicKeys: string[];
@@ -77,6 +77,7 @@ export class BitcoinMultisig {
         this.network = nodeWrapper.network;
 
         this.nodeWrapper = nodeWrapper;
+        this.feeEstimator = new BTCFeeEstimator(this.nodeWrapper);
 
         this.cosigners = config.numRequiredSigners;
 
@@ -237,20 +238,7 @@ export class BitcoinMultisig {
         maxInputs: number|undefined = undefined,
     ): Promise<PartiallySignedBitcoinTransaction> {
         // TODO: this method is a mess. Too many ifs because of the replenisher stuff.
-        const estimateRawFeeOutput = await this.nodeWrapper.call('estimaterawfee', [1]);
-        let feeBtcPerKB = estimateRawFeeOutput.short.feerate;
-        if (typeof feeBtcPerKB !== 'number') {
-            // estimateRawFee doesn't work on regtest
-            if (this.network === networks.regtest) {
-                feeBtcPerKB = 10 / 1e8 * 1000;
-            }
-            else {
-                const response = JSON.stringify(estimateRawFeeOutput);
-                throw new Error(
-                    `Unable to deduce gas fee, got ${response} for response from estimaterawfee 1 from node`
-                );
-            }
-        }
+        const feeBtcPerKB = await this.feeEstimator.estimateFeeBtcPerKB();
 
         // fee rate in sats/vB; add 5 % margin, convert from btc per KiB
         const feeRate = 1.05 * feeBtcPerKB / 1000 * 1e8;
