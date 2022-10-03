@@ -2,7 +2,7 @@
  * Bitcoin multisig signature logic, Bitcoin transaction sending and reading data from the Bitcoin network
  */
 import {inject, injectable} from 'inversify';
-import {bip32, ECPair, Network, networks, Payment, payments, Psbt, script} from "bitcoinjs-lib";
+import {bip32, ECPair, Network, networks, Payment, payments, Psbt, script, address as bitcoinjsAddress} from "bitcoinjs-lib";
 import {normalizeKey, xprvToPublic} from './utils';
 import getByteCount from './bytecount';
 import BitcoinNodeWrapper, {IBitcoinNodeWrapper} from './nodewrapper';
@@ -21,12 +21,20 @@ export interface PartiallySignedBitcoinTransaction {
     requiredSignatures: number;
     derivationPaths: string[];
     noChange: boolean;
+    isCpfp?: boolean;
+    feeSatsPerVB?: number;
+    totalFee?: number;
 }
 
 export interface BtcTransfer {
     btcAddress: string;
     amountSatoshi: BigNumber;
     nonce: number;
+}
+
+export interface CPFPOpts {
+    feeMultiplier?: number;
+    signSelf?: boolean;
 }
 
 // https://developer.bitcoin.org/reference/rpc/gettransaction.html
@@ -293,12 +301,19 @@ export class BitcoinMultisig {
 
         response = withDerivationPaths;
 
-        const amountSatoshi: BigNumber = transfers.map(t => t.amountSatoshi).reduce(
+        const totalPayoutValueSat: BigNumber = transfers.map(t => t.amountSatoshi).reduce(
             (a, b) => a.add(b), BigNumber.from(0),
         );
+        const minChangeSat = (
+            noChange
+                ? BigNumber.from(0)
+                : BigNumber.from(1e7) // 0.1 BTC to ensure enough change for cpfp
+        );
+        const totalPayoutValueWithMinChangeSat = totalPayoutValueSat.add(minChangeSat);
+
         const psbt = new Psbt({network});
 
-        let totalSum = BigNumber.from(0);
+        let totalInputValueSat = BigNumber.from(0);
         let outputCounts = {
             'P2WSH': 2, // OP_RETURN data + change address; this actually always exceeds the byte size of the OP_RETURN
         };
@@ -307,7 +322,7 @@ export class BitcoinMultisig {
         };
 
         const derivationPaths: Set<string> = new Set();
-        let fee = BigNumber.from(0);
+        let feeSat = BigNumber.from(0);
         let totalInputCount = 0;
         for (const utxo of response) {
             const tx = await this.getRawTx(utxo.txid);
@@ -326,9 +341,9 @@ export class BitcoinMultisig {
                 psbt.addInput(input);
                 inputCounts[inputType]++;
                 totalInputCount++;
-                totalSum = totalSum.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
+                totalInputValueSat = totalInputValueSat.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
 
-                fee = BigNumber.from(
+                feeSat = BigNumber.from(
                     Math.round(
                         getByteCount(
                             inputCounts,
@@ -339,7 +354,7 @@ export class BitcoinMultisig {
                         * feeRate
                     )
                 );
-                if (totalSum.gte(amountSatoshi.add(fee))) {
+                if (totalInputValueSat.gte(totalPayoutValueWithMinChangeSat.add(feeSat))) {
                     break;
                 }
                 if (maxInputs && totalInputCount >= maxInputs) {
@@ -348,18 +363,18 @@ export class BitcoinMultisig {
             }
         }
 
-        const transferSumIncludingFee = amountSatoshi.add(fee);
-        if (totalSum.lt(transferSumIncludingFee)) {
-            if (maxInputs && noChange && !totalSum.isZero()) {
+        const transferSumIncludingFee = totalPayoutValueWithMinChangeSat.add(feeSat);
+        if (totalInputValueSat.lt(transferSumIncludingFee)) {
+            if (maxInputs && noChange && !totalInputValueSat.isZero()) {
                 this.logger.warning(
                     `Number of inputs is capped at ${maxInputs} -- can only send ` +
-                    `${totalSum.toString()} satoshi out of ${transferSumIncludingFee.toString()} satoshi wanted. ` +
+                    `${totalInputValueSat.toString()} satoshi out of ${transferSumIncludingFee.toString()} satoshi wanted. ` +
                     `(But that's ok for a replenish tx.)`
                 )
 
             } else {
                 throw new Error(
-                    `balance is too low (can only send up to ${totalSum.toString()} satoshi out of ` +
+                    `balance is too low (can only send up to ${totalInputValueSat.toString()} satoshi out of ` +
                     `${transferSumIncludingFee.toString()} required)`
                 );
             }
@@ -387,7 +402,7 @@ export class BitcoinMultisig {
             // change money!
             psbt.addOutput({
                 address: this.changePayment.address!,
-                value: totalSum.sub(fee).sub(amountSatoshi).toNumber(),
+                value: totalInputValueSat.sub(feeSat).sub(totalPayoutValueSat).toNumber(),
             });
         }
         else {
@@ -398,7 +413,7 @@ export class BitcoinMultisig {
 
             psbt.addOutput({
                 address: transfers[0].btcAddress,
-                value: totalSum.sub(fee).toNumber()
+                value: totalInputValueSat.sub(feeSat).toNumber()
             });
         }
 
@@ -408,12 +423,115 @@ export class BitcoinMultisig {
             requiredSignatures: this.cosigners,
             derivationPaths: [...derivationPaths],
             noChange: Boolean(noChange),
+            isCpfp: false,
+            feeSatsPerVB: feeRate,
+            totalFee: feeSat.toNumber(),
         };
         if (signSelf) {
             ret = this.signTransaction(ret);
         }
 
         this.statsd.gauge('fastbtc.pegout.fee_rate_sats_per_vb', feeRate);
+        return ret;
+    }
+
+    /**
+     * Create a child-pays-for-parent (CPFP) transaction that bumps `bumpedTx`.
+     *
+     * @param bumpedTx
+     * @param opts
+     */
+    async createPartiallySignedCpfpTransaction(
+        bumpedTx: PartiallySignedBitcoinTransaction,
+        opts?: CPFPOpts,
+    ): Promise<PartiallySignedBitcoinTransaction> {
+        const {
+            feeMultiplier = 10,
+            signSelf = true,
+        } = (opts ?? {});
+        if (!this.changePayment.address || !this.changePayment.redeem) {
+            throw new Error("no change address");
+        }
+        if (!bumpedTx.totalFee) {
+            throw new Error("bumpedTx.totalFee is required");
+        }
+
+        const feeBtcPerKB = await this.feeEstimator.estimateFeeBtcPerKB();
+        let feeSatsPerVB = feeMultiplier * feeBtcPerKB / 1000 * 1e8;
+
+        const outputCounts = {
+            'P2WSH': 1,
+        };
+        const inputType = `MULTISIG-P2WSH:${this.cosigners}-${this.masterPublicKeys.length}`;
+        const inputCounts = {
+            [inputType]: 1,
+        };
+
+        // we add the original fee to this to ensure the network gets enough fee per vB
+        const byteCount = getByteCount(
+            inputCounts,
+            outputCounts,
+            [this.changePayment.address],
+            this.network
+        );
+        const fee = Math.round(byteCount * feeSatsPerVB) + bumpedTx.totalFee;
+        feeSatsPerVB = fee / byteCount; // save this for later :D
+
+        const bumpedPsbt = Psbt.fromBase64(bumpedTx.serializedTransaction, { network: this.network });
+        bumpedPsbt.validateSignaturesOfAllInputs();
+        bumpedPsbt.finalizeAllInputs();
+
+        const rawBumpedTx = bumpedPsbt.extractTransaction();
+
+        let changeOutput: any = null;
+        let changeOutputVout: number = -1;
+        const derivationPath = this.keyDerivationPath; // probably correct
+
+        for (let i = 0; i < rawBumpedTx.outs.length; i++) {
+            const output = rawBumpedTx.outs[i];
+            try {
+                const address = bitcoinjsAddress.fromOutputScript(output.script, this.network);
+                if (address === this.changePayment.address) {
+                    changeOutput = output;
+                    changeOutputVout = i;
+                    break;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+        if (!changeOutput) {
+            throw new Error("bumpedTx has no change output");
+        }
+
+        if (fee >= changeOutput.value) {
+            throw new Error(`fee ${fee} is greater or equal than change output value ${changeOutput.value}`);
+        }
+
+        const cpfpPsbt = new Psbt({network: this.network});
+        cpfpPsbt.addInput({
+            hash: rawBumpedTx.getId(),
+            index: changeOutputVout,
+            nonWitnessUtxo: rawBumpedTx.toBuffer(),
+            witnessScript: this.changePayment.redeem.output,
+        });
+        cpfpPsbt.addOutput({
+            address: this.changePayment.address,
+            value: changeOutput.value - fee,
+        });
+        let ret: PartiallySignedBitcoinTransaction = {
+            serializedTransaction: cpfpPsbt.toBase64(),
+            signedPublicKeys: [],
+            requiredSignatures: this.cosigners,
+            derivationPaths: [derivationPath],
+            noChange: false,
+            isCpfp: true,
+            feeSatsPerVB,
+            totalFee: fee,
+        };
+        if (signSelf) {
+            ret = this.signTransaction(ret);
+        }
         return ret;
     }
 
@@ -531,6 +649,9 @@ export class BitcoinMultisig {
             requiredSignatures: tx.requiredSignatures,
             derivationPaths: [...tx.derivationPaths],
             noChange: Boolean(tx.noChange),
+            isCpfp: Boolean(tx.isCpfp),
+            feeSatsPerVB: tx.feeSatsPerVB,
+            totalFee: tx.totalFee,
         }
     }
 
