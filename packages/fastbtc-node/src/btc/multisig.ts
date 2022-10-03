@@ -22,8 +22,10 @@ export interface PartiallySignedBitcoinTransaction {
     derivationPaths: string[];
     noChange: boolean;
     isCpfp?: boolean;
+    // cumulativeByteCount includes the transaction's byte count, and the byte count
+    // of all CPFP'd transactions in the chain
+    cumulativeByteCount?: number;
     feeSatsPerVB?: number;
-    totalFee?: number;
 }
 
 export interface BtcTransfer {
@@ -324,6 +326,12 @@ export class BitcoinMultisig {
         const derivationPaths: Set<string> = new Set();
         let feeSat = BigNumber.from(0);
         let totalInputCount = 0;
+        let cumulativeByteCount = getByteCount(
+            inputCounts,
+            outputCounts,
+            transfers.map(t => t.btcAddress),
+            this.network
+        );
         for (const utxo of response) {
             const tx = await this.getRawTx(utxo.txid);
 
@@ -343,15 +351,15 @@ export class BitcoinMultisig {
                 totalInputCount++;
                 totalInputValueSat = totalInputValueSat.add(BigNumber.from(Math.round(utxo.amount * 1e8)));
 
+                cumulativeByteCount = getByteCount(
+                    inputCounts,
+                    outputCounts,
+                    transfers.map(t => t.btcAddress),
+                    this.network
+                );
                 feeSat = BigNumber.from(
                     Math.round(
-                        getByteCount(
-                            inputCounts,
-                            outputCounts,
-                            transfers.map(t => t.btcAddress),
-                            this.network
-                        )
-                        * feeRate
+                        cumulativeByteCount * feeRate
                     )
                 );
                 if (totalInputValueSat.gte(totalPayoutValueWithMinChangeSat.add(feeSat))) {
@@ -424,8 +432,8 @@ export class BitcoinMultisig {
             derivationPaths: [...derivationPaths],
             noChange: Boolean(noChange),
             isCpfp: false,
+            cumulativeByteCount,
             feeSatsPerVB: feeRate,
-            totalFee: feeSat.toNumber(),
         };
         if (signSelf) {
             ret = this.signTransaction(ret);
@@ -446,18 +454,28 @@ export class BitcoinMultisig {
         opts?: CPFPOpts,
     ): Promise<PartiallySignedBitcoinTransaction> {
         const {
-            feeMultiplier = 10,
+            feeMultiplier = 2, // TODO: experiment with this
             signSelf = true,
         } = (opts ?? {});
         if (!this.changePayment.address || !this.changePayment.redeem) {
             throw new Error("no change address");
         }
-        if (!bumpedTx.totalFee) {
-            throw new Error("bumpedTx.totalFee is required");
+        if (!bumpedTx.cumulativeByteCount || !bumpedTx.feeSatsPerVB) {
+            throw new Error("bumpedTx.cumulativeByteCount and bumpedTx.feeSatsPerVB are required");
         }
+
+        const bumpedPsbt = Psbt.fromBase64(bumpedTx.serializedTransaction, { network: this.network });
+        bumpedPsbt.validateSignaturesOfAllInputs();
+        bumpedPsbt.finalizeAllInputs();
+        const rawBumpedTx = bumpedPsbt.extractTransaction();
+
+        this.logger.info(
+            `Attempting to CPFP ${rawBumpedTx.getId()} with fee multiplier ${feeMultiplier}`
+        );
 
         const feeBtcPerKB = await this.feeEstimator.estimateFeeBtcPerKB();
         let feeSatsPerVB = feeMultiplier * feeBtcPerKB / 1000 * 1e8;
+        feeSatsPerVB = Math.max(feeSatsPerVB, bumpedTx.feeSatsPerVB);
 
         const outputCounts = {
             'P2WSH': 1,
@@ -467,21 +485,28 @@ export class BitcoinMultisig {
             [inputType]: 1,
         };
 
-        // we add the original fee to this to ensure the network gets enough fee per vB
-        const byteCount = getByteCount(
+        // we add the original cumulativeByteCount to this to ensure the network gets enough fee per vB
+        const cumulativeByteCount = getByteCount(
             inputCounts,
             outputCounts,
             [this.changePayment.address],
             this.network
+        ) + bumpedTx.cumulativeByteCount;
+        const fee = Math.round(
+            cumulativeByteCount * feeSatsPerVB
         );
-        const fee = Math.round(byteCount * feeSatsPerVB) + bumpedTx.totalFee;
-        feeSatsPerVB = fee / byteCount; // save this for later :D
 
-        const bumpedPsbt = Psbt.fromBase64(bumpedTx.serializedTransaction, { network: this.network });
-        bumpedPsbt.validateSignaturesOfAllInputs();
-        bumpedPsbt.finalizeAllInputs();
+        this.logger.info(
+            `Creating CPFP transaction with feeSatsPerVB=${feeSatsPerVB}, ` +
+            `cumulativeByteCount=${cumulativeByteCount}. ` +
+            `Original tx (${rawBumpedTx.getId()}): feeSatsPerVB=${bumpedTx.feeSatsPerVB} ` +
+            `cumulativeByteCount=${bumpedTx.cumulativeByteCount}.`
+        );
 
-        const rawBumpedTx = bumpedPsbt.extractTransaction();
+        const maxFeeBtc = 0.01;
+        if (fee >= maxFeeBtc * 1e8) {
+            throw new Error(`yeah, we're not paying over ${maxFeeBtc} for CPFP`);
+        }
 
         let changeOutput: any = null;
         let changeOutputVout: number = -1;
@@ -526,8 +551,8 @@ export class BitcoinMultisig {
             derivationPaths: [derivationPath],
             noChange: false,
             isCpfp: true,
+            cumulativeByteCount,
             feeSatsPerVB,
-            totalFee: fee,
         };
         if (signSelf) {
             ret = this.signTransaction(ret);
@@ -650,8 +675,8 @@ export class BitcoinMultisig {
             derivationPaths: [...tx.derivationPaths],
             noChange: Boolean(tx.noChange),
             isCpfp: Boolean(tx.isCpfp),
+            cumulativeByteCount: tx.cumulativeByteCount,
             feeSatsPerVB: tx.feeSatsPerVB,
-            totalFee: tx.totalFee,
         }
     }
 
