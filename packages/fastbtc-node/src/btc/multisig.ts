@@ -13,6 +13,7 @@ import {
     script,
     address as bitcoinjsAddress,
     Transaction as RawTransaction,
+    PsbtTxOutput,
 } from "bitcoinjs-lib";
 import {normalizeKey, xprvToPublic} from './utils';
 import getByteCount from './bytecount';
@@ -24,7 +25,6 @@ import Logger from '../logger';
 import {setsEqual} from "../utils/sets";
 import {TYPES} from "../stats";
 import {StatsD} from "hot-shots";
-import {Output} from 'bitcoinjs-lib/types/transaction';
 
 
 export interface PartiallySignedBitcoinTransaction {
@@ -524,7 +524,7 @@ export class BitcoinMultisig {
             throw new Error(`yeah, we're not paying over ${maxFeeBtc} for CPFP`);
         }
 
-        const [ changeOutput, changeOutputVout ] = this.getChangeOutputAndVout(rawBumpedTx);
+        const [ changeOutput, changeOutputVout ] = this.getChangeOutputAndVout(bumpedPsbt);
         if (!changeOutput) {
             throw new Error("bumpedTx has no change output");
         }
@@ -571,22 +571,24 @@ export class BitcoinMultisig {
         if (!this.changePayment.address || !this.changePayment.redeem) {
             throw new Error("no change address -- cannot validate");
         }
-        const bumpedPsbt = Psbt.fromBase64(bumpedTx.serializedTransaction, { network: this.network });
         const cpfpPsbt = Psbt.fromBase64(cpfpTx.serializedTransaction, { network: this.network });
+        const bumpedPsbt = Psbt.fromBase64(bumpedTx.serializedTransaction, { network: this.network });
+        bumpedPsbt.validateSignaturesOfAllInputs();
+        bumpedPsbt.finalizeAllInputs();
+
         const rawBumpedTx = bumpedPsbt.extractTransaction();
-        const rawCpfpTx = cpfpPsbt.extractTransaction();
-        const [ changeOutput, changeOutputVout ] = this.getChangeOutputAndVout(rawBumpedTx);
+        const [ changeOutput, changeOutputVout ] = this.getChangeOutputAndVout(bumpedPsbt);
         if (!changeOutput) {
             throw new CPFPValidationError("bumpedTx has no change output");
         }
-        if (rawCpfpTx.ins.length !== 1) {
+        if (cpfpPsbt.txInputs.length !== 1) {
             throw new CPFPValidationError("cpfpTx must have exactly one input");
         }
-        if (rawCpfpTx.outs.length !== 1) {
+        if (cpfpPsbt.txOutputs.length !== 1) {
             throw new CPFPValidationError("cpfpTx must have exactly one output");
         }
 
-        const cpfpInput = rawCpfpTx.ins[0];
+        const cpfpInput = cpfpPsbt.txInputs[0];
         const cpfpInputHash = cpfpInput.hash.toString('hex');
         const rawBumpedTxHash = rawBumpedTx.getHash().toString('hex');
         if (cpfpInputHash !== rawBumpedTxHash) {
@@ -601,7 +603,7 @@ export class BitcoinMultisig {
         }
         // TODO: could maybe validate the witnessScript and nonWitnessUtxo
 
-        const cpfpOutput = rawCpfpTx.outs[0];
+        const cpfpOutput = cpfpPsbt.txOutputs[0];
         const cpfpOutputAddress = bitcoinjsAddress.fromOutputScript(cpfpOutput.script, this.network);
         if (cpfpOutputAddress !== this.changePayment.address) {
             throw new CPFPValidationError(
@@ -610,19 +612,14 @@ export class BitcoinMultisig {
         }
     }
 
-    private getChangeOutputAndVout(rawTx: RawTransaction): [Output|undefined, number] {
-        for (let i = 0; i < rawTx.outs.length; i++) {
-            const output = rawTx.outs[i];
-            try {
-                const address = bitcoinjsAddress.fromOutputScript(output.script, this.network);
-                if (address === this.changePayment.address) {
-                    return [ output, i ];
-                }
-            } catch (e) {
-                // ignore
+    private getChangeOutputAndVout(psbt: Psbt): [PsbtTxOutput|undefined, number] {
+        for (let i = 0; i < psbt.txOutputs.length; i++) {
+            const output = psbt.txOutputs[i];
+            if (output.address === this.changePayment.address) {
+                return [output, i];
             }
         }
-        return [ undefined, -1 ];
+        return [undefined, -1];
     }
 
     getTransactionTransfers(tx: PartiallySignedBitcoinTransaction): BtcTransfer[] {
@@ -746,7 +743,7 @@ export class BitcoinMultisig {
         }
     }
 
-    async combine(txs: PartiallySignedBitcoinTransaction[]): Promise<PartiallySignedBitcoinTransaction> {
+    combine(txs: PartiallySignedBitcoinTransaction[]): PartiallySignedBitcoinTransaction {
         if (! txs.length) {
             throw new Error('Cannot combine zero transactions');
         }
