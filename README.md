@@ -149,17 +149,6 @@ $ make test-transfers-big-amounts
 ```
 
 Observe the output, quit with Ctrl-C if wanted (though it quits automatically on success).
-You should see the lines:
-```
-TEST_CPFP is true, only sleeping for 100 ms
-```
-and
-```
-CPFP transaction successfully sent to bitcoin
-```
-in the output.
-
-This test will also take ~10 minutes to run.
 
 #### Automatic bumping of slow transfers with CPFP
 
@@ -178,6 +167,19 @@ $ make test-transfers
 ```
 
 Observe the output, quit with Ctrl-C if wanted (though it quits automatically on success).
+
+You should see the lines:
+```
+TEST_CPFP is true, only sleeping for 100 ms
+```
+and
+```
+CPFP transaction successfully sent to bitcoin
+```
+in the output.
+
+This test will also take ~10 minutes to run.
+
 
 ### Advanced details
 
