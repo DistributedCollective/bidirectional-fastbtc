@@ -568,7 +568,16 @@ export class FastBTCNode {
             return;
         }
 
-        await callback(transferBatch, message);
+        try {
+            await callback(transferBatch, message);
+        } catch (e: any) {
+            if (e.isValidationError) {
+                this.logger.warn(`Validation error: ${e.message}`);
+            } else {
+                this.logger.exception(e, 'Error processing a message from the initiator');
+            }
+            throw e;
+        }
     }
 
     onRskSendingSignatureResponse = async (data: RSKSendingSignatureResponseMessage, source: Node<FastBTCMessage>) => {

@@ -37,6 +37,7 @@ export class CPFPBumper {
 
     private logger = new Logger('cpfp-bumper')
     private signatureRequestId = 0;
+    private responseListeners: ((msg: MessageUnion<CPFPBumperMessage>) => void)[] = [];
 
     constructor(
         @inject(Config) private config: CPFPBumperConfig,
@@ -74,7 +75,8 @@ export class CPFPBumper {
 
         const requestId = this.signatureRequestId++;
         let gatheredPsbts: PartiallySignedBitcoinTransaction[] = [];
-        const listener = this.network.onMessage(async (msg) => {
+
+        const listener = async (msg: MessageUnion<CPFPBumperMessage>) => {
             if (msg.type !== 'fastbtc:cpfp-bumper:signature-response') {
                 return;
             }
@@ -82,6 +84,7 @@ export class CPFPBumper {
             if (responseRequestId !== requestId) {
                 return;
             }
+            this.logger.info(`Received CPFP signature response from ${msg.source.id}`);
             try {
                 this.validateCpfpTransaction(transferBatch, signedCpfpTransaction);
                 gatheredPsbts.push(cpfpTransaction);
@@ -92,7 +95,11 @@ export class CPFPBumper {
                     this.logger.exception(e, 'Error processing CPFP signature response');
                 }
             }
-        });
+        }
+
+        // We don't use this.network.onMessage(listener) because I cannot find a way to remove that
+        // without removing EVERY onMessage listener -_-
+        this.responseListeners.push(listener);
 
         const maxIterations = this.MAX_SIGNATURE_WAIT_TIME_MS / this.SLEEP_TIME_MS;
         try {
@@ -127,13 +134,18 @@ export class CPFPBumper {
             }
             throw new Error('Timed out waiting for CPFP signatures');
         } finally {
-            listener.unsubscribe();
+            // Remove the listener
+            this.responseListeners = this.responseListeners.filter(l => l !== listener);
         }
     }
 
     private onMessage = async (message: MessageUnion<CPFPBumperMessage>) => {
         try {
-            if (message.type === 'fastbtc:cpfp-bumper:request-signature') {
+            if (message.type === 'fastbtc:cpfp-bumper:signature-response') {
+                for (const listener of this.responseListeners) {
+                    await listener(message);
+                }
+            } else if (message.type === 'fastbtc:cpfp-bumper:request-signature') {
                 const {transferBatchDto, cpfpTransaction, requestId} = message.data;
                 if (cpfpTransaction.signedPublicKeys.indexOf(this.btcMultisig.getThisNodePublicKey()) !== -1) {
                     this.logger.info('CPFP already signed by this node')
