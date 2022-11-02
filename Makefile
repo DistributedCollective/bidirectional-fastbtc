@@ -17,6 +17,9 @@ run-demo-regtest-replenisher-very-small-coins: packages/fastbtc-node/version.jso
 .PHONY: run-demo-regtest-replenisher-limits
 run-demo-regtest-replenisher-limits: packages/fastbtc-node/version.json
 	@export TEST_REPLENISHER_LIMITS=true && make run-demo-regtest
+.PHONY: run-demo-regtest-cpfp
+run-demo-regtest-cpfp: packages/fastbtc-node/version.json
+	@export TEST_CPFP=true && make run-demo-regtest
 
 .PHONY: show-node-logs
 show-node-logs:

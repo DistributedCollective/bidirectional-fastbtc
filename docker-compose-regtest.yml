@@ -29,6 +29,7 @@ services:
      # Extra test vars
      - TEST_VERY_SMALL_REPLENISHER_COINS
      - TEST_REPLENISHER_LIMITS
+     - TEST_CPFP
 
     ports:
       - 18443:18443
@@ -55,6 +56,7 @@ services:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
       - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
       - FASTBTC_REPLENISHER_RPC_URL=http://bitcoin-regtest:18443/wallet/replenisher
+      - TEST_CPFP
     depends_on:
       - bitcoin-regtest
       - hardhat
@@ -64,6 +66,7 @@ services:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
       - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
       - FASTBTC_REPLENISHER_RPC_URL=http://bitcoin-regtest:18443/wallet/replenisher
+      - TEST_CPFP
     depends_on:
       - bitcoin-regtest
       - hardhat
@@ -81,6 +84,7 @@ services:
       - FASTBTC_RSK_RPC_URL=http://hardhat:8545
       - FASTBTC_BTC_RPC_URL=http://bitcoin-regtest:18443/wallet/multisig
       - FASTBTC_REPLENISHER_RPC_URL=http://bitcoin-regtest:18443/wallet/replenisher
+      - TEST_CPFP
     depends_on:
       - bitcoin-regtest
       - hardhat
