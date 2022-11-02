@@ -25,6 +25,13 @@ run-demo-regtest-cpfp: packages/fastbtc-node/version.json
 show-node-logs:
 	@docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml logs -f node1 node2 node3
 
+# This is very hacky :P We grep for a message only sent by the initiator and parse the node id from there
+.PHONY: show-initiator-logs
+show-initiator-logs:
+	docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml logs -f $$( \
+		docker-compose -f docker-compose-base.yml -f docker-compose-regtest.yml logs --no-color \
+		| grep -e 'stored batches in total' | tail -1 | cut -d_ -f 1)
+
 .PHONY: build-regtest-bitcoin
 build-regtest-bitcoin:
 	@(cd integration_test/bitcoind-regtest \
