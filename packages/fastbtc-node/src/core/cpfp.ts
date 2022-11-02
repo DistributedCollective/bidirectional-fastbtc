@@ -1,6 +1,6 @@
 import {inject, injectable} from 'inversify';
 import Logger from '../logger';
-import {Network} from '../p2p/network';
+import {Network, P2PNetwork} from '../p2p/network';
 import {BitcoinMultisig, CPFPValidationError, PartiallySignedBitcoinTransaction} from '../btc/multisig';
 import {BitcoinTransferService, TransferBatch, TransferBatchDTO, TransferBatchValidator} from './transfers';
 import {Config} from '../config';
@@ -40,7 +40,7 @@ export class CPFPBumper {
 
     constructor(
         @inject(Config) private config: CPFPBumperConfig,
-        @inject(Network) private network: Network<CPFPBumperMessage>,
+        @inject(P2PNetwork) private network: Network<CPFPBumperMessage>,
         @inject(BitcoinTransferService) private bitcoinTransferService: BitcoinTransferService,
         @inject(TransferBatchValidator) private transferBatchValidator: TransferBatchValidator,
         @inject(BitcoinMultisig) private btcMultisig: BitcoinMultisig,
