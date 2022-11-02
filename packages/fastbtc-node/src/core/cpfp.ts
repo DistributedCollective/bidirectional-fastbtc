@@ -135,7 +135,7 @@ export class CPFPBumper {
         try {
             if (message.type === 'fastbtc:cpfp-bumper:request-signature') {
                 const {transferBatchDto, cpfpTransaction, requestId} = message.data;
-                if (cpfpTransaction.signedPublicKeys.indexOf(this.btcMultisig.getThisNodePublicKey()) === -1) {
+                if (cpfpTransaction.signedPublicKeys.indexOf(this.btcMultisig.getThisNodePublicKey()) !== -1) {
                     this.logger.info('CPFP already signed by this node')
                     return;
                 }

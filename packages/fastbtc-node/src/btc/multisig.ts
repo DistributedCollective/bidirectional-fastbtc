@@ -775,6 +775,9 @@ export class BitcoinMultisig {
                 requiredSignatures: tx.requiredSignatures,
                 derivationPaths: [...tx.derivationPaths],
                 noChange: Boolean(tx.noChange),
+                isCpfp: Boolean(tx.isCpfp),
+                cumulativeByteCount: tx.cumulativeByteCount,
+                feeSatsPerVB: tx.feeSatsPerVB,
             }
         }
         return result;
