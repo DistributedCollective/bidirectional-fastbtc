@@ -46,6 +46,7 @@ export interface TransferBatchEnvironment {
     requiredBitcoinConfirmations: number;
     requiredRskConfirmations: number;
     bitcoinOnChainTransaction?: BitcoinRPCGetTransactionResponse;
+    bitcoinOnChainCpfpTransactions: (BitcoinRPCGetTransactionResponse|undefined)[];
 }
 
 /**
@@ -192,6 +193,14 @@ export class TransferBatch {
         if (!chainTx) {
             return false;
         }
+        for (let cpfpTx of this.environment.bitcoinOnChainCpfpTransactions) {
+            if (!cpfpTx) {
+                return false;
+            }
+            if (cpfpTx.confirmations < this.environment.requiredBitcoinConfirmations) {
+                return false;
+            }
+        }
         return chainTx.confirmations >= this.environment.requiredBitcoinConfirmations;
     }
 
@@ -298,8 +307,12 @@ export class BitcoinTransferService {
                 transfers.push(transfer);
             }
 
+            const cpfpTxHashes = dto.signedCpfpTransactions?.map(
+                tx => this.btcMultisig.getBitcoinTransactionHash(tx)
+            ) ?? [];
+
             return new TransferBatch(
-                await this.getTransferBatchEnvironment(dto.bitcoinTransactionHash),
+                await this.getTransferBatchEnvironment(dto.bitcoinTransactionHash, cpfpTxHashes),
                 transfers,
                 dto.rskSendingSignatures,
                 dto.rskSendingSigners,
@@ -651,6 +664,12 @@ export class BitcoinTransferService {
         }
         await this.btcMultisig.submitTransaction(transferBatch.signedBtcTransaction);
         this.logger.info("TransferBatch successfully sent to bitcoin");
+        if (transferBatch.signedCpfpTransactions) {
+            for (const cpfpTransaction of transferBatch.signedCpfpTransactions) {
+                await this.btcMultisig.submitTransaction(cpfpTransaction);
+                this.logger.info("CPFP transaction successfully sent to bitcoin");
+            }
+        }
 
         // This method should be idempotent, but we will still wait for the required number of confirmations.
         // TODO: wait for N blocks, not N time
@@ -664,8 +683,18 @@ export class BitcoinTransferService {
             const chainTx = await this.btcMultisig.getTransaction(transferBatch.bitcoinTransactionHash);
             const confirmations = chainTx ? chainTx.confirmations : 0;
             if (confirmations >= requiredConfirmations) {
-                // mined
-                return true;
+                let isConfirmed = true;
+                if (transferBatch.signedCpfpTransactions) {
+                    for (const cpfpPsbt of transferBatch.signedCpfpTransactions) {
+                        const cpfpTxHash = this.btcMultisig.getBitcoinTransactionHash(cpfpPsbt);
+                        const cpfpTx = await this.btcMultisig.getTransaction(cpfpTxHash);
+                        if (!cpfpTx || cpfpTx.confirmations < requiredConfirmations) {
+                            isConfirmed = false;
+                            break;
+                        }
+                    }
+                }
+                return isConfirmed;
             }
             await sleep(sleepTimeMs);
         }
@@ -691,7 +720,7 @@ export class BitcoinTransferService {
             initialSignedBtcTransaction
         );
         return new TransferBatch(
-            await this.getTransferBatchEnvironment(bitcoinTxHash),  // could also null here since it is not in blockchain
+            await this.getTransferBatchEnvironment(bitcoinTxHash, []),  // could also null here since it is not in blockchain
             transfers,
             [],
             [],
@@ -703,15 +732,19 @@ export class BitcoinTransferService {
         );
     }
 
-    private async getTransferBatchEnvironment(bitcoinTransactionHash: string|null): Promise<TransferBatchEnvironment> {
+    private async getTransferBatchEnvironment(bitcoinTransactionHash: string|null, cpfpTransactionHashes: string[]): Promise<TransferBatchEnvironment> {
         const currentBlockNumber = await this.ethersProvider.getBlockNumber();
         let bitcoinOnChainTransaction = undefined;
         if (bitcoinTransactionHash) {
             bitcoinOnChainTransaction = await this.btcMultisig.getTransaction(bitcoinTransactionHash);
         }
+        const bitcoinOnChainCpfpTransactions = await Promise.all(
+            cpfpTransactionHashes.map(h => this.btcMultisig.getTransaction(h))
+        );
         return {
             currentBlockNumber,
             bitcoinOnChainTransaction,
+            bitcoinOnChainCpfpTransactions,
             requiredBitcoinConfirmations: this.config.btcRequiredConfirmations,
             requiredRskConfirmations: this.config.rskRequiredConfirmations,
             numRequiredSigners: this.config.numRequiredSigners,

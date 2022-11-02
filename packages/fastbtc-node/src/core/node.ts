@@ -15,6 +15,7 @@ import {StatsD} from "hot-shots";
 import {TYPES} from "../stats";
 import StatusChecker from './statuschecker';
 import {BitcoinReplenisher} from '../replenisher/replenisher';
+import {CPFPBumper} from './cpfp';
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -115,6 +116,7 @@ export class FastBTCNode {
         @inject(TYPES.StatsD) private statsd: StatsD,
         @inject(StatusChecker) private statusChecker: StatusChecker,
         @inject(BitcoinReplenisher) private replenisher: BitcoinReplenisher,
+        @inject(CPFPBumper) private cpfpBumper: CPFPBumper,
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger);
         network.onNodeAvailable(this.onNodeAvailable);
@@ -298,6 +300,7 @@ export class FastBTCNode {
                     'TransferBatch was not sent in due time, initiating CPFP'
                 );
                 this.statsd.increment('fastbtc.pegout.cpfp_initiated');
+                transferBatch = await this.cpfpBumper.addCpfpTransaction(transferBatch);
             }
             return;
         }
