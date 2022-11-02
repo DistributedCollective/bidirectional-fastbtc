@@ -160,7 +160,7 @@ do
 
         if [[ "$TEST_CPFP" = "true" ]]
         then
-            sleep 600
+            sleep 300
         else
             sleep 1
         fi
