@@ -677,7 +677,14 @@ export class BitcoinTransferService {
         const maxIterations = 200;
         const avgBlockTimeMs = 10 * 60 * 1000;
         const overheadMultiplier = 2;
-        const sleepTimeMs = Math.round((avgBlockTimeMs * requiredConfirmations * overheadMultiplier) / maxIterations);
+        let sleepTimeMs: number;
+        if (process.env.TEST_CPFP === 'true') {
+            // hack for testing cpfp
+            this.logger.info("TEST_CPFP is true, only sleeping for 100 ms");
+            sleepTimeMs = 100;
+        } else {
+            sleepTimeMs = Math.round((avgBlockTimeMs * requiredConfirmations * overheadMultiplier) / maxIterations);
+        }
         this.logger.info(`Waiting for ${requiredConfirmations} confirmations`);
         for (let i = 0; i < maxIterations; i++) {
             const chainTx = await this.btcMultisig.getTransaction(transferBatch.bitcoinTransactionHash);
