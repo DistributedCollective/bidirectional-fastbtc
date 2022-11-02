@@ -84,6 +84,39 @@ task("show-transfer", "Show transfer details")
 
     });
 
+
+task("ispaused", "Check if the bridge is paused")
+    .addPositionalParam('btcAddressOrTransferId')
+    .addOptionalPositionalParam('nonce')
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ btcAddressOrTransferId, nonce, bridgeAddress }, hre) => {
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+        );
+
+        let transferId;
+        if (nonce === undefined) {
+            console.log('Nonce not given, treat', btcAddressOrTransferId, 'as transferId');
+            transferId = btcAddressOrTransferId;
+        } else {
+            console.log('Nonce given, treat', btcAddressOrTransferId, 'as btcAddress');
+            transferId = await contract.getTransferId(btcAddressOrTransferId, nonce);
+        }
+
+        console.log('transferId', transferId);
+
+        const transfer = await contract.getTransferByTransferId(transferId);
+        for (let [key, value] of transfer.entries()) {
+            console.log(
+                key,
+                BigNumber.isBigNumber(value) ? value.toString() : value
+            );
+        }
+        console.log(transfer);
+
+    });
+
 task("free-money", "Sends free money to address")
     .addPositionalParam("address", "Address to send free money to")
     .addPositionalParam("rbtcAmount", "RBTC amount to send", "1.0")
@@ -276,7 +309,7 @@ task('roles', 'Manage roles')
             await getDeploymentAddress(undefined, hre, 'FastBTCAccessControl'),
             signer,
         );
-
+        console.log('fastBTCBridge address', await getDeploymentAddress(undefined, hre, 'FastBTCBridge'));
         console.log(`${action} role ${role}`, account ? `for ${account}` : '');
         const roleHash = await accessControl[`ROLE_${role}`]();
         console.log('role hash:', roleHash);

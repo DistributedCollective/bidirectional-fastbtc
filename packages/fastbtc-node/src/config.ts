@@ -30,6 +30,7 @@ export interface Config {
     btcRpcUrl: string;
     btcRpcUsername: string;
     btcKeyDerivationPath: string;
+    btcWaitedBlocksBeforeCpfp: number;
     statsdUrl?: string;
     secrets: () => ConfigSecrets;
     replenisherConfig: ReplenisherConfig|undefined;
@@ -154,6 +155,7 @@ export const envConfigProviderFactory = async (
             btcRpcUrl: env.FASTBTC_BTC_RPC_URL!,
             btcRpcUsername: env.FASTBTC_BTC_RPC_USERNAME ?? '',
             btcKeyDerivationPath: env.FASTBTC_BTC_KEY_DERIVATION_PATH ?? 'm/0/0/0',
+            btcWaitedBlocksBeforeCpfp: parseInt(env.FASTBTC_BTC_WAITED_BLOCKS_BEFORE_CPFP ?? '5'),
             statsdUrl: env.FASTBTC_STATSD_URL,
             secrets: () => (
                 {

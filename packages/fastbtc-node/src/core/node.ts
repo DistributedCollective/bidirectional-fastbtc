@@ -292,7 +292,13 @@ export class FastBTCNode {
                     transferBatchDto: transferBatch.getDto(),
                 }
             );
-            await this.bitcoinTransferService.sendToBitcoin(transferBatch);
+            const wasMined = await this.bitcoinTransferService.sendToBitcoin(transferBatch);
+            if (!wasMined) {
+                this.logger.info(
+                    'TransferBatch was not sent in due time, initiating CPFP'
+                );
+                this.statsd.increment('fastbtc.pegout.cpfp_initiated');
+            }
             return;
         }
 

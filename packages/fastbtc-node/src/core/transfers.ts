@@ -14,6 +14,7 @@ import {sleep} from '../utils';
 import {setExtend, setIntersection} from "../utils/sets";
 import {toNumber} from '../rsk/utils';
 import {Satoshis} from '../btc/types';
+import {deepcopy} from '../utils/copy';
 
 // For lack of a better place, just have these here
 export const MAX_BTC_IN_BATCH = 5.0;
@@ -34,6 +35,7 @@ export interface TransferBatchDTO {
     signedBtcTransaction?: PartiallySignedBitcoinTransaction;
     rskMinedSignatures: string[];
     rskMinedSigners: string[];
+    signedCpfpTransactions?: PartiallySignedBitcoinTransaction[];
 }
 
 export interface TransferBatchEnvironment {
@@ -60,6 +62,7 @@ export class TransferBatch {
         public signedBtcTransaction: PartiallySignedBitcoinTransaction|undefined,
         public rskMinedSignatures: string[],
         public rskMinedSigners: string[],
+        public signedCpfpTransactions?: PartiallySignedBitcoinTransaction[],
     ) {
     }
 
@@ -81,6 +84,7 @@ export class TransferBatch {
             signedBtcTransaction: this.signedBtcTransaction,
             rskMinedSignatures: this.rskMinedSignatures,
             rskMinedSigners: this.rskMinedSigners,
+            signedCpfpTransactions: this.signedCpfpTransactions,
         }
     }
 
@@ -304,6 +308,7 @@ export class BitcoinTransferService {
                 dto.signedBtcTransaction,
                 dto.rskMinedSignatures,
                 dto.rskMinedSigners,
+                dto.signedCpfpTransactions,
             );
         });
     }
@@ -530,6 +535,25 @@ export class BitcoinTransferService {
         return transferBatch;
     }
 
+    async addCpfpTransaction(
+        transferBatch: TransferBatch,
+        cpfpTransaction: PartiallySignedBitcoinTransaction
+    ): Promise<TransferBatch> {
+        await this.validator.validateForAddingCpfpTransaction(transferBatch);
+        if (!transferBatch.signedBtcTransaction) {
+            throw new Error('Cannot add cpfp transaction to unsigned transaction');
+        }
+        this.btcMultisig.validatePartiallySignedCpfpTransaction(transferBatch.signedBtcTransaction, cpfpTransaction);
+        transferBatch = transferBatch.copy();
+        if(!transferBatch.signedCpfpTransactions) {
+            transferBatch.signedCpfpTransactions = [];
+        }
+        transferBatch.signedCpfpTransactions.push(cpfpTransaction);
+        await this.validator.validateCpfpTransactions(transferBatch);
+        await this.updateStoredTransferBatch(transferBatch);
+        return transferBatch;
+    }
+
     async markAsSendingInRsk(transferBatch: TransferBatch): Promise<void> {
         if (!transferBatch.hasEnoughRskSendingSignatures()) {
             throw new Error('TransferBatch does not have enough signatures to be marked as sending');
@@ -615,12 +639,12 @@ export class BitcoinTransferService {
         return this.btcMultisig.signTransaction(transferBatch.initialBtcTransaction);
     }
 
-    async sendToBitcoin(transferBatch: TransferBatch): Promise<void> {
+    async sendToBitcoin(transferBatch: TransferBatch): Promise<boolean> {
         this.logger.info("Sending TransferBatch to bitcoin");
         await this.validator.validateForSendingToBitcoin(transferBatch);
         if (transferBatch.isSentToBitcoin()) {
             this.logger.info("TransferBatch is already sent to bitcoin");
-            return;
+            return true;
         }
         if (!transferBatch.signedBtcTransaction) {
             throw new Error("TransferBatch doesn't have signedBtcTransaction");
@@ -629,6 +653,7 @@ export class BitcoinTransferService {
         this.logger.info("TransferBatch successfully sent to bitcoin");
 
         // This method should be idempotent, but we will still wait for the required number of confirmations.
+        // TODO: wait for N blocks, not N time
         const requiredConfirmations = this.config.btcRequiredConfirmations;
         const maxIterations = 200;
         const avgBlockTimeMs = 10 * 60 * 1000;
@@ -639,10 +664,13 @@ export class BitcoinTransferService {
             const chainTx = await this.btcMultisig.getTransaction(transferBatch.bitcoinTransactionHash);
             const confirmations = chainTx ? chainTx.confirmations : 0;
             if (confirmations >= requiredConfirmations) {
-                break;
+                // mined
+                return true;
             }
             await sleep(sleepTimeMs);
         }
+        // not mined
+        return false;
     }
 
     async signRskMinedUpdate(transferBatch: TransferBatch): Promise<{signature: string, address: string}> {
@@ -852,6 +880,32 @@ export class TransferBatchValidator {
         await this.validateTransferBatch(transferBatch, null, true);
     }
 
+    async validateForSigningCpfpTransaction(transferBatch: TransferBatch): Promise<void> {
+        await this.validateForAddingCpfpTransaction(transferBatch);
+    }
+
+    async validateForAddingCpfpTransaction(transferBatch: TransferBatch): Promise<void> {
+        if (
+            transferBatch.transfers.length == 0 ||
+            //!transferBatch.hasEnoughRskSendingSignatures() ||
+            !transferBatch.hasEnoughBitcoinSignatures() ||
+            !transferBatch.isMarkedAsSendingInRsk() ||
+            !transferBatch.signedBtcTransaction
+        ) {
+            throw new TransferBatchValidationError('TransferBatch is not sendable to bitcoin');
+        }
+        if (transferBatch.isSentToBitcoin()) {
+            throw new TransferBatchValidationError('TransferBatch is already sent to bitcoin');
+        }
+        if (transferBatch.signedCpfpTransactions?.length) {
+            // TODO: get rid of this when we add support for more than one CPFP transaction
+            throw new TransferBatchValidationError(
+                `Only one CPFP transaction is currently supported, got ${transferBatch.signedCpfpTransactions.length}`
+            );
+        }
+        await this.validateTransferBatch(transferBatch, TransferStatus.Sending, true);
+    }
+
     async validateCompleteTransferBatch(transferBatch: TransferBatch): Promise<void> {
         if (
             transferBatch.transfers.length == 0 ||
@@ -929,7 +983,7 @@ export class TransferBatchValidator {
     private async validateTransferBatch(
         transferBatch: TransferBatch,
         expectedStatus: TransferStatus|null,
-        requireSignedBtcTransaction: boolean
+        requireSignedBtcTransaction: boolean,
     ): Promise<void> {
         if (!transferBatch.hasValidTransferState()) {
             throw new TransferBatchValidationError(
@@ -946,6 +1000,7 @@ export class TransferBatchValidator {
                 'TransferBatch is missing signedBtcTransaction'
             );
         }
+        await this.validateCpfpTransactions(transferBatch);
     }
 
     private async validateRskSignatures(transferBatch: TransferBatch): Promise<void> {
@@ -1076,6 +1131,34 @@ export class TransferBatchValidator {
         }
     }
 
+    async validateCpfpTransactions(transferBatch: TransferBatch) {
+        if (!transferBatch.signedCpfpTransactions?.length) {
+            return;
+        }
+        if (!transferBatch.signedBtcTransaction) {
+            throw new TransferBatchValidationError(
+                'TransferBatch must have a signed BTC transaction to have CPFP transactions'
+            );
+        }
+        if (transferBatch.signedCpfpTransactions.length > 1) {
+            // TODO: get rid of this when we add support for more than one CPFP transaction
+            throw new TransferBatchValidationError(
+                `Only one CPFP transaction is currently supported, got ${transferBatch.signedCpfpTransactions.length}`
+            );
+        }
+        let bumpedTx = transferBatch.signedBtcTransaction;
+        for (const cpfp of transferBatch.signedCpfpTransactions) {
+            // TODO: validate signers
+            if (cpfp.signedPublicKeys.length !== cpfp.requiredSignatures) {
+                throw new TransferBatchValidationError(
+                    `TransferBatch has a CPFP tx with ${cpfp.signedPublicKeys.length} signatures but requires ${cpfp.requiredSignatures}`
+                );
+            }
+            await this.btcMultisig.validatePartiallySignedCpfpTransaction(bumpedTx, cpfp);
+            bumpedTx = cpfp;
+        }
+    }
+
     private async fetchRskTransferInfo(btcPaymentAddress: string, nonce: number): Promise<RskTransferInfo> {
         const currentBlock = await this.ethersProvider.getBlockNumber();
         const transferData = await this.fastBtcBridge.getTransfer(btcPaymentAddress, nonce);
@@ -1134,8 +1217,4 @@ async function getUpdateHashForMined(fastBtcBridge: Contract, transferBatch: Tra
         transferBatch.getTransferIds(),
         TransferStatus.Mined
     );
-}
-
-function deepcopy<T = any>(thing: T): T {
-    return JSON.parse(JSON.stringify(thing));
 }
