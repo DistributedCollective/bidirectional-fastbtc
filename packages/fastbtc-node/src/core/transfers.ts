@@ -1188,7 +1188,9 @@ export class TransferBatchValidator {
         }
         let bumpedTx = transferBatch.signedBtcTransaction;
         for (const cpfp of transferBatch.signedCpfpTransactions) {
-            // TODO: validate signers
+            // We should maybe validate that signed public keys match signers... But 1) it doesn't look like they are
+            // validated for the "normal" BTC transactions either and 2) any federator can put anything in the
+            // signed public keys as it's not derived from the PSBT
             if (cpfp.signedPublicKeys.length !== cpfp.requiredSignatures) {
                 throw new TransferBatchValidationError(
                     `TransferBatch has a CPFP tx with ${cpfp.signedPublicKeys.length} signatures but requires ${cpfp.requiredSignatures}`
