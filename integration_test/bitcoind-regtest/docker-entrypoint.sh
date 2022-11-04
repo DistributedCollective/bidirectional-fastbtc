@@ -60,11 +60,15 @@ echo "done"
 #   triggered (as long as the number matches the one configured in the backend) -- and the rest to the replenisher
 #   wallet. This is meant to test the case where a new TransferBatch cannot be created because the multisig doesn't
 #   have enough funds, but the replenisher doesn't trigger either because the balance is over the threshold.
+# - If TEST_CPFP is true, we wait a crapton of time between mining new blocks. This is very slow, but
+#   it enables us to actually send a CPFP transaction and test that the code does not fail.
+#   Caveat: It does not actually test that the CPFP transaction does a CPFP.
 #
 # Ugh.
 echo "Test settings:"
 echo "TEST_VERY_SMALL_REPLENISHER_COINS=$TEST_VERY_SMALL_REPLENISHER_COINS"
 echo "TEST_REPLENISHER_LIMITS=$TEST_REPLENISHER_LIMITS"
+echo "TEST_CPFP=$TEST_CPFP"
 
 # We need a temporary address for both of these cases, because we need to send amounts smaller than the block reward.
 if [[ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ||  "$TEST_REPLENISHER_LIMITS" = "true" ]]
@@ -107,6 +111,12 @@ then
     echo "Sending 5.5 BTC to the multisig (should be just over the threshold)..."
     bitcoin-cli -rpcwallet=temporary sendtoaddress "$MULTISIG_ADDRESS" 5.5 > /dev/null
 else
+    if [[ "$TEST_CPFP" = "true" ]]
+    then
+        echo "Generating 101 blocks (sending balance to multisig because we are testing CPFP)..."
+        bitcoin-cli -rpcwallet=replenisher generatetoaddress 101 "$MULTISIG_ADDRESS" > /dev/null
+    fi
+
     echo "Generating 101+ blocks (sending balance to replenisher wallet, not directly to multisig)..."
     echo "Init replenisher funds"
     for i in $(bitcoin-cli deriveaddresses "$REPLENISHER_SOURCE_DESCRIPTOR" '[5,10]'|cut -f 2 -d '"'|grep bc)
@@ -147,7 +157,13 @@ do
             # sending to replenisher here, not multisig
             bitcoin-cli -rpcwallet=replenisher generatetoaddress 1 "$i" > /dev/null
         fi
-        sleep 1
+
+        if [[ "$TEST_CPFP" = "true" ]]
+        then
+            sleep 300
+        else
+            sleep 1
+        fi
     done
 done
 

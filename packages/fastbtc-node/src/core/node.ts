@@ -15,6 +15,7 @@ import {StatsD} from "hot-shots";
 import {TYPES} from "../stats";
 import StatusChecker from './statuschecker';
 import {BitcoinReplenisher} from '../replenisher/replenisher';
+import {CPFPBumper} from './cpfp';
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -115,6 +116,7 @@ export class FastBTCNode {
         @inject(TYPES.StatsD) private statsd: StatsD,
         @inject(StatusChecker) private statusChecker: StatusChecker,
         @inject(BitcoinReplenisher) private replenisher: BitcoinReplenisher,
+        @inject(CPFPBumper) private cpfpBumper: CPFPBumper,
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger);
         network.onNodeAvailable(this.onNodeAvailable);
@@ -292,7 +294,14 @@ export class FastBTCNode {
                     transferBatchDto: transferBatch.getDto(),
                 }
             );
-            await this.bitcoinTransferService.sendToBitcoin(transferBatch);
+            const wasMined = await this.bitcoinTransferService.sendToBitcoin(transferBatch);
+            if (!wasMined) {
+                this.logger.info(
+                    'TransferBatch was not sent in due time, initiating CPFP'
+                );
+                this.statsd.increment('fastbtc.pegout.cpfp_initiated');
+                transferBatch = await this.cpfpBumper.addCpfpTransaction(transferBatch);
+            }
             return;
         }
 
@@ -559,7 +568,16 @@ export class FastBTCNode {
             return;
         }
 
-        await callback(transferBatch, message);
+        try {
+            await callback(transferBatch, message);
+        } catch (e: any) {
+            if (e.isValidationError) {
+                this.logger.warn(`Validation error: ${e.message}`);
+            } else {
+                this.logger.exception(e, 'Error processing a message from the initiator');
+            }
+            throw e;
+        }
     }
 
     onRskSendingSignatureResponse = async (data: RSKSendingSignatureResponseMessage, source: Node<FastBTCMessage>) => {

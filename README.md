@@ -150,6 +150,37 @@ $ make test-transfers-big-amounts
 
 Observe the output, quit with Ctrl-C if wanted (though it quits automatically on success).
 
+#### Automatic bumping of slow transfers with CPFP
+
+This test tests the case when a bitcoin transfer is slow and requires a CPFP (child-pays-for-parent)
+transaction to speed it up. 
+
+This is notoriously hard to test in a regtest environment. The test case will validate
+that the code for creating a CPFP transaction works, but it will not actually test that
+it will actually bump the parent transaction.
+
+```
+# In one tab:
+$ make run-demo-regtest-cpfp
+# In another tab
+$ make test-transfers
+```
+
+Observe the output, quit with Ctrl-C if wanted (though it quits automatically on success).
+
+You should see the lines:
+```
+TEST_CPFP is true, only sleeping for 100 ms
+```
+and
+```
+CPFP transaction successfully sent to bitcoin
+```
+in the output.
+
+This test will also take ~10 minutes to run.
+
+
 ### Advanced details
 
 The test setup (launched with `make run-demo-regtest`) will expose the Hardhat RPC server at `http://localhost:18545`
