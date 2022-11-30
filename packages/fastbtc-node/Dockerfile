@@ -1,11 +1,11 @@
 ########
 # base #
 ########
-FROM node:14-alpine AS base
+FROM node:14-bullseye AS base
 
-RUN apk update
+RUN apt-get update
 # Requirements for libsodium/gyp/etc
-RUN apk add -t build-dependencies libtool autoconf automake gcc g++ make python3
+RUN apt-get install -y build-essential libtool autoconf automake gcc g++ make python3
 
 
 ###########
@@ -37,10 +37,10 @@ COPY version.json ./
 ###################
 # the final image #
 ###################
-FROM alpine:3.14
+FROM node:14-bullseye
 
-RUN apk update
-RUN apk add nodejs curl --no-cache
+RUN apt-get update
+RUN apt-get install -y curl
 RUN node --version
 
 COPY --from=builder /app /app
