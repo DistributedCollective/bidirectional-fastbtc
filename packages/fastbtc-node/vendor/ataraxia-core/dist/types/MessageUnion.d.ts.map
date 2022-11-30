@@ -1,1 +1,0 @@
-{"version":3,"file":"MessageUnion.d.ts","sourceRoot":"","sources":["../../src/MessageUnion.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAEpC;;;;;;;;;;GAUG;AACH,oBAAY,YAAY,CAAC,YAAY,SAAS,MAAM,IAAI;KACtD,CAAC,IAAI,MAAM,YAAY,GAAG,CAAC,SAAS,MAAM,GAAG,OAAO,CAAC,YAAY,EAAE,CAAC,CAAC,GAAG,KAAK;CAC9E,CAAC,MAAM,YAAY,CAAC,CAAC"}
