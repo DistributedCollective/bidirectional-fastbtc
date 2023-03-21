@@ -563,6 +563,35 @@ task("get-rbtc-balance", "Show formatted rBTC balance of address")
         console.log(utils.formatEther(balance));
     });
 
+
+// For testing
+task("wait-for-startup", "Wait for network startup")
+    .addOptionalParam("maxWaitTime", "Maximum wait time in seconds")
+    .setAction(async ({ maxWaitTime = 600 }, hre) => {
+        console.log(`Waiting for connection to ${hre.network.name} (max ${maxWaitTime} seconds)`)
+        const start = Date.now();
+        const deadline = start + maxWaitTime * 1000;
+        let lastError;
+        while (true) {
+            const timeLeftMs = deadline - Date.now();
+            if (timeLeftMs < 0) {
+                break;
+            }
+
+            try {
+                await hre.network.provider.send('eth_chainId', []);
+                console.log(`Connected to network ${hre.network.name}!`)
+                return;
+            } catch (e) {
+                lastError = e;
+                console.log(`Could not connect to network ${hre.network.name}, waiting... (${timeLeftMs/1000}s left)`);
+                await sleep(5000);
+            }
+        }
+        console.error(lastError);
+        throw new Error("Could not connect to network");
+    })
+
 const btcAddressValidatorReadVars = [
     'bech32MinLength',
     'bech32MaxLength',
