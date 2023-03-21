@@ -3,6 +3,7 @@ import {ActualBitcoinReplenisher, BitcoinReplenisher, NullBitcoinReplenisher} fr
 import {Config} from '../config';
 import {BitcoinMultisig} from '../btc/multisig';
 import {P2PNetwork} from '../p2p/network';
+import {Alerter} from '../alerts/types';
 import {Network} from 'ataraxia';
 import {TYPES} from '../stats';
 import {StatsD} from 'hot-shots';
@@ -13,6 +14,7 @@ export function setupInversify(container: Container) {
     container.bind<BitcoinReplenisher>(BitcoinReplenisher).toDynamicValue(
         (context) => {
             const config = context.container.get<Config>(Config);
+
             const replenisherConfig = config.replenisherConfig;
             if (!replenisherConfig) {
                 return new NullBitcoinReplenisher();
@@ -21,11 +23,13 @@ export function setupInversify(container: Container) {
                 const bitcoinMultisig = context.container.get<BitcoinMultisig>(BitcoinMultisig);
                 const network = context.container.get<Network>(P2PNetwork);
                 const replenisherMultisig = new ReplenisherMultisig(replenisherConfig, bitcoinMultisig, statsd);
+                const alerter = context.container.get<Alerter>(Alerter);
                 return new ActualBitcoinReplenisher(
                     replenisherConfig,
                     bitcoinMultisig,
                     network,
                     replenisherMultisig,
+                    alerter,
                 )
             }
         },

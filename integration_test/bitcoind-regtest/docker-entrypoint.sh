@@ -63,12 +63,15 @@ echo "done"
 # - If TEST_CPFP is true, we wait a crapton of time between mining new blocks. This is very slow, but
 #   it enables us to actually send a CPFP transaction and test that the code does not fail.
 #   Caveat: It does not actually test that the CPFP transaction does a CPFP.
+# - If TEST_SLOW_REPLENISHER is true, we wait some time before sending coins to the replenisher.
+#   This way we can test the balance monitoring code.
 #
 # Ugh.
 echo "Test settings:"
 echo "TEST_VERY_SMALL_REPLENISHER_COINS=$TEST_VERY_SMALL_REPLENISHER_COINS"
 echo "TEST_REPLENISHER_LIMITS=$TEST_REPLENISHER_LIMITS"
 echo "TEST_CPFP=$TEST_CPFP"
+echo "TEST_SLOW_REPLENISHER=$TEST_SLOW_REPLENISHER"
 
 # We need a temporary address for both of these cases, because we need to send amounts smaller than the block reward.
 if [[ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ||  "$TEST_REPLENISHER_LIMITS" = "true" ]]
@@ -85,6 +88,14 @@ then
     bitcoin-cli -rpcwallet=temporary settxfee 0.00001
 else
     TEMPORARY_ADDRESS="temporary_address_not_created_because_not_TEST_VERY_SMALL_REPLENISHER_COINS_or_TEST_REPLENISHER_LIMITS"
+fi
+
+if [[ "$TEST_SLOW_REPLENISHER" = "true" ]]
+then
+    echo "Waiting for 2 minutes before sending coins to the replenisher"
+    sleep 60
+    echo "1 minute left..."
+    sleep 60
 fi
 
 if [[ "$TEST_VERY_SMALL_REPLENISHER_COINS" = "true" ]]

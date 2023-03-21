@@ -180,6 +180,15 @@ in the output.
 
 This test will also take ~10 minutes to run.
 
+#### Replenisher balance monitoring
+
+```
+# OPTIONAL
+$ export FASTBTC_ALERTER_DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<webhook>/<secrets>
+# Then
+$ make run-demo-regtest-slow-replenisher
+```
+
 
 ### Advanced details
 

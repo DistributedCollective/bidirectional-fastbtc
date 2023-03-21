@@ -47,7 +47,7 @@ EXPOSE 7777
 # Add federators and fund accounts
 # TODO: not sure if funding here is the best bet or if it should be done for each test individually
 RUN echo -e '#!/bin/sh\n\
-(sleep 20\n\
+(npx hardhat --network localhost wait-for-startup\n\
 npx hardhat --network localhost add-federator $NODE1_ADDRESS $NODE2_ADDRESS $NODE3_ADDRESS\n\
 npx hardhat --network localhost free-money $USER_ADDRESS 10.0\n\
 npx hardhat --network localhost free-money $NODE1_ADDRESS 10.0\n\

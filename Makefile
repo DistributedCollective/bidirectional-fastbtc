@@ -20,6 +20,9 @@ run-demo-regtest-replenisher-limits: packages/fastbtc-node/version.json
 .PHONY: run-demo-regtest-cpfp
 run-demo-regtest-cpfp: packages/fastbtc-node/version.json
 	@export TEST_CPFP=true && make run-demo-regtest
+.PHONY: run-demo-regtest-slow-replenisher
+run-demo-regtest-slow-replenisher: packages/fastbtc-node/version.json
+	@export TEST_SLOW_REPLENISHER=true && make run-demo-regtest
 
 .PHONY: show-node-logs
 show-node-logs:

@@ -7,6 +7,7 @@ import * as btc from './btc';
 import * as core from './core';
 import * as stats from './stats';
 import * as replenisher from './replenisher';
+import * as alerts from './alerts';
 
 async function bootstrap(): Promise<Container> {
     const container = new Container();
@@ -22,6 +23,7 @@ async function bootstrap(): Promise<Container> {
     replenisher.setupInversify(container);
     core.setupInversify(container);
     stats.setupInversify(container);
+    alerts.setupInversify(container);
     return container;
 }
 

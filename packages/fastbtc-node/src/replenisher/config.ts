@@ -10,5 +10,6 @@ export interface ReplenisherConfig {
     rpcUserName: string;
     keyDerivationPath: string;
     numRequiredSigners: number;
+    balanceAlertThreshold: number;
     secrets: () => ReplenisherSecrets;
 }
