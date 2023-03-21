@@ -47,6 +47,18 @@ export class ReplenisherMultisig {
         );
     }
 
+    /**
+     * Get the balance of the replenisher multisig, e.g. the amount of BTC that can be sent to the main multisig
+     * Returns balance in BTC as a floating point number
+     */
+    async getBalance(opts = { logToStatsd: false }): Promise<number> {
+        const ret = await this.replenisherMultisig.getMultisigBalance(false);
+        if (opts.logToStatsd) {
+            this.statsd.gauge('fastbtc.pegout.replenisher.balance', ret);
+        }
+        return ret;
+    }
+
     async shouldReplenish(): Promise<boolean> {
         // TODO: should maybe move this to replenisher.ts
         const multisigBalance = await this.bitcoinMultisig.getMultisigBalance(true);

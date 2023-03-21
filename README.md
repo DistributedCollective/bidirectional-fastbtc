@@ -150,6 +150,16 @@ $ make test-transfers-big-amounts
 
 Observe the output, quit with Ctrl-C if wanted (though it quits automatically on success).
 
+#### Replenisher balance monitoring
+
+```
+# OPTIONAL
+$ export FASTBTC_ALERTER_DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/<webhook>/<secrets>
+# Then
+$ make run-demo-regtest-slow-replenisher
+```
+
+
 ### Advanced details
 
 The test setup (launched with `make run-demo-regtest`) will expose the Hardhat RPC server at `http://localhost:18545`

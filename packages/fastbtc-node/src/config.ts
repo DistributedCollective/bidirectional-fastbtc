@@ -13,6 +13,7 @@ export interface ConfigSecrets {
     btcMasterPrivateKey: string; // secret
     btcMasterPublicKeys: string[]; // secret
     rskPrivateKey: string; // secret
+    alerterDiscordWebhookUrl: string | undefined; // secret
 }
 
 export interface Config {
@@ -41,6 +42,7 @@ const secretConfigKeys: Extract<keyof ConfigSecrets, string>[] = [
     'btcRpcPassword',
     'btcMasterPrivateKey',
     'btcMasterPublicKeys',
+    'alerterDiscordWebhookUrl',
 ];
 
 const defaults = {
@@ -162,6 +164,7 @@ export const envConfigProviderFactory = async (
                     btcMasterPublicKeys: env.FASTBTC_BTC_MASTER_PUBLIC_KEYS!.split(',').map(x => x.trim()).filter(s => s),
                     rskPrivateKey: env.FASTBTC_RSK_PRIVATE_KEY!,
                     dbUrl: env.FASTBTC_DB_URL!,
+                    alerterDiscordWebhookUrl: env.FASTBTC_ALERTER_DISCORD_WEBHOOK_URL,
                 }
             ),
             replenisherConfig: getReplenisherConfig(env),
@@ -184,6 +187,7 @@ function getReplenisherConfig(env: Record<string, string>): ReplenisherConfig | 
         rpcUserName: env.FASTBTC_REPLENISHER_RPC_USERNAME ?? env.FASTBTC_BTC_RPC_USERNAME,
         keyDerivationPath: env.FASTBTC_REPLENISHER_KEY_DERIVATION_PATH ?? env.FASTBTC_BTC_KEY_DERIVATION_PATH ?? 'm/0/0/0',
         numRequiredSigners: parseInt(env.FASTBTC_REPLENISHER_NUM_REQUIRED_SIGNERS ?? '0'),
+        balanceAlertThreshold: parseConfigFloat(env, 'FASTBTC_REPLENISHER_BALANCE_ALERT_THRESHOLD') ?? 5.0,
         secrets: () => secrets,
     };
 

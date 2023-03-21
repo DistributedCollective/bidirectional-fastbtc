@@ -5,6 +5,7 @@ import {ReplenisherMultisig} from './replenishermultisig';
 import {ReplenisherConfig} from './config';
 import {setExtend, setIntersection} from '../utils/sets';
 import {sleep} from '../utils';
+import {Alerter} from '../alerts/types';
 
 interface RequestReplenishSignatureMessage {
     psbt: PartiallySignedBitcoinTransaction;
@@ -21,7 +22,9 @@ interface BitcoinReplenisherMessage {
 
 export interface BitcoinReplenisher {
     handleReplenisherIteration(): Promise<void>;
+    checkBalances(): Promise<void>
 }
+
 export const BitcoinReplenisher = Symbol.for('BitcoinReplenisher')
 
 
@@ -38,17 +41,43 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     // Keeping all replenishment periods in a record will in theory leak memory,
     // but replenishments should be rare enough for this not to matter
     private timesReplenishedPerPeriod: Record<number, number> = {};
+    // If the replenisher multisig balance drops below this (in BTC), we'll send an alert
+    private balanceAlertThreshold: number;
+    private readonly balanceAlertIntervalSeconds = 60 * 60; // 1 hour
 
     constructor(
         config: ReplenisherConfig,
         private bitcoinMultisig: BitcoinMultisig,
         private network: Network<BitcoinReplenisherMessage>,
         private replenisherMultisig: ReplenisherMultisig,
+        private alerter: Alerter,
     ) {
         this.numRequiredSigners = config.numRequiredSigners;
         // It's possible that this node is not a replenisher though it can be the initiator
         this.isReplenisher = !!config.secrets().masterPrivateKey;
+        this.balanceAlertThreshold = config.balanceAlertThreshold;
         network.onMessage(this.onMessage);
+    }
+
+    async checkBalances() {
+        // This is now separated from handleReplenisherIteration because only one node is monitoring the balances
+        // and that node is not necessary the initiator (which is the one that calls handleReplenisherIteration)
+        // Alternatively we could conf each node with the monitoring config and do this in handleReplenisherIteration
+        const balance = await this.replenisherMultisig.getBalance({
+            logToStatsd: true,
+        });
+        this.logger.debug(`Replenisher multisig balance: ${balance} BTC`);
+        if (balance < this.balanceAlertThreshold) {
+            this.logger.warning(
+                `Replenisher balance ${balance} BTC is below the alert threshold ${this.balanceAlertThreshold} BTC`,
+            )
+            this.alerter.throttledAlert(
+                'replenisher.balance',
+                `Replenisher multisig balance is low (${balance} BTC), ` +
+                `please replenish it as soon as possible`,
+                this.balanceAlertIntervalSeconds,
+            );
+        }
     }
 
     async handleReplenisherIteration() {
@@ -275,5 +304,9 @@ export class NullBitcoinReplenisher implements BitcoinReplenisher {
 
     async handleReplenisherIteration() {
         this.logger.warning('Replenisher config missing -- not handling iteration');
+    }
+
+    async checkBalances() {
+        this.logger.warning('Replenisher config missing -- cannot check balances');
     }
 }

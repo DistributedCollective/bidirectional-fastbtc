@@ -159,6 +159,12 @@ export class FastBTCNode {
         this.statsd.gauge('fastbtc.pegout.transfers.total', numTransfers);
         this.statsd.gauge('fastbtc.pegout.nodes.online', numNodesOnline);
 
+        try {
+            await this.replenisher.checkBalances();
+        } catch (e) {
+            this.logger.exception(e, 'Replenisher balance check error');
+        }
+
         if (!isInitiator) {
             this.logger.info('not initiator, not doing anything');
             this.transientInitiatorData = getEmptyTransientInitiatorData(null);
