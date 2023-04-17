@@ -8,6 +8,7 @@ import * as core from './core';
 import * as stats from './stats';
 import * as replenisher from './replenisher';
 import * as alerts from './alerts';
+import * as withdrawer from './withdrawer';
 
 async function bootstrap(): Promise<Container> {
     const container = new Container();
@@ -24,6 +25,7 @@ async function bootstrap(): Promise<Container> {
     core.setupInversify(container);
     stats.setupInversify(container);
     alerts.setupInversify(container);
+    withdrawer.setupInversify(container);
     return container;
 }
 
