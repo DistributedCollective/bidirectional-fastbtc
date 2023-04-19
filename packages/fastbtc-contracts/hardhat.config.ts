@@ -15,6 +15,7 @@ const INTEGRATION_TEST_ADDRESSES: Record<string, string> = {
     'FastBTCAccessControl': '0xe7f1725e7734ce288f8367e1bb143e90bb3f0512',
     'BTCAddressValidator': '0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0',
     'FastBTCBridge': '0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9',
+    'Withdrawer': '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9',
 }
 async function getDeploymentAddress(givenAddress: string|undefined, hre: HardhatRuntimeEnvironment, name: string): Promise<string> {
     if (givenAddress) {
