@@ -15,4 +15,7 @@ interface IWithdrawerFastBTCBridge {
         address payable receiver
     )
     external;
+
+    /// @dev The amount of rBTC that is sent to Bitcoin and can thus be withdrawn by admins.
+    function totalAdminWithdrawableRbtc() external view returns(uint256);
 }

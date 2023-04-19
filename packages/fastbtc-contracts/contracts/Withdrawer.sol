@@ -120,7 +120,13 @@ contract Withdrawer is FastBTCAccessControllable {
             return 0;
         }
 
-        withdrawable = address(fastBtcBridge).balance;
+        /// @dev the older version of FastBTCBridge doesn't have this function, so we will revert to balance check
+        try fastBtcBridge.totalAdminWithdrawableRbtc() returns (uint256 totalAdminWithdrawableRbtc) {
+            withdrawable = totalAdminWithdrawableRbtc;
+        } catch {
+            withdrawable = address(fastBtcBridge).balance;
+        }
+
         if (withdrawable > maxWithdrawable) {
             withdrawable = maxWithdrawable;
         }
