@@ -7,7 +7,6 @@ import { setNextBlockTimestamp } from './utils';
 
 
 const TRANSFER_STATUS_SENDING = 2;
-const ZERO = BigNumber.from('0')
 const ONE_BTC_IN_SATOSHI = BigNumber.from('10').pow('8');
 const ONE_SATOSHI_IN_WEI = parseEther('1').div(ONE_BTC_IN_SATOSHI);
 
@@ -104,7 +103,7 @@ describe("Withdrawer", function() {
         });
 
         it('cannot withdraw zero amount', async () => {
-            await expect(withdrawer.withdrawRbtcToReceiver(ZERO)).to.be.revertedWith(
+            await expect(withdrawer.withdrawRbtcToReceiver(0)).to.be.revertedWith(
                 'cannot withdraw zero amount'
             );
         });
@@ -178,6 +177,168 @@ describe("Withdrawer", function() {
             await withdrawer.connect(federators[1]).withdrawRbtcToReceiver(
                 amount
             );
+        });
+    });
+
+    describe('#setMaxWithdrawable', () => {
+        it('only admin can set maxWithdrawable', async () => {
+            await expect(withdrawer.connect(federators[0]).setMaxWithdrawable(parseEther('1'))).to.be.reverted;
+            await expect(withdrawer.connect(anotherAccount).setMaxWithdrawable(parseEther('1'))).to.be.reverted;
+            await expect(withdrawer.connect(ownerAccount).setMaxWithdrawable(parseEther('1'))).to.not.be.reverted;
+        });
+
+        it('can set maxWithdrawable to zero', async () => {
+            await expect(withdrawer.connect(ownerAccount).setMaxWithdrawable(0)).to.not.be.reverted;
+        });
+
+        it('calling changes maxWithdrawable', async () => {
+            const amount = parseEther('1.2345');
+            await withdrawer.connect(ownerAccount).setMaxWithdrawable(amount);
+            expect(await withdrawer.maxWithdrawable()).to.equal(amount);
+        });
+
+        it('calling emits the MaxWithdrawableUpdated event', async () => {
+            const amount = parseEther('1.2345');
+            await expect(
+                withdrawer.connect(ownerAccount).setMaxWithdrawable(amount)
+            ).to.emit(withdrawer, 'MaxWithdrawableUpdated').withArgs(amount);
+        });
+    });
+
+    describe('#setMinTimeBetweenWithdrawals', () => {
+        // same tests as above, basicallydd
+        it('only admin can set minTimeBetweenWithdrawals', async () => {
+            await expect(withdrawer.connect(federators[0]).setMinTimeBetweenWithdrawals(1)).to.be.reverted;
+            await expect(withdrawer.connect(anotherAccount).setMinTimeBetweenWithdrawals(1)).to.be.reverted;
+            await expect(withdrawer.connect(ownerAccount).setMinTimeBetweenWithdrawals(1)).to.not.be.reverted;
+        });
+
+        it('can set minTimeBetweenWithdrawals to zero', async () => {
+            await expect(withdrawer.connect(ownerAccount).setMinTimeBetweenWithdrawals(0)).to.not.be.reverted;
+        });
+
+        it('calling changes minTimeBetweenWithdrawals', async () => {
+            const time = 12345;
+            await withdrawer.connect(ownerAccount).setMinTimeBetweenWithdrawals(time);
+            expect(await withdrawer.minTimeBetweenWithdrawals()).to.equal(time);
+        });
+
+        it('calling emits the MinTimeBetweenWithdrawalsUpdated event', async () => {
+            const time = 12345;
+            await expect(
+                withdrawer.connect(ownerAccount).setMinTimeBetweenWithdrawals(time)
+            ).to.emit(withdrawer, 'MinTimeBetweenWithdrawalsUpdated').withArgs(time);
+        });
+    });
+
+    describe('#hasWithdrawPermissions', () => {
+        it('returns true if the contract is an admin of FastBTCBridge', async () => {
+            expect(await withdrawer.hasWithdrawPermissions()).to.be.true;
+        });
+
+        it('returns false if the contract is not an admin of FastBTCBridge', async () => {
+            await accessControl.connect(ownerAccount).revokeRole(
+                await accessControl.ROLE_ADMIN(),
+                withdrawer.address,
+            );
+            expect(await withdrawer.hasWithdrawPermissions()).to.be.false;
+        });
+    });
+
+    describe('#nextPossibleWithdrawTimestamp', () => {
+        it('is initially minTimeBetweenWithdrawals', async () => {
+            const minTimeBetweenWithdrawals = await withdrawer.minTimeBetweenWithdrawals();
+            expect(await withdrawer.nextPossibleWithdrawTimestamp()).to.equal(minTimeBetweenWithdrawals);
+        });
+
+        it('increases after a withdrawal', async () => {
+            const amount = parseEther('0.12345');
+            await fundFastBtcBridge(amount);
+            const result = await withdrawer.withdrawRbtcToReceiver(amount);
+
+            const block = await ethers.provider.getBlock(result.blockNumber);
+            const minTimeBetweenWithdrawals = await withdrawer.minTimeBetweenWithdrawals();
+
+            expect(await withdrawer.nextPossibleWithdrawTimestamp()).to.equal(block.timestamp + minTimeBetweenWithdrawals.toNumber());
+        });
+    });
+
+    describe('#receiverBalance', () => {
+        it('returns the balance of the receiver', async () => {
+            await ownerAccount.sendTransaction({
+                to: receiverAddress,
+                value: parseEther('0.12345'),
+            });
+            expect(await withdrawer.receiverBalance()).to.equal(await receiverAccount.getBalance());
+        });
+
+    });
+
+    describe('#amountWithdrawable', () => {
+        it('returns totalAdminWithdrawableRbtc if everything is ok and the method is supported by FastBTCBridge', async () => {
+            const excessBalance = parseEther('10');
+
+            await ethers.provider.send('hardhat_setBalance', [
+                fastBtcBridge.address,
+                excessBalance.toHexString(),
+            ]);
+
+            expect(await fastBtcBridge.totalAdminWithdrawableRbtc()).to.equal(0);
+            expect(await withdrawer.amountWithdrawable()).to.equal(0);
+
+            const expectedWithdrawableAmount = parseEther('1.337');
+            await fundFastBtcBridge(expectedWithdrawableAmount);
+
+            expect(await fastBtcBridge.totalAdminWithdrawableRbtc()).to.equal(expectedWithdrawableAmount);
+
+            expect(await ethers.provider.getBalance(fastBtcBridge.address)).to.equal(
+                expectedWithdrawableAmount.add(excessBalance)
+            );
+            expect(await withdrawer.amountWithdrawable()).to.equal(expectedWithdrawableAmount);
+        });
+
+        it('returns contract balance if everything is ok but totalAdminWithdrawableRbtc is not supported by FastBTCBridge', async () => {
+            const Withdrawer = await ethers.getContractFactory("Withdrawer");
+
+            // This bears some explanation: `Withdrawer` is a `FastBTCAccessControllable` contract itself,
+            // so it has the `accessControl` method that points to the correct `FastBTCAccessControl` instance.
+            // That means we can pretend that the previous `Withdrawer` instance is the `FastBTCBridge` contract,
+            // as far as the constructor or the newly deployed `Withdrawer` is concerned.
+            // Naturally, `Withdrawer` does not have the `totalAdminWithdrawableRbtc` function, so we can
+            // test this edge case here.
+            const fakeFastBtcBridge = withdrawer;
+            const newWithdrawer = await Withdrawer.deploy(
+                fakeFastBtcBridge.address,
+                receiverAddress,
+            );
+            await accessControl.grantRole(await accessControl.ROLE_ADMIN(), newWithdrawer.address);
+
+            const contractBalance = parseEther('10');
+
+            await ethers.provider.send('hardhat_setBalance', [
+                fakeFastBtcBridge.address,
+                contractBalance.toHexString(),
+            ]);
+
+            expect(await newWithdrawer.amountWithdrawable()).to.equal(contractBalance);
+        });
+
+        it('returns 0 if the contract does not have withdraw permissions', async () => {
+            await fundFastBtcBridge(parseEther('1.2345'));
+            await accessControl.connect(ownerAccount).revokeRole(
+                await accessControl.ROLE_ADMIN(),
+                withdrawer.address,
+            );
+            expect(await withdrawer.amountWithdrawable()).to.equal(0);
+        });
+
+        it('returns 0 if enough time has not passed from the last withdrawal', async () => {
+            const amount = parseEther('0.1');
+
+            await fundFastBtcBridge(amount);
+            await withdrawer.withdrawRbtcToReceiver(amount.div(2));
+
+            expect(await withdrawer.amountWithdrawable()).to.equal(0);
         });
     });
 
