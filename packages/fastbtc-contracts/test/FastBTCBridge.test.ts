@@ -780,7 +780,7 @@ describe("FastBTCBridge", function() {
         });
     });
 
-    describe.only('#setNodeConfigValue', () => {
+    describe('#setNodeConfigValue', () => {
         const key1 = '0x1234567812345678123456781234567812345678123456781234567812345678';
         const key2 = '0x8765432112345678123456781234567812345678123456781234567812345678';
         const value1 = '0x1234';
