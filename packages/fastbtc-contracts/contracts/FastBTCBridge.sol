@@ -140,6 +140,9 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // by admin online without having to administer each node separately.
     mapping(bytes32 => bytes) public nodeConfig;
 
+    /// @dev Is this contract initialized (all nonces copied from previous contract)
+    bool public initialized = false;
+
     /// @dev Constructor.
     /// @param accessControl            Address of the FastBTCAccessControl contract.
     /// @param newBtcAddressValidator   Address of the BTCAddressValidator contract.
@@ -161,6 +164,19 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         _setCurrentFeeStructure(0);
     }
 
+    // MODIFIERS
+    // =========
+
+    modifier whenInitialized() {
+        require(initialized, "Contract not initialized");
+        _;
+    }
+
+    modifier whenNotInitialized() {
+        require(!initialized, "Contract already initialized");
+        _;
+    }
+
     // PUBLIC USER API
     // ===============
 
@@ -173,6 +189,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     payable
     whenNotPaused
+    whenInitialized
     {
         _transferToBtc(btcAddress, msg.sender, msg.value);
     }
@@ -188,6 +205,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     payable
     whenNotPaused
+    whenInitialized
     {
         (address rskAddress, string memory btcAddress) = decodeBridgeUserData(userData);
         _transferToBtc(btcAddress, rskAddress, msg.value);
@@ -199,6 +217,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     nonReentrant
     whenNotFrozen
+    whenInitialized
     {
         BitcoinTransfer storage transfer = transfers[transferId];
         // decide if it should be possible to also reclaim sent transfers
@@ -294,6 +313,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     onlyFederator
     whenNotFrozen
+    whenInitialized
     {
         emit BitcoinTransferBatchSending(bitcoinTxHash, uint8(transferIds.length));
 
@@ -329,6 +349,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     onlyFederator
     whenNotFrozen
+    whenInitialized
     {
         accessControl.checkFederatorSignatures(
             getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.MINED),
@@ -361,6 +382,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     external
     onlyFederator
     whenNotFrozen
+    whenInitialized
     {
         accessControl.checkFederatorSignatures(
             getTransferBatchUpdateHash(transferIds, BitcoinTransferStatus.REFUNDED),
@@ -390,10 +412,12 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         BitcoinTransferStatus newStatus
     )
     public
-    pure
+    view
     returns (bytes32)
     {
-        return keccak256(abi.encodePacked("batchUpdate:", newStatus, ":", transferIds));
+        return keccak256(
+            abi.encodePacked("batchUpdate:", address(this), ":", newStatus, ":", transferIds)
+        );
     }
 
     /// @dev Calculate the hash to sign for a batch update for methods that require Bitcoin transaction hash.
@@ -407,10 +431,12 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         BitcoinTransferStatus newStatus
     )
     public
-    pure
+    view
     returns (bytes32)
     {
-        return keccak256(abi.encodePacked("batchUpdateWithTxHash:", newStatus, ":", bitcoinTxHash, ":", transferIds));
+        return keccak256(
+            abi.encodePacked("batchUpdateWithTxHash:", address(this), ":", newStatus, ":", bitcoinTxHash, ":", transferIds)
+        );
     }
 
 
@@ -835,16 +861,46 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // CONFIG API
     // ==========
 
-    // @dev set a configuration key to a value
-    // @param key  The key to set the value to. Likely keccak256 of the string key
-    // @param value  The value to set.
+    /// @dev set a configuration key to a value
+    /// @param key  The key to set the value to. Likely keccak256 of the string key
+    /// @param value  The value to set.
     function setNodeConfigValue(bytes32 key, bytes memory value) external onlyConfigAdmin {
         nodeConfig[key] = value;
     }
 
-    // @dev Delete a value for a configuration key.
-    // @param key  The key to delete the value from.
+    /// @dev Delete a value for a configuration key.
+    /// @param key  The key to delete the value from.
     function deleteNodeConfigValue(bytes32 key) external onlyConfigAdmin {
         delete nodeConfig[key];
+    }
+
+    // INITIALIZATION / UPGRADING API
+    // ==============================
+
+    /// @dev copy nonces from the old FastBTCBridge contract. Can only be done during initialization
+    /// @param oldContract   The address of the old FastBTCBridge contract.
+    /// @param btcAddresses  The BTC addresses to copy the nonces for.
+    function copyNonces(
+        address oldContract,
+        string[] calldata btcAddresses
+    )
+    external
+    onlyAdmin
+    whenNotInitialized
+    {
+        for(uint256 i = 0; i < btcAddresses.length; i++) {
+            string memory btcAddress = btcAddresses[i];
+            uint8 nonce = FastBTCBridge(oldContract).nextNonces(btcAddress);
+            nextNonces[btcAddress] = nonce;
+        }
+    }
+
+    /// @dev initialize the contract, preventing further pre-initialization actions and enabling normal uses
+    function initialize()
+    external
+    onlyAdmin
+    whenNotInitialized
+    {
+        initialized = true;
     }
 }

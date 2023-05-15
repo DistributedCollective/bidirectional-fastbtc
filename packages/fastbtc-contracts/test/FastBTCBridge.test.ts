@@ -57,6 +57,8 @@ describe("FastBTCBridge", function() {
         );
         await fastBtcBridge.deployed();
 
+        await fastBtcBridge.initialize();
+
         fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
     });
 
@@ -94,13 +96,33 @@ describe("FastBTCBridge", function() {
 
     it('#getTransferBatchUpdateHash', async () => {
         let updateHash = await fastBtcBridge.getTransferBatchUpdateHash([], TRANSFER_STATUS_SENDING);
-        expect(updateHash).to.equal('0x849e7c1bf1eaa72e3d54ccafe4e31a87e7fdf91fadde443e59d6e7a4dc7bbf89');
+        let expected = ethers.utils.solidityKeccak256(
+            ["string", "address", "string", "uint8", "string", "bytes32[]"],
+            ["batchUpdate:", fastBtcBridge.address, ":", TRANSFER_STATUS_SENDING, ":", []],
+        );
+        expect(updateHash).to.equal(expected);
 
         updateHash = await fastBtcBridge.getTransferBatchUpdateHash([], TRANSFER_STATUS_MINED);
-        expect(updateHash).to.equal('0xade6aa218b6b5b2b24c9d124f1354d1433129799b4f057da7fac270110173526');
+        expected = ethers.utils.solidityKeccak256(
+            ["string", "address", "string", "uint8", "string", "bytes32[]"],
+            ["batchUpdate:", fastBtcBridge.address, ":", TRANSFER_STATUS_MINED, ":", []],
+        );
+        expect(updateHash).to.equal(expected);
 
         updateHash = await fastBtcBridge.getTransferBatchUpdateHash([], TRANSFER_STATUS_REFUNDED);
-        expect(updateHash).to.equal('0x407f4d1873d801d54d66816813e572aa318e59136d8e1e663a1c554352ba3772');
+        expected = ethers.utils.solidityKeccak256(
+            ["string", "address", "string", "uint8", "string", "bytes32[]"],
+            ["batchUpdate:", fastBtcBridge.address, ":", TRANSFER_STATUS_REFUNDED, ":", []],
+        );
+        expect(updateHash).to.equal(expected);
+
+        const btcTxHash = '0x6162636465666768696a6b6c6d6e6f707172737475767778797a414243444546';
+        updateHash = await fastBtcBridge.getTransferBatchUpdateHashWithTxHash(btcTxHash, [], TRANSFER_STATUS_SENDING);
+        expected = ethers.utils.solidityKeccak256(
+            ["string", "address", "string", "uint8", "string", "bytes32", "string", "bytes32[]"],
+            ["batchUpdateWithTxHash:", fastBtcBridge.address, ":", TRANSFER_STATUS_SENDING, ":", btcTxHash, ":", []],
+        );
+        expect(updateHash).to.equal(expected);
     });
 
     describe('#transferToRbtc', () => {
@@ -820,4 +842,152 @@ describe("FastBTCBridge", function() {
             expect(await fastBtcBridge.nodeConfig(key1)).to.equal('0x');
         });
     });
+
+    describe('Initialization', () => {
+        let oldFastBtcBridge: Contract;
+        let oldFastBtcBridgeFromFederator: Contract;
+        const btcAddress1 = 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4';
+        const btcAddress2 = "1BvBMSEYstWetqTFn5Au4m4GFg";
+        const btcAddress3 = "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2";
+
+        beforeEach(async () => {
+            oldFastBtcBridge = fastBtcBridge;
+            oldFastBtcBridgeFromFederator = fastBtcBridgeFromFederator;
+
+            const FastBTCBridge = await ethers.getContractFactory("FastBTCBridge");
+            fastBtcBridge = await FastBTCBridge.deploy(
+                accessControl.address,
+                btcAddressValidator.address
+            );
+            await fastBtcBridge.deployed();
+
+            // DO NOT initialize
+            fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
+        });
+
+        it('can be initialized exactly once', async () => {
+            await fastBtcBridge.initialize();
+            await expect(fastBtcBridge.initialize()).to.be.revertedWith('Contract already initialized');
+        });
+
+        it('nonces can be copied before initialization by the admin', async () => {
+            const transferAmount = parseEther('0.01');
+            await oldFastBtcBridge.connect(anotherAccount).transferToBtc(
+                btcAddress1,
+                {
+                    value: transferAmount,
+                }
+            );
+            await oldFastBtcBridge.connect(anotherAccount).transferToBtc(
+                btcAddress2,
+                {
+                    value: transferAmount,
+                }
+            );
+            await oldFastBtcBridge.connect(anotherAccount).transferToBtc(
+                btcAddress1,
+                {
+                    value: transferAmount,
+                }
+            );
+
+            expect(await fastBtcBridge.getNextNonce(btcAddress1)).to.equal(0);
+            expect(await fastBtcBridge.getNextNonce(btcAddress2)).to.equal(0);
+            expect(await fastBtcBridge.getNextNonce(btcAddress3)).to.equal(0);
+
+            await fastBtcBridge.copyNonces(oldFastBtcBridge.address, [btcAddress1, btcAddress2, btcAddress3]);
+
+            expect(await fastBtcBridge.getNextNonce(btcAddress1)).to.equal(2);
+            expect(await fastBtcBridge.getNextNonce(btcAddress2)).to.equal(1);
+            expect(await fastBtcBridge.getNextNonce(btcAddress3)).to.equal(0);
+
+            await oldFastBtcBridge.connect(anotherAccount).transferToBtc(
+                btcAddress2,
+                {
+                    value: transferAmount,
+                }
+            );
+
+            // can be copied again
+            await fastBtcBridge.copyNonces(oldFastBtcBridge.address, [btcAddress2]);
+            expect(await fastBtcBridge.getNextNonce(btcAddress1)).to.equal(2);
+            expect(await fastBtcBridge.getNextNonce(btcAddress2)).to.equal(2);
+            expect(await fastBtcBridge.getNextNonce(btcAddress3)).to.equal(0);
+
+            // only by admin
+            await expect(fastBtcBridge.connect(anotherAccount).copyNonces(oldFastBtcBridge.address, [btcAddress2])).to.be.reverted;
+
+            await fastBtcBridge.initialize();
+            await expect(fastBtcBridge.copyNonces(oldFastBtcBridge.address, [btcAddress2])).to.be.reverted;
+        });
+
+        it('new transfers can only be made after initialization', async () => {
+            const transferAmount = parseEther('0.01');
+            await expect(
+                fastBtcBridge.connect(anotherAccount).transferToBtc(
+                    btcAddress1,
+                    {
+                        value: transferAmount,
+                    }
+                )
+            ).to.be.revertedWith("Contract not initialized");
+            const userData = await fastBtcBridge.encodeBridgeUserData(
+                '0x0000000000000000000000000000000000001337',
+                'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+            );
+
+            await expect(
+                fastBtcBridge.connect(anotherAccount).receiveEthFromBridge(
+                    userData,
+                    {
+                        value: transferAmount,
+                    }
+                )
+            ).to.be.revertedWith("Contract not initialized");
+
+            await fastBtcBridge.initialize();
+
+            await fastBtcBridge.connect(anotherAccount).transferToBtc(
+                btcAddress1,
+                {
+                    value: transferAmount,
+                }
+            );
+            await fastBtcBridge.connect(anotherAccount).receiveEthFromBridge(
+                userData,
+                {
+                    value: transferAmount,
+                }
+            );
+        });
+
+        it('non-admin functions cannot be called when the contract is not initialized', async () => {
+            const fauxBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000';
+            const promises = [
+                fastBtcBridge.connect(anotherAccount).reclaimTransfer(
+                    fauxBytes32,
+                ),
+                fastBtcBridgeFromFederator.markTransfersAsSending(
+                    fauxBytes32,
+                    [fauxBytes32],
+                    [fauxBytes32],
+                ),
+                fastBtcBridgeFromFederator.markTransfersAsMined(
+                    [fauxBytes32],
+                    [fauxBytes32],
+                ),
+                fastBtcBridgeFromFederator.refundTransfers(
+                    [fauxBytes32],
+                    [fauxBytes32],
+                ),
+            ]
+            for (const promise of promises) {
+                await expect(
+                    promise,
+                ).to.be.revertedWith("Contract not initialized");
+            }
+
+            // it's implicitly tested by other tests that they work when the contract is initialized
+        });
+    })
 });
