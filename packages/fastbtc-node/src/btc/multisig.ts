@@ -238,10 +238,8 @@ export class BitcoinMultisig {
         maxInputs: number|undefined = undefined,
     ): Promise<PartiallySignedBitcoinTransaction> {
         // TODO: this method is a mess. Too many ifs because of the replenisher stuff.
-        const feeBtcPerKB = await this.feeEstimator.estimateFeeBtcPerKB();
-
-        // fee rate in sats/vB; add 5 % margin, convert from btc per KiB
-        const feeRate = 1.05 * feeBtcPerKB / 1000 * 1e8;
+        const margin = 1.05;  // 5% margin
+        const feeRate = await this.feeEstimator.estimateFeeSatsPerVB() * margin;
         this.logger.info(`Using fee rate ${feeRate} per vB`);
 
         if (transfers.length > this.maximumBatchSize) {
