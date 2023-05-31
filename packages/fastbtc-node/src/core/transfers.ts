@@ -254,6 +254,10 @@ export type HandleReclaimedTransfersResult = ReclaimedTransfersFoundResult | Rec
 @injectable()
 export class BitcoinTransferService {
     private logger = new Logger('transfers');
+    // use a hardcoded gas price since it will occassionally estimate it too low (0.05 gwei) otherwise
+    private RSK_TX_OPTS = {
+        gasPrice: ethers.utils.parseUnits('0.07', 'gwei'),
+    }
 
     constructor(
         @inject(new LazyServiceIdentifer(() => TransferBatchValidator)) private validator: TransferBatchValidator,
@@ -545,7 +549,8 @@ export class BitcoinTransferService {
                 () => this.fastBtcBridge.markTransfersAsSending(
                     `0x${transferBatch.bitcoinTransactionHash}`,
                     transferBatch.getTransferIds(),
-                    transferBatch.rskSendingSignatures
+                    transferBatch.rskSendingSignatures,
+                    this.RSK_TX_OPTS,
                 )
             );
             this.logger.info('transfers successfully marked as sending in tx hash:', result.hash);
@@ -579,7 +584,8 @@ export class BitcoinTransferService {
             const result = await this.sendRskTransaction(
                 () => this.fastBtcBridge.markTransfersAsMined(
                     transferBatch.getTransferIds(),
-                    transferBatch.rskMinedSignatures
+                    transferBatch.rskMinedSignatures,
+                    this.RSK_TX_OPTS,
                 )
             );
             this.logger.info('transfers successfully marked as mined in tx hash:', result.hash);
