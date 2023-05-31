@@ -770,9 +770,22 @@ export class BitcoinTransferService {
             1,
             this.config.rskRequiredConfirmations + 1
         );
+
+        // in some cases, we either send a transaction with too low gas (which should be fixed now with hardcoded gas price)
+        // or we get some weird network skew error which causes the transaction to never enter the blockchain
+        // both cases will cause the transaction to never be confirmed, so we need to timeout and try again
+        // as a fallback
+        const expectedTxConfirmationTimeSeconds = numRequiredConfirmations * 30; // avg rsk blocktime = 30s
+        // timeout is expected confirmation duration times some arbitrary factor, in ms
+        const timeoutMs = 1000 * expectedTxConfirmationTimeSeconds * 5;
+
         this.logger.info('tx hash:', result.hash, `waiting (${numRequiredConfirmations} confirms)...`);
         try {
-            await result.wait(numRequiredConfirmations);
+            await this.ethersProvider.waitForTransaction(
+                result.hash,
+                numRequiredConfirmations,
+                timeoutMs
+            );
         } catch(e: any) {
             //this.logger.exception(e, `RSK transaction ${result.hash} failed.`)
             this.logger.error(`RSK transaction ${result.hash} failed.`)
