@@ -57,7 +57,7 @@ describe("FastBTCBridge", function() {
         );
         await fastBtcBridge.deployed();
 
-        await fastBtcBridge.initialize();
+        await fastBtcBridge.markReady();
 
         fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
     });
@@ -865,9 +865,13 @@ describe("FastBTCBridge", function() {
             fastBtcBridgeFromFederator = fastBtcBridge.connect(federators[0]);
         });
 
-        it('can be initialized exactly once', async () => {
-            await fastBtcBridge.initialize();
-            await expect(fastBtcBridge.initialize()).to.be.revertedWith('Contract already initialized');
+        it('can be marked ready exactly once', async () => {
+            await fastBtcBridge.markReady();
+            await expect(fastBtcBridge.markReady()).to.be.revertedWith('Contract already initialized');
+        });
+
+        it('marking ready raises the Initialized event', async () => {
+            await expect(fastBtcBridge.markReady()).to.emit(fastBtcBridge, 'Initialized');
         });
 
         it('nonces can be copied before initialization by the admin', async () => {
@@ -894,12 +898,15 @@ describe("FastBTCBridge", function() {
             expect(await fastBtcBridge.getNextNonce(btcAddress1)).to.equal(0);
             expect(await fastBtcBridge.getNextNonce(btcAddress2)).to.equal(0);
             expect(await fastBtcBridge.getNextNonce(btcAddress3)).to.equal(0);
+            expect(await fastBtcBridge.previousFastBtcBridgeContract()).to.equal(ethers.constants.AddressZero);
 
             await fastBtcBridge.copyNonces(oldFastBtcBridge.address, [btcAddress1, btcAddress2, btcAddress3]);
 
             expect(await fastBtcBridge.getNextNonce(btcAddress1)).to.equal(2);
             expect(await fastBtcBridge.getNextNonce(btcAddress2)).to.equal(1);
             expect(await fastBtcBridge.getNextNonce(btcAddress3)).to.equal(0);
+            // test that it sets the address
+            expect(await fastBtcBridge.previousFastBtcBridgeContract()).to.equal(oldFastBtcBridge.address);
 
             await oldFastBtcBridge.connect(anotherAccount).transferToBtc(
                 btcAddress2,
@@ -917,7 +924,7 @@ describe("FastBTCBridge", function() {
             // only by admin
             await expect(fastBtcBridge.connect(anotherAccount).copyNonces(oldFastBtcBridge.address, [btcAddress2])).to.be.reverted;
 
-            await fastBtcBridge.initialize();
+            await fastBtcBridge.markReady();
             await expect(fastBtcBridge.copyNonces(oldFastBtcBridge.address, [btcAddress2])).to.be.reverted;
         });
 
@@ -945,7 +952,7 @@ describe("FastBTCBridge", function() {
                 )
             ).to.be.revertedWith("Contract not initialized");
 
-            await fastBtcBridge.initialize();
+            await fastBtcBridge.markReady();
 
             await fastBtcBridge.connect(anotherAccount).transferToBtc(
                 btcAddress1,
@@ -989,5 +996,39 @@ describe("FastBTCBridge", function() {
 
             // it's implicitly tested by other tests that they work when the contract is initialized
         });
-    })
+    });
+
+    describe('Obsolescence', () => {
+        it('can be marked obsolete by the admin when frozen', async () => {
+            expect(await fastBtcBridge.supersedingFastBtcBridgeContract()).to.equal(ethers.constants.AddressZero);
+            expect(await fastBtcBridge.replacementReason()).to.equal("");
+
+            await expect(fastBtcBridge.markObsolete(
+                '0x0000000000000000000000000000000000001337',
+                "I'm obsolete!"
+            )).to.be.revertedWith('Freezable: not frozen');
+
+            // freeze it
+            await fastBtcBridge.freeze();
+
+            // no non-admin
+            await expect(fastBtcBridgeFromFederator.markObsolete(
+                '0x0000000000000000000000000000000000001337',
+                "I'm obsolete!"
+            )).to.be.revertedWith(
+                'AccessControl: account 0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc is missing role 0x0000000000000000000000000000000000000000000000000000000000000000'
+            );
+
+            await expect(fastBtcBridge.markObsolete(
+                '0x0000000000000000000000000000000000001337',
+                "I'm obsolete!"
+            )).to.emit(fastBtcBridge, 'MarkedObsolete').withArgs(
+                '0x0000000000000000000000000000000000001337',
+                "I'm obsolete!"
+            );
+            expect(await fastBtcBridge.supersedingFastBtcBridgeContract()).to.equal('0x0000000000000000000000000000000000001337');
+            expect(await fastBtcBridge.replacementReason()).to.equal("I'm obsolete!");
+        });
+
+    });
 });

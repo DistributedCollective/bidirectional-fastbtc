@@ -95,6 +95,15 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         uint256 dynamicFee
     );
 
+    /// @dev Emitted when the contract is initialized (marked as ready)
+    event Initialized();
+
+    /// @dev Emitted when the contract is obsoleted by a newer FastBTCBridge contract
+    event MarkedObsolete(
+        address indexed newContract,
+        string reason
+    );
+
     /// @dev Divisor for converting
     uint256 public constant SATOSHI_DIVISOR = 1 ether / 100_000_000;
 
@@ -142,6 +151,15 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
 
     /// @dev Is this contract initialized (all nonces copied from previous contract)
     bool public initialized = false;
+
+    /// @dev The previous FastBTC bridge contract superseded by this one
+    address public previousFastBtcBridgeContract = address(0);
+
+    /// @dev The next FastBTC bridge contract that supersedes this one
+    address public supersedingFastBtcBridgeContract = address(0);
+
+    /// @dev the contract replacement reason comment
+    string public replacementReason = "";
 
     /// @dev Constructor.
     /// @param accessControl            Address of the FastBTCAccessControl contract.
@@ -878,6 +896,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     // ==============================
 
     /// @dev copy nonces from the old FastBTCBridge contract. Can only be done during initialization
+    /// Also set the previous contract address.
     /// @param oldContract   The address of the old FastBTCBridge contract.
     /// @param btcAddresses  The BTC addresses to copy the nonces for.
     function copyNonces(
@@ -888,6 +907,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     onlyAdmin
     whenNotInitialized
     {
+        previousFastBtcBridgeContract = oldContract;
         for(uint256 i = 0; i < btcAddresses.length; i++) {
             string memory btcAddress = btcAddresses[i];
             uint8 nonce = FastBTCBridge(oldContract).nextNonces(btcAddress);
@@ -895,12 +915,27 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
         }
     }
 
-    /// @dev initialize the contract, preventing further pre-initialization actions and enabling normal uses
-    function initialize()
+    /// @dev Mark this contract obsolete and point to a replacement
+    function markObsolete(
+        address newContract,
+        string calldata message
+    )
+    external
+    onlyAdmin
+    whenFrozen
+    {
+        supersedingFastBtcBridgeContract = newContract;
+        replacementReason = message;
+        emit MarkedObsolete(newContract, message);
+    }
+
+    /// @dev mark the initialization completed, preventing further initialization actions and enabling the normal use
+    function markReady()
     external
     onlyAdmin
     whenNotInitialized
     {
         initialized = true;
+        emit Initialized();
     }
 }
