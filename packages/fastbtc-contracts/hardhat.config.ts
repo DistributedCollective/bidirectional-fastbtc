@@ -621,7 +621,8 @@ task("initialize-fastbtc-v2",
     .addParam("oldBridgeAddress", "Old FastBTCBridge contract address (if empty, use deployment)")
     .addOptionalParam("newBridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
     .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
-    .setAction(async ({ newBridgeAddress, oldBridgeAddress, startBlock, privateKey }, hre) => {
+    .addFlag('markReady', 'Finish initialization by calling markReady on the new bridge contract')
+    .setAction(async ({ newBridgeAddress, oldBridgeAddress, startBlock, privateKey, markReady }, hre) => {
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
         const oldFastbtcBridge = await hre.ethers.getContractAt(
             'FastBTCBridge',
@@ -635,15 +636,27 @@ task("initialize-fastbtc-v2",
             signer
         );
 
-        // if (oldFastbtcBridge.address === newFastbtcBridge.address) {
-        //     console.error('Old and new bridge addresses are the same');
-        //     return;
-        // }
+        const oldAccessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
+            await oldFastbtcBridge.accessControl(),
+            signer
+        );
 
-        // if (await newFastbtcBridge.isInitialized()) {
-        //     console.error('New bridge already initialized');
-        //     return;
-        // }
+        const newAccessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
+            await newFastbtcBridge.accessControl(),
+            signer
+        );
+
+        if (oldFastbtcBridge.address === newFastbtcBridge.address) {
+            console.error('Old and new bridge addresses are the same');
+            return;
+        }
+
+        if (await newFastbtcBridge.initialized()) {
+            console.error('New bridge already initialized');
+            return;
+        }
 
         async function getCopyNoncesCalls(): Promise<any[]> {
             // NONCES
@@ -743,17 +756,45 @@ task("initialize-fastbtc-v2",
         const newMaxTransferSatoshi = await newFastbtcBridge.maxTransferSatoshi();
         console.log("maxTransferSatoshi: old %s, new %s", oldMaxTransferSatoshi, newMaxTransferSatoshi);
 
-        const response = await utils.readInput('Continue initialization? (y/N) ');
+        const roleNames = [
+            'ADMIN',
+            'FEDERATOR',
+            'PAUSER',
+            'GUARD',
+            //'CONFIG_ADMIN' // doesn't exist in the old one
+        ];
+        const addedRoleMembers: {[roleName: string]: string[]} = {};
+        for (const roleName of roleNames) {
+            const role = await oldAccessControl['ROLE_' + roleName]();
+            const oldCount = await oldAccessControl.getRoleMemberCount(role);
+            const newCount = await newAccessControl.getRoleMemberCount(role);
+            console.log('Role %s: %s. Old: %s, new %s', roleName, role, oldCount, newCount);
+            for (let i = 0; i < oldCount; i++) {
+                const address = await oldAccessControl.getRoleMember(role, i);
+                const isMemberOnNewBridge = await newAccessControl.hasRole(role, address);
+                console.log(' - %s, is already added: %s', address, isMemberOnNewBridge ? 'yes' : 'no');
+                if (!isMemberOnNewBridge) {
+                    if (!addedRoleMembers[roleName]) {
+                        addedRoleMembers[roleName] = [];
+                    }
+                    addedRoleMembers[roleName].push(address);
+                }
+            }
+        }
+        console.log('Role members to add:', addedRoleMembers);
+
+        const response = await utils.readInput(
+            'Continue initialization (will not mark the contract ready yet)? (y/N) ');
         if (response !== 'y') {
             console.log('Aborting');
             return;
         }
 
         for (const args of copyNoncesCalls) {
-            console.log('copyNonces(%s, %s);', ...args);
-            const tx = await newFastbtcBridge.copyNonces(...args);
-            console.log('copyNonces tx:', tx.hash);
-            await tx.wait();
+           console.log('copyNonces(%s, %s);', ...args);
+           const tx = await newFastbtcBridge.copyNonces(...args);
+           console.log('copyNonces tx:', tx.hash);
+           await tx.wait();
         }
 
         if (feeStructureArgs) {
@@ -779,6 +820,30 @@ task("initialize-fastbtc-v2",
             const tx = await newFastbtcBridge.setMaxTransferSatoshi(oldMaxTransferSatoshi);
             console.log('setMaxTransferSatoshi tx:', tx.hash);
             await tx.wait();
+        }
+
+        for (const [roleName, members] of Object.entries(addedRoleMembers)) {
+            const role = await newAccessControl['ROLE_' + roleName]();
+            console.log('Granting role %s (%s) to members: %s', roleName, role, members);
+            for (const member of members) {
+                console.log('grantRole(%s, %s);', role, member);
+                const tx = await newAccessControl.grantRole(role, member);
+                console.log('grantRole tx:', tx.hash);
+                await tx.wait();
+            }
+        }
+
+        if (markReady) {
+            const answer = await utils.readInput(
+                'Mark new bridge as ready? THIS IS IRREVERSIBLE!! (y/N) ');
+            if (answer === 'y') {
+                console.log('Marking new bridge as ready...');
+                const tx = await newFastbtcBridge.markReady();
+                console.log('markReady tx:', tx.hash);
+                await tx.wait();
+            }
+        } else {
+            console.log('Not marking the new bridge as ready because --mark-ready not given');
         }
     });
 
