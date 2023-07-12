@@ -339,12 +339,13 @@ task("set-limits", "Set min/max transfer limits")
     .addOptionalParam("minBtc", "Min in BTC (will be converted to satoshi)")
     .addOptionalParam("maxBtc", "Max in BTC (will be converted to satoshi)")
     .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
-    .setAction(async ({ privateKey, minBtc, maxBtc }, hre) => {
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ privateKey, minBtc, maxBtc, bridgeAddress }, hre) => {
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
         const contract = await hre.ethers.getContractAt(
             'FastBTCBridge',
-            await getDeploymentAddress(undefined, hre, 'FastBTCBridge'),
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
             signer,
         );
 
@@ -968,6 +969,20 @@ task("withdraw-rbtc", "Withdraw rBTC from the FastBTCBridge")
         console.log('tx hash:', tx.hash);
         await tx.wait();
         console.log('All done.');
+    });
+
+
+task("show-next-nonce", "Show the next nonce of BTC address")
+    .addPositionalParam("btcAddress", "BTC address")
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ btcAddress, bridgeAddress }, hre) => {
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+        );
+
+        const nonce = await contract.getNextNonce(btcAddress);
+        console.log(nonce);
     });
 
 
