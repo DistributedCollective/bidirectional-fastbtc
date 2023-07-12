@@ -951,7 +951,7 @@ task("withdraw-rbtc", "Withdraw rBTC from the FastBTCBridge")
 
         const receiver = await signer.getAddress();
         console.log('Withdrawing to: %s', receiver);
-        if (amount === undefined) {
+        if (!amount) {
             amount = await utils.readInput('Amount to withdraw in rBTC: ');
         }
 
