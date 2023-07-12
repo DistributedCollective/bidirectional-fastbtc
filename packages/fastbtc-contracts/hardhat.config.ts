@@ -615,6 +615,7 @@ task("get-rbtc-balance", "Show formatted rBTC balance of address")
     });
 
 
+
 task("initialize-fastbtc-v2",
     "Copy nonces and other stuff from the old bridge, initialize the new one")
     .addParam("startBlock", "Start block to scan for nonces", undefined, types.int)
@@ -921,6 +922,52 @@ task("btc-address-validator", "Manage BTC address validator")
                 console.log('all done')
             }
         }
+    });
+
+
+task("withdraw-rbtc", "Withdraw rBTC from the FastBTCBridge")
+    .addOptionalParam("amount", "Amount to withdraw in rbtc (default: interactive)")
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .addFlag('showWithdrawable', 'Show total amount of rBTC that can be withdrawn by the admin')
+    .setAction(async ({ amount, showWithdrawable, bridgeAddress, privateKey }, hre) => {
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+            signer,
+        );
+
+        const contractBalanceWei = await hre.ethers.provider.getBalance(contract.address);
+        const contractBalance = hre.ethers.utils.formatEther(contractBalanceWei);
+        console.log('Contract balance: %s rBTC (%s wei)', contractBalance, contractBalanceWei.toString());
+
+        if (showWithdrawable) {
+            const withdrawableWei = await contract.totalAdminWithdrawableRbtc();
+            const withdrawable = hre.ethers.utils.formatEther(withdrawableWei);
+            console.log('Withdrawable: %s rBTC (%s wei)', withdrawable, withdrawableWei.toString());
+        }
+
+        const receiver = await signer.getAddress();
+        console.log('Withdrawing to: %s', receiver);
+        if (amount === undefined) {
+            amount = await utils.readInput('Amount to withdraw in rBTC: ');
+        }
+
+        const amountWei = hre.ethers.utils.parseEther(amount);
+        console.log('Withdrawing %s rBTC (%s wei) to %s', amount, amountWei.toString(), receiver);
+        const answer = await utils.readInput('Are you sure? (y/N) ');
+        if (answer !== 'y') {
+            console.log('Aborting');
+            return;
+        }
+
+        console.log('Withdrawing in 5s...')
+        await utils.sleep(5);
+        const tx = await contract.withdrawRbtc(amountWei, receiver);
+        console.log('tx hash:', tx.hash);
+        await tx.wait();
+        console.log('All done.');
     });
 
 
