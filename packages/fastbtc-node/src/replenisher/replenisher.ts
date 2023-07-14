@@ -43,7 +43,7 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     private timesReplenishedPerPeriod: Record<number, number> = {};
     // If the replenisher multisig balance drops below this (in BTC), we'll send an alert
     private balanceAlertThreshold: number;
-    private readonly balanceAlertIntervalSeconds = 60 * 60; // 1 hour
+    private readonly balanceAlertIntervalSeconds = 24 * 60 * 60; // 1 day
 
     constructor(
         config: ReplenisherConfig,
