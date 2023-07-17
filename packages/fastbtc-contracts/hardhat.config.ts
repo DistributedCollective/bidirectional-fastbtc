@@ -706,7 +706,7 @@ task("initialize-fastbtc-v2",
 
             const copyNoncesCalls: any[] = [];
             // split bitcoinAddressesToCopyNoncesFor into chunks
-            const copyNoncesBatchSize = 50;
+            const copyNoncesBatchSize = 200;
             for (let i = 0; i < bitcoinAddressesToCopyNoncesFor.length; i += copyNoncesBatchSize) {
                 const btcAddresses = bitcoinAddressesToCopyNoncesFor.slice(i, i + copyNoncesBatchSize)
                 copyNoncesCalls.push([oldFastbtcBridge.address, btcAddresses]);
