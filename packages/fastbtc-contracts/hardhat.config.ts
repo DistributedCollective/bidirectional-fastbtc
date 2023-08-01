@@ -6,6 +6,7 @@ import {task, types} from "hardhat/config";
 import {BigNumber, Signer} from 'ethers';
 import {HardhatRuntimeEnvironment} from 'hardhat/types';
 import {formatUnits, parseUnits} from 'ethers/lib/utils';
+import * as utils from "./utils";
 
 dotenv.config();
 
@@ -338,12 +339,13 @@ task("set-limits", "Set min/max transfer limits")
     .addOptionalParam("minBtc", "Min in BTC (will be converted to satoshi)")
     .addOptionalParam("maxBtc", "Max in BTC (will be converted to satoshi)")
     .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
-    .setAction(async ({ privateKey, minBtc, maxBtc }, hre) => {
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ privateKey, minBtc, maxBtc, bridgeAddress }, hre) => {
         const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
 
         const contract = await hre.ethers.getContractAt(
             'FastBTCBridge',
-            await getDeploymentAddress(undefined, hre, 'FastBTCBridge'),
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
             signer,
         );
 
@@ -537,6 +539,56 @@ task("set-required-blocks-before-reclaim", "Self-explanatory")
         }
     });
 
+task("pause-freeze", "Pause/unpause/freeze/unfreeze the bridge")
+    .addPositionalParam('action', 'pause/unpause/freeze/unfreeze')
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .setAction(async ({ action, bridgeAddress, privateKey }, hre) => {
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+            signer,
+        );
+
+        const paused = await contract.paused();
+        console.log('Paused:', paused);
+        const frozen = await contract.frozen();
+        console.log('Frozen:', frozen);
+
+        let tx;
+        switch(action) {
+            case 'check':
+                return;
+            case 'pause':
+                console.log('Pausing...');
+                tx = await contract.pause();
+                break;
+            case 'unpause':
+                console.log('Unpausing...');
+                tx = await contract.unpause();
+                break;
+            case 'freeze':
+                console.log('Freezing...');
+                tx = await contract.freeze();
+                break;
+            case 'unfreeze':
+                console.log('Unfreezing...');
+                tx = await contract.unfreeze();
+                break;
+            default:
+                console.error('Unknown action', action);
+                return;
+        }
+        console.log('tx hash:', tx.hash, 'waiting...');
+        await tx.wait();
+        console.log('Done.');
+        if (action === 'unfreeze') {
+            console.log('Note that you still need to unpause');
+        }
+
+    });
+
 // For testing
 task('set-mining-interval', "Set mining interval")
     .addPositionalParam('ms', 'Mining interval as milliseconds (0 for automine)', undefined, types.int)
@@ -561,6 +613,240 @@ task("get-rbtc-balance", "Show formatted rBTC balance of address")
         const { ethers: { provider, utils } } = hre;
         const balance = await provider.getBalance(address, blockTag);
         console.log(utils.formatEther(balance));
+    });
+
+
+
+task("initialize-fastbtc-v2",
+    "Copy nonces and other stuff from the old bridge, initialize the new one")
+    .addParam("startBlock", "Start block to scan for nonces", undefined, types.int)
+    .addParam("oldBridgeAddress", "Old FastBTCBridge contract address (if empty, use deployment)")
+    .addOptionalParam("newBridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .addFlag('markReady', 'Finish initialization by calling markReady on the new bridge contract')
+    .setAction(async ({ newBridgeAddress, oldBridgeAddress, startBlock, privateKey, markReady }, hre) => {
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
+        const oldFastbtcBridge = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            oldBridgeAddress,
+            signer
+        );
+
+        const newFastbtcBridge = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(newBridgeAddress, hre, 'FastBTCBridge'),
+            signer
+        );
+
+        const oldAccessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
+            await oldFastbtcBridge.accessControl(),
+            signer
+        );
+
+        const newAccessControl = await hre.ethers.getContractAt(
+            'FastBTCAccessControl',
+            await newFastbtcBridge.accessControl(),
+            signer
+        );
+
+        if (oldFastbtcBridge.address === newFastbtcBridge.address) {
+            console.error('Old and new bridge addresses are the same');
+            return;
+        }
+
+        if (await newFastbtcBridge.initialized()) {
+            console.error('New bridge already initialized');
+            return;
+        }
+
+        async function getCopyNoncesCalls(): Promise<any[]> {
+            // NONCES
+            // ======
+            // - read NewBitcoinTransfer events from the old bridge from startBlock in batches of 10000
+            const endBlock = await hre.ethers.provider.getBlockNumber();
+            const bitcoinTransfers = await utils.getEvents(
+                oldFastbtcBridge,
+                oldFastbtcBridge.filters.NewBitcoinTransfer(),
+                startBlock,
+                endBlock,
+                {
+                    batchSize: 10000,
+                }
+            )
+
+            // - get a list of unique bitcoin addresses from the events
+            const allBitcoinAddresses: string[] = [];
+            for (const event of bitcoinTransfers) {
+                const bitcoinAddress = event.args!.btcAddress;
+                if (!allBitcoinAddresses.includes(bitcoinAddress)) {
+                    allBitcoinAddresses.push(bitcoinAddress);
+                }
+            }
+            console.log('%d unique Bitcoin addresses', allBitcoinAddresses.length);
+
+            // - for each address, get the nonce from the old bridge and the nonce from the new bridge (using getNextNonce)
+            // - print the old nonce and new nonce for each address
+            // - if the old nonce differs from the new nonce, add the bitcoin address to a list of bitcoin addresses to set
+            const bitcoinAddressesToCopyNoncesFor: string[] = [];
+            for (const bitcoinAddress of allBitcoinAddresses) {
+                const oldNonce = await oldFastbtcBridge.getNextNonce(bitcoinAddress);
+                const newNonce = await newFastbtcBridge.getNextNonce(bitcoinAddress);
+                console.log(
+                    utils.rightPad(bitcoinAddress, 62),
+                    'old:', oldNonce,
+                    'new:', newNonce,
+                    'copy?', oldNonce !== newNonce,
+                );
+                if (oldNonce !== newNonce) {
+                    bitcoinAddressesToCopyNoncesFor.push(bitcoinAddress);
+                }
+            }
+            console.log('%d Bitcoin addresses to copy nonces for', bitcoinAddressesToCopyNoncesFor.length);
+
+            const copyNoncesCalls: any[] = [];
+            // split bitcoinAddressesToCopyNoncesFor into chunks
+            const copyNoncesBatchSize = 200;
+            for (let i = 0; i < bitcoinAddressesToCopyNoncesFor.length; i += copyNoncesBatchSize) {
+                const btcAddresses = bitcoinAddressesToCopyNoncesFor.slice(i, i + copyNoncesBatchSize)
+                copyNoncesCalls.push([oldFastbtcBridge.address, btcAddresses]);
+            }
+            if (copyNoncesCalls.length === 0) {
+                console.log('No need to call copyNonces');
+            } else {
+                console.log('Calling copyNonces %d times:', copyNoncesCalls.length);
+                for (const args of copyNoncesCalls) {
+                    console.log('copyNonces(%s, %s);', ...args);
+                }
+            }
+            return copyNoncesCalls;
+        }
+
+        async function getFeeStructureArgs(): Promise<undefined|[number,number,number]> {
+            // FEE STRUCTURE
+            // =============
+            // - get the fee structure from the old bridge
+            const oldBridgeFeeStructure = await oldFastbtcBridge.feeStructures(await oldFastbtcBridge.currentFeeStructureIndex());
+            const newBridgeFeeStructureIndex = await newFastbtcBridge.currentFeeStructureIndex();
+            const newBridgeFeeStructure = await newFastbtcBridge.feeStructures(newBridgeFeeStructureIndex);
+            console.log('Fee structure on old bridge', oldBridgeFeeStructure);
+            console.log('Fee structure on new bridge', newBridgeFeeStructure);
+
+            // - if the fee structure on the old bridge is the same as the fee structure on the new bridge, we're done
+            if (
+                oldBridgeFeeStructure.baseFeeSatoshi === newBridgeFeeStructure.baseFeeSatoshi &&
+                oldBridgeFeeStructure.dynamicFee === newBridgeFeeStructure.dynamicFee
+            ) {
+                console.log('Fee structure is the same, no need to call setFeeStructure');
+            } else {
+                return [
+                    newBridgeFeeStructureIndex + 1,
+                    oldBridgeFeeStructure.baseFeeSatoshi,
+                    oldBridgeFeeStructure.dynamicFee,
+                ]
+            }
+        }
+
+        const copyNoncesCalls = await getCopyNoncesCalls();
+        const feeStructureArgs = await getFeeStructureArgs();
+
+        const oldMinTransferSatoshi = await oldFastbtcBridge.minTransferSatoshi();
+        const newMinTransferSatoshi = await newFastbtcBridge.minTransferSatoshi();
+        console.log("minTransferSatoshi: old %s, new %s", oldMinTransferSatoshi, newMinTransferSatoshi);
+
+        const oldMaxTransferSatoshi = await oldFastbtcBridge.maxTransferSatoshi();
+        const newMaxTransferSatoshi = await newFastbtcBridge.maxTransferSatoshi();
+        console.log("maxTransferSatoshi: old %s, new %s", oldMaxTransferSatoshi, newMaxTransferSatoshi);
+
+        const roleNames = [
+            'ADMIN',
+            'FEDERATOR',
+            'PAUSER',
+            'GUARD',
+            //'CONFIG_ADMIN' // doesn't exist in the old one
+        ];
+        const addedRoleMembers: {[roleName: string]: string[]} = {};
+        for (const roleName of roleNames) {
+            const role = await oldAccessControl['ROLE_' + roleName]();
+            const oldCount = await oldAccessControl.getRoleMemberCount(role);
+            const newCount = await newAccessControl.getRoleMemberCount(role);
+            console.log('Role %s: %s. Old: %s, new %s', roleName, role, oldCount, newCount);
+            for (let i = 0; i < oldCount; i++) {
+                const address = await oldAccessControl.getRoleMember(role, i);
+                const isMemberOnNewBridge = await newAccessControl.hasRole(role, address);
+                console.log(' - %s, is already added: %s', address, isMemberOnNewBridge ? 'yes' : 'no');
+                if (!isMemberOnNewBridge) {
+                    if (!addedRoleMembers[roleName]) {
+                        addedRoleMembers[roleName] = [];
+                    }
+                    addedRoleMembers[roleName].push(address);
+                }
+            }
+        }
+        console.log('Role members to add:', addedRoleMembers);
+
+        const response = await utils.readInput(
+            'Continue initialization (will not mark the contract ready yet)? (y/N) ');
+        if (response !== 'y') {
+            console.log('Aborting');
+            return;
+        }
+
+        for (const args of copyNoncesCalls) {
+           console.log('copyNonces(%s, %s);', ...args);
+           const tx = await newFastbtcBridge.copyNonces(...args);
+           console.log('copyNonces tx:', tx.hash);
+           await tx.wait();
+        }
+
+        if (feeStructureArgs) {
+            console.log('addFeeStructure(%s, %s, %s);', ...feeStructureArgs);
+            let tx = await newFastbtcBridge.addFeeStructure(...feeStructureArgs);
+            console.log('setFeeStructure tx:', tx.hash);
+            await tx.wait();
+            console.log('setCurrentFeeStructure(%s);', feeStructureArgs[0]);
+            tx = await newFastbtcBridge.setCurrentFeeStructure(feeStructureArgs[0]);
+            console.log('setCurrentFeeStructuretx:', tx.hash);
+            await tx.wait();
+        }
+
+        if (oldMinTransferSatoshi !== newMinTransferSatoshi) {
+            console.log('setMinTransferSatoshi(%s);', oldMinTransferSatoshi);
+            const tx = await newFastbtcBridge.setMinTransferSatoshi(oldMinTransferSatoshi);
+            console.log('setMinTransferSatoshi tx:', tx.hash);
+            await tx.wait();
+        }
+
+        if (oldMaxTransferSatoshi !== newMaxTransferSatoshi) {
+            console.log('setMaxTransferSatoshi(%s);', oldMaxTransferSatoshi);
+            const tx = await newFastbtcBridge.setMaxTransferSatoshi(oldMaxTransferSatoshi);
+            console.log('setMaxTransferSatoshi tx:', tx.hash);
+            await tx.wait();
+        }
+
+        for (const [roleName, members] of Object.entries(addedRoleMembers)) {
+            const role = await newAccessControl['ROLE_' + roleName]();
+            console.log('Granting role %s (%s) to members: %s', roleName, role, members);
+            for (const member of members) {
+                console.log('grantRole(%s, %s);', role, member);
+                const tx = await newAccessControl.grantRole(role, member);
+                console.log('grantRole tx:', tx.hash);
+                await tx.wait();
+            }
+        }
+
+        if (markReady) {
+            const answer = await utils.readInput(
+                'Mark new bridge as ready? THIS IS IRREVERSIBLE!! (y/N) ');
+            if (answer === 'y') {
+                console.log('Marking new bridge as ready...');
+                const tx = await newFastbtcBridge.markReady();
+                console.log('markReady tx:', tx.hash);
+                await tx.wait();
+            }
+        } else {
+            console.log('Not marking the new bridge as ready because --mark-ready not given');
+        }
     });
 
 
@@ -637,6 +923,66 @@ task("btc-address-validator", "Manage BTC address validator")
                 console.log('all done')
             }
         }
+    });
+
+
+task("withdraw-rbtc", "Withdraw rBTC from the FastBTCBridge")
+    .addOptionalParam("amount", "Amount to withdraw in rbtc (default: interactive)")
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .addFlag('showWithdrawable', 'Show total amount of rBTC that can be withdrawn by the admin')
+    .setAction(async ({ amount, showWithdrawable, bridgeAddress, privateKey }, hre) => {
+        const signer = await getSignerFromPrivateKeyOrDeployer(privateKey, hre);
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+            signer,
+        );
+
+        const contractBalanceWei = await hre.ethers.provider.getBalance(contract.address);
+        const contractBalance = hre.ethers.utils.formatEther(contractBalanceWei);
+        console.log('Contract balance: %s rBTC (%s wei)', contractBalance, contractBalanceWei.toString());
+
+        if (showWithdrawable) {
+            const withdrawableWei = await contract.totalAdminWithdrawableRbtc();
+            const withdrawable = hre.ethers.utils.formatEther(withdrawableWei);
+            console.log('Withdrawable: %s rBTC (%s wei)', withdrawable, withdrawableWei.toString());
+        }
+
+        const receiver = await signer.getAddress();
+        console.log('Withdrawing to: %s', receiver);
+        if (!amount) {
+            amount = await utils.readInput('Amount to withdraw in rBTC: ');
+        }
+
+        const amountWei = hre.ethers.utils.parseEther(amount);
+        console.log('Withdrawing %s rBTC (%s wei) to %s', amount, amountWei.toString(), receiver);
+        const answer = await utils.readInput('Are you sure? (y/N) ');
+        if (answer !== 'y') {
+            console.log('Aborting');
+            return;
+        }
+
+        console.log('Withdrawing in 5s...')
+        await utils.sleep(5);
+        const tx = await contract.withdrawRbtc(amountWei, receiver);
+        console.log('tx hash:', tx.hash);
+        await tx.wait();
+        console.log('All done.');
+    });
+
+
+task("show-next-nonce", "Show the next nonce of BTC address")
+    .addPositionalParam("btcAddress", "BTC address")
+    .addOptionalParam("bridgeAddress", "FastBTCBridge contract address (if empty, use deployment)")
+    .setAction(async ({ btcAddress, bridgeAddress }, hre) => {
+        const contract = await hre.ethers.getContractAt(
+            'FastBTCBridge',
+            await getDeploymentAddress(bridgeAddress, hre, 'FastBTCBridge'),
+        );
+
+        const nonce = await contract.getNextNonce(btcAddress);
+        console.log(nonce);
     });
 
 
