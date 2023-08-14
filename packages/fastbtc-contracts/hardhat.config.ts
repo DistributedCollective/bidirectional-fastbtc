@@ -2,6 +2,7 @@ import "@nomiclabs/hardhat-waffle";
 import "hardhat-deploy";
 import "@tenderly/hardhat-tenderly";
 import dotenv from "dotenv";
+import * as fs from 'fs';
 import {task, types} from "hardhat/config";
 import {BigNumber, Signer} from 'ethers';
 import {HardhatRuntimeEnvironment} from 'hardhat/types';
@@ -252,6 +253,7 @@ task('roles', 'Manage roles')
     .addParam('role', 'name of role')
     .addFlag('force', 'Force removal of admin role from myself, if needed')
     .addOptionalParam("privateKey", "Admin private key (else deployer is used)")
+    .addOptionalParam("accessControl", "Access control address")
     .setAction(async (args, hre) => {
         const {
             action,
@@ -274,7 +276,7 @@ task('roles', 'Manage roles')
         const signerAddress = await signer.getAddress();
         const accessControl = await hre.ethers.getContractAt(
             'FastBTCAccessControl',
-            await getDeploymentAddress(undefined, hre, 'FastBTCAccessControl'),
+            await getDeploymentAddress(args.accessControl, hre, 'FastBTCAccessControl'),
             signer,
         );
 
@@ -722,32 +724,41 @@ task("initialize-fastbtc-v2",
             return copyNoncesCalls;
         }
 
-        async function getFeeStructureArgs(): Promise<undefined|[number,number,number]> {
+        async function getFeeStructureArgs(): Promise<undefined|[number,number,number][]> {
             // FEE STRUCTURE
             // =============
             // - get the fee structure from the old bridge
-            const oldBridgeFeeStructure = await oldFastbtcBridge.feeStructures(await oldFastbtcBridge.currentFeeStructureIndex());
-            const newBridgeFeeStructureIndex = await newFastbtcBridge.currentFeeStructureIndex();
-            const newBridgeFeeStructure = await newFastbtcBridge.feeStructures(newBridgeFeeStructureIndex);
-            console.log('Fee structure on old bridge', oldBridgeFeeStructure);
-            console.log('Fee structure on new bridge', newBridgeFeeStructure);
+            const oldBridgeFeeStructureMaxIndex = await oldFastbtcBridge.currentFeeStructureIndex();
+            const ret: [number, number, number][] = [];
+            for (let i = 1; i <= oldBridgeFeeStructureMaxIndex; i++) {
+                const oldBridgeFeeStructure = await oldFastbtcBridge.feeStructures(i);
+                //const newBridgeFeeStructureIndex = await newFastbtcBridge.currentFeeStructureIndex();
+                const newBridgeFeeStructure = await newFastbtcBridge.feeStructures(i);
+                console.log('Fee structure %s on old bridge: %s', i, oldBridgeFeeStructure);
+                console.log('Fee structure %s on new bridge: %s', i, newBridgeFeeStructure);
 
-            // - if the fee structure on the old bridge is the same as the fee structure on the new bridge, we're done
-            if (
-                oldBridgeFeeStructure.baseFeeSatoshi === newBridgeFeeStructure.baseFeeSatoshi &&
-                oldBridgeFeeStructure.dynamicFee === newBridgeFeeStructure.dynamicFee
-            ) {
-                console.log('Fee structure is the same, no need to call setFeeStructure');
-            } else {
-                return [
-                    newBridgeFeeStructureIndex + 1,
-                    oldBridgeFeeStructure.baseFeeSatoshi,
-                    oldBridgeFeeStructure.dynamicFee,
-                ]
+                // - if the fee structure on the old bridge is the same as the fee structure on the new bridge, we're done
+                if (
+                    oldBridgeFeeStructure.baseFeeSatoshi === newBridgeFeeStructure.baseFeeSatoshi &&
+                    oldBridgeFeeStructure.dynamicFee === newBridgeFeeStructure.dynamicFee
+                ) {
+                    console.log('Fee structure is the same, no need to call setFeeStructure');
+                } else {
+                    ret.push([
+                        //newBridgeFeeStructureIndex + 1,
+                        i,
+                        oldBridgeFeeStructure.baseFeeSatoshi,
+                        oldBridgeFeeStructure.dynamicFee,
+                    ])
+                }
             }
+            return ret;
         }
 
         const copyNoncesCalls = await getCopyNoncesCalls();
+        //fs.writeFileSync('copynonces.json', JSON.stringify(copyNoncesCalls, null, 2));
+        //const copyNoncesCalls = JSON.parse(fs.readFileSync('copynonces.json', 'utf-8'));
+
         const feeStructureArgs = await getFeeStructureArgs();
 
         const oldMinTransferSatoshi = await oldFastbtcBridge.minTransferSatoshi();
@@ -792,21 +803,17 @@ task("initialize-fastbtc-v2",
             return;
         }
 
-        for (const args of copyNoncesCalls) {
-           console.log('copyNonces(%s, %s);', ...args);
-           const tx = await newFastbtcBridge.copyNonces(...args);
-           console.log('copyNonces tx:', tx.hash);
-           await tx.wait();
-        }
-
-        if (feeStructureArgs) {
-            console.log('addFeeStructure(%s, %s, %s);', ...feeStructureArgs);
-            let tx = await newFastbtcBridge.addFeeStructure(...feeStructureArgs);
-            console.log('setFeeStructure tx:', tx.hash);
-            await tx.wait();
-            console.log('setCurrentFeeStructure(%s);', feeStructureArgs[0]);
-            tx = await newFastbtcBridge.setCurrentFeeStructure(feeStructureArgs[0]);
-            console.log('setCurrentFeeStructuretx:', tx.hash);
+        if (feeStructureArgs && feeStructureArgs.length) {
+            for (const args of feeStructureArgs) {
+                console.log('addFeeStructure(%s, %s, %s);', ...args);
+                let tx = await newFastbtcBridge.addFeeStructure(...args);
+                console.log('addFeeStructure tx:', tx.hash);
+                await tx.wait();
+            }
+            const lastIndex = feeStructureArgs[feeStructureArgs.length -1][0];
+            console.log('setCurrentFeeStructure(%s);', lastIndex);
+            let tx = await newFastbtcBridge.setCurrentFeeStructure(lastIndex);
+            console.log('setCurrentFeeStructure tx:', tx.hash);
             await tx.wait();
         }
 
@@ -833,6 +840,13 @@ task("initialize-fastbtc-v2",
                 console.log('grantRole tx:', tx.hash);
                 await tx.wait();
             }
+        }
+
+        for (const args of copyNoncesCalls) {
+            console.log('copyNonces(%s, %s);', ...args);
+            const tx = await newFastbtcBridge.copyNonces(...args);
+            console.log('copyNonces tx:', tx.hash);
+            await tx.wait();
         }
 
         if (markReady) {
@@ -893,9 +907,9 @@ task("btc-address-validator", "Manage BTC address validator")
 
         const deployment = await hre.deployments.get('BTCAddressValidator');
         const contract = await hre.ethers.getContractAt(
-            'BTCAddressValidator',
-            deployment.address,
-            signer,
+           'BTCAddressValidator',
+           deployment.address,
+           signer,
         );
 
         console.log('Current settings:')
