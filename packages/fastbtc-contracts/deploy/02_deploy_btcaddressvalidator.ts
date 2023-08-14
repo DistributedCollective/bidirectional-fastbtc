@@ -21,8 +21,8 @@ const validatorConfigs = {
     mainnet: {
         bech32Prefix: "bc1q",
         nonBech32Prefixes: [
-            //"1", // pubkey hash
-            //"3", // script hash
+            "1", // pubkey hash
+            "3", // script hash
         ],
     },
 }

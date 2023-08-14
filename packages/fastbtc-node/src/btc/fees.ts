@@ -1,6 +1,9 @@
+import https from 'https';
+
 import {IBitcoinNodeWrapper} from './nodewrapper';
 import {Network, networks} from "bitcoinjs-lib";
 import Logger from '../logger';
+import * as http from '../utils/http'
 
 export class BTCFeeEstimator {
     private logger = new Logger('fee-estimator');
@@ -11,6 +14,56 @@ export class BTCFeeEstimator {
         private nodeWrapper: IBitcoinNodeWrapper,
     ) {
         this.network = nodeWrapper.network;
+    }
+
+    public async estimateFeeSatsPerVB(): Promise<number> {
+        let mempoolSpaceFeeSatsPerVB: number | undefined;
+        try {
+            mempoolSpaceFeeSatsPerVB = await this.fetchFeeSatsPerVBFromMempoolSpace();
+        } catch (e) {
+            this.logger.exception(
+                e,
+                'Failed to fetch fee from mempool.space (only a warning, ignored), falling back to bitcoind'
+            );
+        }
+
+        let bitcoindFeeSatsPerVB: number | undefined;
+        try {
+            const feeBtcPerKBFromBitcoind = await this.estimateFeeBtcPerKB();
+            bitcoindFeeSatsPerVB = feeBtcPerKBFromBitcoind / 1000 * 1e8;
+        } catch (e) {
+            this.logger.exception(
+                e,
+                'Failed to fetch fee from bitcoind (only a warning, ignored)'
+            );
+        }
+
+        // TODO: debug print, we can ditch this
+        console.log(`feeSatsPerVB: mempool.space: ${mempoolSpaceFeeSatsPerVB}, bitcoind: ${bitcoindFeeSatsPerVB}`)
+
+        if (mempoolSpaceFeeSatsPerVB !== undefined) {
+            return mempoolSpaceFeeSatsPerVB;
+        }
+        if (bitcoindFeeSatsPerVB !== undefined) {
+            return bitcoindFeeSatsPerVB;
+        }
+        throw new Error(`Failed to fetch fee from both mempool.space and bitcoind`);
+    }
+
+    private async fetchFeeSatsPerVBFromMempoolSpace(): Promise<number> {
+        let url: string;
+        if (this.network === networks.testnet) {
+            url = 'https://mempool.space/testnet/api/v1/fees/recommended';
+        } else {
+            // might as well use the real fee for regtest *__*
+            url = 'https://mempool.space/api/v1/fees/recommended';
+        }
+        const response = await http.getJson(url);
+        const ret = response.fastestFee;
+        if (typeof ret !== 'number') {
+            throw new Error(`Unexpected response from mempool.space: ${JSON.stringify(response)}`);
+        }
+        return ret;
     }
 
     public async estimateFeeBtcPerKB(): Promise<number> {

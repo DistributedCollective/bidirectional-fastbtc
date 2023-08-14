@@ -254,6 +254,10 @@ export type HandleReclaimedTransfersResult = ReclaimedTransfersFoundResult | Rec
 @injectable()
 export class BitcoinTransferService {
     private logger = new Logger('transfers');
+    // use a hardcoded gas price since it will occassionally estimate it too low (0.05 gwei) otherwise
+    private RSK_TX_OPTS = {
+        gasPrice: ethers.utils.parseUnits('0.07', 'gwei'),
+    }
 
     constructor(
         @inject(new LazyServiceIdentifer(() => TransferBatchValidator)) private validator: TransferBatchValidator,
@@ -545,7 +549,8 @@ export class BitcoinTransferService {
                 () => this.fastBtcBridge.markTransfersAsSending(
                     `0x${transferBatch.bitcoinTransactionHash}`,
                     transferBatch.getTransferIds(),
-                    transferBatch.rskSendingSignatures
+                    transferBatch.rskSendingSignatures,
+                    this.RSK_TX_OPTS,
                 )
             );
             this.logger.info('transfers successfully marked as sending in tx hash:', result.hash);
@@ -579,7 +584,8 @@ export class BitcoinTransferService {
             const result = await this.sendRskTransaction(
                 () => this.fastBtcBridge.markTransfersAsMined(
                     transferBatch.getTransferIds(),
-                    transferBatch.rskMinedSignatures
+                    transferBatch.rskMinedSignatures,
+                    this.RSK_TX_OPTS,
                 )
             );
             this.logger.info('transfers successfully marked as mined in tx hash:', result.hash);
@@ -764,9 +770,22 @@ export class BitcoinTransferService {
             1,
             this.config.rskRequiredConfirmations + 1
         );
+
+        // in some cases, we either send a transaction with too low gas (which should be fixed now with hardcoded gas price)
+        // or we get some weird network skew error which causes the transaction to never enter the blockchain
+        // both cases will cause the transaction to never be confirmed, so we need to timeout and try again
+        // as a fallback
+        const expectedTxConfirmationTimeSeconds = numRequiredConfirmations * 30; // avg rsk blocktime = 30s
+        // timeout is expected confirmation duration times some arbitrary factor, in ms
+        const timeoutMs = 1000 * expectedTxConfirmationTimeSeconds * 5;
+
         this.logger.info('tx hash:', result.hash, `waiting (${numRequiredConfirmations} confirms)...`);
         try {
-            await result.wait(numRequiredConfirmations);
+            await this.ethersProvider.waitForTransaction(
+                result.hash,
+                numRequiredConfirmations,
+                timeoutMs
+            );
         } catch(e: any) {
             //this.logger.exception(e, `RSK transaction ${result.hash} failed.`)
             this.logger.error(`RSK transaction ${result.hash} failed.`)
