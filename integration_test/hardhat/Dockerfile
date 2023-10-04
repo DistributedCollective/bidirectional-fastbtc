@@ -22,7 +22,7 @@ COPY contracts/ ./contracts
 COPY deploy/ ./deploy
 COPY scripts/ ./scripts
 COPY test/ ./test
-COPY package.json hardhat.config.ts tsconfig.json yarn.lock ./
+COPY package.json hardhat.config.ts utils.ts tsconfig.json yarn.lock ./
 
 RUN git --version
 RUN yarn

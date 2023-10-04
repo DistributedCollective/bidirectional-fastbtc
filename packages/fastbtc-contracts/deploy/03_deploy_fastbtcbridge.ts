@@ -16,7 +16,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
         console.log("Initializing FastBTCBridge contract on hardhat network");
         const contract = await hre.ethers.getContractAt('FastBTCBridge', deployResult.address);
         // initialize it
-        const tx = await contract.initialize();
+        const tx = await contract.markReady();
         await tx.wait();
     }
 };
