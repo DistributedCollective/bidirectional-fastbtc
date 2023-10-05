@@ -1066,28 +1066,6 @@ export class TransferBatchValidator {
                 `(batch ${transferBatch.bitcoinTransactionHash}`
             )
         }
-        for (let i = 0; i < transferBatch.transfers.length; i++) {
-            const transfer = transferBatch.transfers[i];
-            const expectedLogIndex = transferBatch.commitment.rskLogIndex + i;
-            if (transfer.rskLogIndex !== expectedLogIndex) {
-                throw new TransferBatchValidationError(
-                    `Transfer ${transfer.transferId} at index ${i} has log index ${transfer.rskLogIndex}, expected ${expectedLogIndex} ` +
-                    `(batch ${transferBatch.bitcoinTransactionHash})`
-                );
-            }
-            if (transfer.rskTransactionIndex !== transferBatch.commitment.rskTransactionIndex) {
-                throw new TransferBatchValidationError(
-                    `Transfer ${transfer.transferId} at index ${i} has tx index ${transfer.rskTransactionIndex}, expected ${transferBatch.commitment.rskTransactionIndex} ` +
-                    `(batch ${transferBatch.bitcoinTransactionHash}`
-                );
-            }
-            if (transfer.rskBlockNumber !== transferBatch.commitment.rskBlockNumber) {
-                throw new TransferBatchValidationError(
-                    `Transfer ${transfer.transferId} at index ${i} has block number ${transfer.rskBlockNumber}, expected ${transferBatch.commitment.rskBlockNumber} ` +
-                    `(batch ${transferBatch.bitcoinTransactionHash}`
-                );
-            }
-        }
     }
 
     private async validatePsbt(transferBatch: TransferBatch, psbt: PartiallySignedBitcoinTransaction) {
