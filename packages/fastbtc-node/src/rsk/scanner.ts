@@ -146,7 +146,12 @@ export class EventScanner {
 
                     transfer.status = newStatus;
                 } else if (event.event === 'BitcoinTransferBatchSending') {
-                    const btcTransactionHash = args.bitcoinTxHash as string;
+                    let btcTransactionHash = args.bitcoinTxHash as string;
+                    // The BTC tx hashes we store don't generally start with 0x,
+                    // because BTC doesn't follow that convention. RSK does, however.
+                    if (btcTransactionHash.startsWith('0x')) {
+                        btcTransactionHash = btcTransactionHash.slice(2);
+                    }
                     const transferBatchSize = args.transferBatchSize as number;
                     this.logger.debug('BitcoinTransferBatchSending', btcTransactionHash, transferBatchSize);
 
