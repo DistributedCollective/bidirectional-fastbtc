@@ -8,7 +8,7 @@ import {BigNumber, Contract, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
 import {Connection, EntityManager} from 'typeorm';
 import {Config} from '../config';
-import {StoredBitcoinTransferBatchRepository, Transfer, TransferStatus} from '../db/models';
+import {StoredBitcoinTransferBatchRepository, Transfer, TransferStatus, TransferBatchCommitment} from '../db/models';
 import Logger from '../logger';
 import {sleep} from '../utils';
 import {setExtend, setIntersection} from "../utils/sets";
@@ -60,6 +60,7 @@ export class TransferBatch {
         public signedBtcTransaction: PartiallySignedBitcoinTransaction|undefined,
         public rskMinedSignatures: string[],
         public rskMinedSigners: string[],
+        public commitment?: TransferBatchCommitment,
     ) {
     }
 
@@ -285,6 +286,7 @@ export class BitcoinTransferService {
     async loadFromDto(dto: TransferBatchDTO): Promise<TransferBatch|undefined> {
         return this.dbConnection.transaction(async transaction => {
             const transferRepository = transaction.getRepository(Transfer);
+            const commitmentRepository = transaction.getRepository(TransferBatchCommitment);
             const transfers: Transfer[] = [];
 
             for (const transferId of dto.transferIds) {
@@ -298,6 +300,13 @@ export class BitcoinTransferService {
                 transfers.push(transfer);
             }
 
+            let commitment: TransferBatchCommitment|undefined;
+            if (dto.bitcoinTransactionHash) {
+                commitment = await commitmentRepository.findOne({
+                    where: {btcTransactionHash: dto.bitcoinTransactionHash},
+                })
+            }
+
             return new TransferBatch(
                 await this.getTransferBatchEnvironment(dto.bitcoinTransactionHash),
                 transfers,
@@ -308,6 +317,7 @@ export class BitcoinTransferService {
                 dto.signedBtcTransaction,
                 dto.rskMinedSignatures,
                 dto.rskMinedSigners,
+                commitment,
             );
         });
     }
@@ -678,6 +688,7 @@ export class BitcoinTransferService {
             undefined,
             [],
             [],
+            undefined,
         );
     }
 
@@ -855,7 +866,12 @@ export class TransferBatchValidator {
         if (!transferBatch.isMarkedAsSendingInRsk()) {
             throw new TransferBatchValidationError('Refusing to sign a batch that is not marked as sending');
         }
+
         await this.validateTransferBatch(transferBatch, TransferStatus.Sending, false);
+
+        // Very important -- check that the transfer batch was committed to in the RSK smart contract
+        // await not needed but all the other validateX methods are async and I'm afraid if this is accidentally changed
+        await this.validateTransferBatchCommitment(transferBatch);
     }
 
     async validateForSendingToBitcoin(transferBatch: TransferBatch): Promise<void> {
@@ -1025,6 +1041,51 @@ export class TransferBatchValidator {
                         `${prefix} recovered address ${recovered} does not match address ${address}`
                     );
                 }
+            }
+        }
+    }
+
+    /**
+     * Validate that this transfer batch has been committed to on the RSK smart contract
+     * This is crucial to avoid signing multiple bitcoin transactions that would double-spend the same transfers
+     */
+    private validateTransferBatchCommitment(transferBatch: TransferBatch) {
+        if (!transferBatch.commitment) {
+            throw new TransferBatchValidationError(
+                `TransferBatch has no commitment (batch ${transferBatch.bitcoinTransactionHash}`
+            );
+        }
+        if (transferBatch.commitment.btcTransactionHash !== transferBatch.bitcoinTransactionHash) {
+            throw new TransferBatchValidationError(
+                `Commitment tx hash ${transferBatch.commitment.btcTransactionHash} does not match batch tx hash ${transferBatch.bitcoinTransactionHash}`
+            );
+        }
+        if (transferBatch.commitment.transferBatchSize !== transferBatch.transfers.length) {
+            throw new TransferBatchValidationError(
+                `Commitment transfer batch size ${transferBatch.commitment.transferBatchSize} does not match batch size ${transferBatch.transfers.length} ` +
+                `(batch ${transferBatch.bitcoinTransactionHash}`
+            )
+        }
+        for (let i = 0; i < transferBatch.transfers.length; i++) {
+            const transfer = transferBatch.transfers[i];
+            const expectedLogIndex = transferBatch.commitment.rskLogIndex + i;
+            if (transfer.rskLogIndex !== expectedLogIndex) {
+                throw new TransferBatchValidationError(
+                    `Transfer ${transfer.transferId} at index ${i} has log index ${transfer.rskLogIndex}, expected ${expectedLogIndex} ` +
+                    `(batch ${transferBatch.bitcoinTransactionHash})`
+                );
+            }
+            if (transfer.rskTransactionIndex !== transferBatch.commitment.rskTransactionIndex) {
+                throw new TransferBatchValidationError(
+                    `Transfer ${transfer.transferId} at index ${i} has tx index ${transfer.rskTransactionIndex}, expected ${transferBatch.commitment.rskTransactionIndex} ` +
+                    `(batch ${transferBatch.bitcoinTransactionHash}`
+                );
+            }
+            if (transfer.rskBlockNumber !== transferBatch.commitment.rskBlockNumber) {
+                throw new TransferBatchValidationError(
+                    `Transfer ${transfer.transferId} at index ${i} has block number ${transfer.rskBlockNumber}, expected ${transferBatch.commitment.rskBlockNumber} ` +
+                    `(batch ${transferBatch.bitcoinTransactionHash}`
+                );
             }
         }
     }

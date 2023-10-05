@@ -197,10 +197,54 @@ export class StoredBitcoinTransferBatchRepository extends Repository<StoredBitco
     }
 }
 
+/**
+ * This model corresponds to the BitcoinTransferBatchSending event
+ *
+ * Nodes should only sign transfers in a batch that has a bitcoin transaction hash that has been committed
+ * to the RSK smart contract to avoid double spending.
+ */
+@Entity()
+@Index(['rskBlockNumber', 'rskTransactionIndex', 'rskLogIndex'], {unique: true})
+export class TransferBatchCommitment {
+    @PrimaryGeneratedColumn({ name: 'id'})
+    dbId!: number;
+
+    // Event args
+
+    @Column({ unique: true })
+    btcTransactionHash!: string;
+
+    @Column('int', {nullable: false})
+    transferBatchSize!: number;
+
+    // Event data
+
+    @Column({nullable: false})
+    rskTransactionHash!: string;
+
+    @Column({nullable: false})
+    rskTransactionIndex!: number;
+
+    @Column({nullable: false})
+    rskLogIndex!: number;
+
+    @Column({nullable: false})
+    rskBlockHash!: string;
+
+    @Column({nullable: false})
+    rskBlockNumber!: number;
+
+    // Metadata
+
+    @Column('timestamp with time zone', {nullable: false, default: () => 'CURRENT_TIMESTAMP'})
+    createdAt!: Date;
+}
+
 // remember to keep this up-to-date
 export const ALL_MODELS = [
     KeyValuePair,
     Transfer,
     LogItem,
     StoredBitcoinTransferBatch,
+    TransferBatchCommitment,
 ];

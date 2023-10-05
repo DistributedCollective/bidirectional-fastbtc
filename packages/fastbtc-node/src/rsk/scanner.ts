@@ -4,7 +4,7 @@
 import {inject, injectable} from 'inversify';
 import {BigNumber, ethers} from 'ethers';
 import {DBConnection} from '../db/connection';
-import {KeyValuePairRepository, Transfer, TransferStatus} from '../db/models';
+import {KeyValuePairRepository, Transfer, TransferStatus, TransferBatchCommitment} from '../db/models';
 import {EthersProvider, FastBtcBridgeContract} from './base';
 import {Config} from '../config';
 import {Connection} from 'typeorm';
@@ -75,6 +75,7 @@ export class EventScanner {
             [
                 this.fastBtcBridge.filters.NewBitcoinTransfer(),
                 this.fastBtcBridge.filters.BitcoinTransferStatusUpdated(),
+                this.fastBtcBridge.filters.BitcoinTransferBatchSending(),
             ],
             fromBlock,
             toBlock,
@@ -83,6 +84,7 @@ export class EventScanner {
         return await this.dbConnection.transaction(async db => {
             const keyValuePairRepository = db.getCustomRepository(KeyValuePairRepository);
             const transferRepository = db.getRepository(Transfer);
+            const transferBatchCommitmentRepository = db.getRepository(TransferBatchCommitment);
 
             const transfers: Transfer[] = [];
             const transfersByTransferId: Record<string, Transfer> = {};
@@ -143,6 +145,22 @@ export class EventScanner {
                     }
 
                     transfer.status = newStatus;
+                } else if (event.event === 'BitcoinTransferBatchSending') {
+                    const btcTransactionHash = args.bitcoinTxHash as string;
+                    const transferBatchSize = args.transferBatchSize as number;
+                    this.logger.debug('BitcoinTransferBatchSending', btcTransactionHash, transferBatchSize);
+
+                    // could double-check it's not already in DB. But this would cause a db error anyway
+                    const commitment = transferBatchCommitmentRepository.create({
+                        btcTransactionHash: btcTransactionHash,
+                        transferBatchSize: transferBatchSize,
+                        rskTransactionHash: event.transactionHash,
+                        rskTransactionIndex: event.transactionIndex,
+                        rskLogIndex: event.logIndex,
+                        rskBlockNumber: event.blockNumber,
+                        rskBlockHash: event.blockHash,
+                    });
+                    await transferBatchCommitmentRepository.save(commitment);
                 } else {
                     this.logger.error('Unknown event:', event);
                 }
