@@ -1066,6 +1066,14 @@ export class TransferBatchValidator {
                 `(batch ${transferBatch.bitcoinTransactionHash}`
             )
         }
+        for (let i = 0; i < transferBatch.transfers.length; i++) {
+            const transfer = transferBatch.transfers[i];
+            if (transfer.btcTransactionHash !== transferBatch.bitcoinTransactionHash) {
+                throw new TransferBatchValidationError(
+                    `Transfer ${transfer.transferId} at index ${i} has tx hash ${transfer.btcTransactionHash} which does not match batch tx hash ${transferBatch.bitcoinTransactionHash}`
+                );
+            }
+        }
     }
 
     private async validatePsbt(transferBatch: TransferBatch, psbt: PartiallySignedBitcoinTransaction) {

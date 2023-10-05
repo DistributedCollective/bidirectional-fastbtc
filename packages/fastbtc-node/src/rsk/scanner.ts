@@ -145,6 +145,35 @@ export class EventScanner {
                     }
 
                     transfer.status = newStatus;
+
+                    if (newStatus === TransferStatus.Sending) {
+                        // When we are updating to Sending, we should always see a BitcoinTransferBatchSending event
+                        // that contains args bitcoinTxHash and transferBatchSize, followed by transferBatchSize
+                        // BitcoinTransferStatusUpdated events with status Sending.
+                        // Thus, when we see a BitcoinTransferStatusUpdated event with status Sending,
+                        // we can query DB for the TransferBatchCommitment (BitcoinTransferBatchSending event)
+                        // where the logIndex and transferBatchSize match the current event, and use it to store
+                        // the bitcoin tx hash
+                        const commitment = await transferBatchCommitmentRepository
+                            .createQueryBuilder('c')
+                            .where({
+                                rskTransactionHash: event.transactionHash,
+                                rskTransactionIndex: event.transactionIndex,
+                            })
+                            .andWhere(
+                                'c.rsk_log_index < :logIndex AND :logIndex <= c.rsk_log_index + c.transfer_batch_size',
+                                {logIndex: event.logIndex}
+                            )
+                            .orderBy('c.rsk_log_index', 'DESC')
+                            .getOne();
+                        if (!commitment) {
+                            throw new Error(
+                                `Could not find TransferBatchCommitment for BitcoinTransferStatusUpdated event ` +
+                                `${event.transactionHash} ${event.transactionIndex} ${event.logIndex}
+                            `);
+                        }
+                        transfer.btcTransactionHash = commitment.btcTransactionHash;
+                    }
                 } else if (event.event === 'BitcoinTransferBatchSending') {
                     let btcTransactionHash = args.bitcoinTxHash as string;
                     // The BTC tx hashes we store don't generally start with 0x,
