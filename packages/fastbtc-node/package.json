@@ -9,7 +9,7 @@
     "start": "node ./dist/index.js",
     "dev": "ts-node ./src/index.ts",
     "copy-abi": "node ./copy-abi.js",
-    "migrate:create": "yarn build && ts-node ./node_modules/typeorm/cli.js migration:create",
+    "migrate:create-empty": "yarn build && ts-node ./node_modules/typeorm/cli.js migration:create",
     "migrate:up": "yarn build && ts-node ./node_modules/typeorm/cli.js migration:run",
     "migrate:down": "yarn build && ts-node ./node_modules/typeorm/cli.js migration:revert",
     "migrate:generate": "yarn build && ts-node ./node_modules/typeorm/cli.js migration:generate",
