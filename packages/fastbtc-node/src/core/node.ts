@@ -128,44 +128,27 @@ export class FastBTCNode {
         await this.networkUtil.enterMainLoop(this.runIteration);
     }
 
-    debugLog = (first: string, ...rest: any[]) => {
-        // prefix first argument with "DEBUG"
-        this.logger.info('DEBUG: ' + first, ...rest);
-    }
-
-
     runIteration = async () => {
         this.logger.throttledInfo("running iteration");
-        this.debugLog('iteration start');
         await this.statusChecker.makeSureThatThisNodeIsStillAFederator();
 
-        this.debugLog('getMultisigBalance start');
         try {
             const multisigBalance = await this.btcMultisig.getMultisigBalance();
             this.statsd.gauge('fastbtc.pegout.multisig.balance', multisigBalance);
         } catch (e) {
             this.logger.exception(e, `failed to fetch multisig balance, got exception ${e}`);
         }
-        this.debugLog('getMultisigBalance end');
 
-        this.debugLog('scanNewEvents start');
         const newEvents = await this.eventScanner.scanNewEvents();
         if (newEvents.length) {
             this.logger.info(`scanned ${newEvents.length} new events`);
         }
-        this.debugLog('scanNewEvents end');
 
-        this.debugLog('getNumTransfers start');
         const numTransfers = await this.eventScanner.getNumTransfers();
-        this.debugLog('getNumTransfers end');
-        this.debugLog('getNumnodesOnline start');
         const numNodesOnline = this.networkUtil.getNumNodesOnline();
-        this.debugLog('getNumnodesOnline end');
 
         // we could obtain consensus for the initiator, but it's not strictly required
-        this.debugLog('getInitiatorId start');
         const initiatorId = this.networkUtil.getInitiatorId();
-        this.debugLog('getInitiatorId end');
         const isInitiator = this.networkUtil.id == initiatorId;
 
         this.logger.throttledInfo(
@@ -176,13 +159,11 @@ export class FastBTCNode {
         this.statsd.gauge('fastbtc.pegout.transfers.total', numTransfers);
         this.statsd.gauge('fastbtc.pegout.nodes.online', numNodesOnline);
 
-        this.debugLog('checkBalances start');
         try {
             await this.replenisher.checkBalances();
         } catch (e) {
             this.logger.exception(e, 'Replenisher balance check error');
         }
-        this.debugLog('checkBalances end');
 
         if (!isInitiator) {
             this.logger.info('not initiator, not doing anything');
@@ -415,11 +396,8 @@ export class FastBTCNode {
     onMessage = async (message: MessageUnion<FastBTCMessage>) => {
         let promise: Promise<any> | null = null;
 
-        this.debugLog(`onMessage ${message.type} dblog start`);
         await this.dbLogging.log('messageReceived', {data: message.data, source: message.source.id});
-        this.debugLog(`onMessage ${message.type} dblog end`);
 
-        this.debugLog(`onMessage ${message.type} start`);
         switch (message.type) {
             case 'fastbtc:request-rsk-sending-signature': {
                 promise = this.onRequestRskSendingSignature(message.data, message.source);
@@ -472,10 +450,7 @@ export class FastBTCNode {
             this.logger.debug('source', message.source);
             this.logger.debug('data  ', JSON.stringify(message.data));
 
-            promise.then(() => {
-                this.debugLog(`onMessage ${message.type} end (success)`);
-            }).catch(err => {
-                this.debugLog(`onMessage ${message.type} end (fail)`);
+            promise.catch(err => {
                 if (err.isValidationError) {
                     this.logger.warning('Validation error:', err.message, 'when processing message:', message);
                 } else {
@@ -487,7 +462,7 @@ export class FastBTCNode {
                         JSON.stringify(message.data)
                     );
                 }
-            })
+            });
         }
     }
 
