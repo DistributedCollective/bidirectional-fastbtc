@@ -2,6 +2,8 @@ import {Network, Node} from 'ataraxia';
 import {sleep} from '../utils';
 import Logger from '../logger';
 import {InitiatorVoting} from './initiator';
+const { performance } = require('node:perf_hooks');
+
 
 /**
  * Utility class for abstracting some common Ataraxia network tasks
@@ -34,11 +36,14 @@ export default class NetworkUtil<MessageTypes extends object = any> {
             await this.initiatorVoting.start();
 
             while (this.running) {
+                const startTime = performance.now();
                 try {
                     await runIteration();
                 } catch (e) {
                     this.logger.error('Error when running iteration', e);
                 }
+                const endTime = performance.now();
+                this.logger.info('Iteration finished (took %s ms)', endTime - startTime);
 
                 // sleeping in loop is more graceful for ctrl-c
                 for (let i = 0; i < sleepTimeSeconds && this.running; i++) {
