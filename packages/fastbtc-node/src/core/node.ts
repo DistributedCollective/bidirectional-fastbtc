@@ -116,7 +116,7 @@ export class FastBTCNode {
         @inject(StatusChecker) private statusChecker: StatusChecker,
         @inject(BitcoinReplenisher) private replenisher: BitcoinReplenisher,
     ) {
-        this.networkUtil = new NetworkUtil(network, this.logger);
+        this.networkUtil = new NetworkUtil(network, this.logger, statsd);
         network.onNodeAvailable(this.onNodeAvailable);
         network.onNodeUnavailable(this.onNodeUnavailable);
         network.onMessage(this.onMessage);

@@ -2,6 +2,7 @@ import {Network, Node} from 'ataraxia';
 import {sleep} from '../utils';
 import Logger from '../logger';
 import {InitiatorVoting} from './initiator';
+import {StatsD} from 'hot-shots';
 const { performance } = require('node:perf_hooks');
 
 
@@ -14,7 +15,8 @@ export default class NetworkUtil<MessageTypes extends object = any> {
 
     public constructor(
         private network: Network<MessageTypes>,
-        private logger: Logger = new Logger('network')
+        private logger: Logger = new Logger('network'),
+        private statsd: StatsD|undefined = undefined,
     ) {
         this.initiatorVoting = new InitiatorVoting(network as Network);
     }
@@ -44,6 +46,9 @@ export default class NetworkUtil<MessageTypes extends object = any> {
                 }
                 const endTime = performance.now();
                 this.logger.info('Iteration finished (took %s ms)', endTime - startTime);
+                if (this.statsd) {
+                    this.statsd.timing('fastbtc.pegout.iteration', endTime - startTime);
+                }
 
                 // sleeping in loop is more graceful for ctrl-c
                 for (let i = 0; i < sleepTimeSeconds && this.running; i++) {
