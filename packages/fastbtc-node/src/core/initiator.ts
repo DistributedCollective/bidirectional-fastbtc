@@ -45,7 +45,7 @@ export class InitiatorVoting {
                     'Error syncing initiator from network (periodical)'
                 );
             })
-        }, 10_000);
+        }, 60 * 1_000);
     }
 
     /**
