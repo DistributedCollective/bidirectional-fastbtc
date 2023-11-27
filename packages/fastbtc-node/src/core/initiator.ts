@@ -21,12 +21,16 @@ export class InitiatorVoting {
     private logger = new Logger('initiatorvoting');
     private nodeInitiatorIds = new NodeValues();
     private updateIntervalId?: NodeJS.Timer;
+    private forcedInitiatorId = process.env.FASTBTC_FORCED_INITIATOR_ID || null;
 
     constructor(
         private network: Network<InitiatorVotingMessage>,
     ) {
         network.onNodeUnavailable(this.onNodeUnavailable)
         network.onMessage(this.onMessage);
+        if (this.forcedInitiatorId) {
+            this.logger.info('Forced initiator id: %s', this.forcedInitiatorId);
+        }
     }
 
     /**
@@ -45,7 +49,7 @@ export class InitiatorVoting {
                     'Error syncing initiator from network (periodical)'
                 );
             })
-        }, 10_000);
+        }, 60 * 1_000);
     }
 
     /**
@@ -85,7 +89,12 @@ export class InitiatorVoting {
             // Wait a little while for it to propagate
             await sleep(sleepTimeMs);
 
-            initiatorId = this.nodeInitiatorIds.getMostPopularValue();
+            const forcedId = this.getForcedInitiatorId();
+            if (forcedId !== null) {
+                initiatorId = forcedId;
+            } else {
+                initiatorId = this.nodeInitiatorIds.getMostPopularValue();
+            }
 
             // The following is log spam for debugging -- can be removed
             //this.logger.debug('initiatorvoting tries:', tries);
@@ -189,6 +198,11 @@ export class InitiatorVoting {
 
     // Get the initiator id if the network is undecided on one
     private getDefaultInitiatorId(): string | null {
+        const forcedId = this.getForcedInitiatorId();
+        if (forcedId !== null) {
+            return forcedId;
+        }
+
         const nodeIds = this.getSortedNodeIds();
         if (nodeIds.length === 0) {
             return null;
@@ -211,5 +225,25 @@ export class InitiatorVoting {
         }
 
         return nodeIds;
+    }
+
+    private getForcedInitiatorId(): string | null {
+        if (this.forcedInitiatorId) {
+            if (this.forcedInitiatorId === "me") {
+                return this.id;
+            } else {
+                const nodeIds = this.getNodeIds();
+                if (nodeIds.indexOf(this.forcedInitiatorId) === -1) {
+                    this.logger.warning(
+                        'Forced initiator id %s is not among nodes %s',
+                        this.forcedInitiatorId,
+                        nodeIds,
+                    )
+                } else {
+                    return this.forcedInitiatorId;
+                }
+            }
+        }
+        return null;
     }
 }

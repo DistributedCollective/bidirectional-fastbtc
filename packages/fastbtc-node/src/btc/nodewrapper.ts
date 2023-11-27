@@ -2,6 +2,8 @@ import {URL} from 'url';
 import {injectable} from 'inversify';
 import {Network, networks} from 'bitcoinjs-lib';
 import RPCClient from './rpcclient';
+import Logger from '../logger';
+const { performance } = require('node:perf_hooks');
 
 
 export interface BitcoinNodeWrapperOpts {
@@ -21,6 +23,8 @@ export interface IBitcoinNodeWrapper {
 export default class BitcoinNodeWrapper implements IBitcoinNodeWrapper {
     private client: RPCClient;
     public readonly network: Network;
+    private logger = new Logger('btcnodewrapper');
+
     constructor({url, user, password, btcNetwork}: BitcoinNodeWrapperOpts) {
         this.network = networks[btcNetwork === 'mainnet' ? 'bitcoin' : btcNetwork];
 
@@ -37,8 +41,14 @@ export default class BitcoinNodeWrapper implements IBitcoinNodeWrapper {
     }
 
     async call(method: string, params: any = null): Promise<any>{
+        const startTime = performance.now();
         return new Promise((resolve, reject) => {
             this.client.call(method, params, (err: any, res: any) => {
+                const duration = performance.now() - startTime;
+                if (duration > 5000) {
+                    this.logger.warning('Bitcoin node call %s took %s ms', method, duration);
+                }
+
                 if (err) {
                     reject(err);
                 }
