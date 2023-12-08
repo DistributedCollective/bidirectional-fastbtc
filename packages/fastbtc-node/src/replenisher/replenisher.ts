@@ -66,14 +66,14 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         const balance = await this.replenisherMultisig.getTotalAvailableBalance({
             logToStatsd: true,
         });
-        this.logger.debug(`Replenisher multisig balance: ${balance} BTC`);
+        this.logger.debug(`Total available balance (multisig + replenisher): ${balance} BTC`);
         if (balance < this.balanceAlertThreshold) {
             this.logger.warning(
-                `Total available balance ${balance} BTC is below the alert threshold ${this.balanceAlertThreshold} BTC`,
+                `Total available balance (multisig + replenisher) ${balance} BTC is below the alert threshold ${this.balanceAlertThreshold} BTC`,
             )
             this.alerter.throttledAlert(
                 'replenisher.balance',
-                `Total available balance for bidi-FastBTC is low (${balance} BTC), ` +
+                `Total available balance (multisig + replenisher) for bidi-FastBTC is low (${balance} BTC), ` +
                 `please replenish it as soon as possible`,
                 this.balanceAlertIntervalSeconds,
             );
