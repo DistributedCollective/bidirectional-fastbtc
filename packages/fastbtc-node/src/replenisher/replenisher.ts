@@ -43,7 +43,7 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     private timesReplenishedPerPeriod: Record<number, number> = {};
     // If the replenisher multisig balance drops below this (in BTC), we'll send an alert
     private balanceAlertThreshold: number;
-    private readonly balanceAlertIntervalSeconds = 24 * 60 * 60; // 1 day
+    private readonly balanceAlertIntervalSeconds = 6 * 60 * 60; // 6 hours
 
     constructor(
         config: ReplenisherConfig,
@@ -63,17 +63,17 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         // This is now separated from handleReplenisherIteration because only one node is monitoring the balances
         // and that node is not necessary the initiator (which is the one that calls handleReplenisherIteration)
         // Alternatively we could conf each node with the monitoring config and do this in handleReplenisherIteration
-        const balance = await this.replenisherMultisig.getBalance({
+        const balance = await this.replenisherMultisig.getTotalAvailableBalance({
             logToStatsd: true,
         });
         this.logger.debug(`Replenisher multisig balance: ${balance} BTC`);
         if (balance < this.balanceAlertThreshold) {
             this.logger.warning(
-                `Replenisher balance ${balance} BTC is below the alert threshold ${this.balanceAlertThreshold} BTC`,
+                `Total available balance ${balance} BTC is below the alert threshold ${this.balanceAlertThreshold} BTC`,
             )
             this.alerter.throttledAlert(
                 'replenisher.balance',
-                `Replenisher multisig balance is low (${balance} BTC), ` +
+                `Total available balance for bidi-FastBTC is low (${balance} BTC), ` +
                 `please replenish it as soon as possible`,
                 this.balanceAlertIntervalSeconds,
             );
