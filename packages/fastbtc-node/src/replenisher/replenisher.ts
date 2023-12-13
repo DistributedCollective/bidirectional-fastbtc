@@ -43,7 +43,7 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
     private timesReplenishedPerPeriod: Record<number, number> = {};
     // If the replenisher multisig balance drops below this (in BTC), we'll send an alert
     private balanceAlertThreshold: number;
-    private readonly balanceAlertIntervalSeconds = 6 * 60 * 60; // 6 hours
+    private readonly balanceAlertIntervalSeconds = 12 * 60 * 60; // 12 hours
 
     constructor(
         config: ReplenisherConfig,
@@ -63,18 +63,19 @@ export class ActualBitcoinReplenisher implements BitcoinReplenisher {
         // This is now separated from handleReplenisherIteration because only one node is monitoring the balances
         // and that node is not necessary the initiator (which is the one that calls handleReplenisherIteration)
         // Alternatively we could conf each node with the monitoring config and do this in handleReplenisherIteration
-        const balance = await this.replenisherMultisig.getTotalAvailableBalance({
+        const [multisigBalance, replenisherBalance, totalBalance] = await this.replenisherMultisig.getCombinedBalances({
             logToStatsd: true,
         });
-        this.logger.debug(`Total available balance (multisig + replenisher): ${balance} BTC`);
-        if (balance < this.balanceAlertThreshold) {
+        this.logger.debug(`Balances: Multisig: ${multisigBalance}, Replenisher: ${replenisherBalance}, Total: ${totalBalance}`);
+        if (totalBalance < this.balanceAlertThreshold) {
             this.logger.warning(
-                `Total available balance (multisig + replenisher) ${balance} BTC is below the alert threshold ${this.balanceAlertThreshold} BTC`,
+                `Total available balance (multisig + replenisher) ${totalBalance} BTC is below the alert threshold ${this.balanceAlertThreshold} BTC`,
             )
             this.alerter.throttledAlert(
                 'replenisher.balance',
-                `Total available balance (multisig + replenisher) for bidi-FastBTC is low (${balance} BTC), ` +
-                `please replenish it as soon as possible`,
+                `Total available balance for bidi-FastBTC is low (${totalBalance} BTC), ` +
+                `please replenish it as soon as possible. ` +
+                `(Multisig balance: ${multisigBalance} BTC, Replenisher balance: ${replenisherBalance} BTC)`,
                 this.balanceAlertIntervalSeconds,
             );
         }
