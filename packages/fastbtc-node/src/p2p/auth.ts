@@ -13,6 +13,7 @@ import {randomBytes} from 'crypto';
 import {ethers} from "ethers";
 import {arrayify, hexlify} from "ethers/lib/utils";
 import {TCPTransport} from "ataraxia-tcp";
+import Logger from '../logger';
 
 /**
  * Options for `SharedSecretAuth`. Used to provide the shared secret.
@@ -65,14 +66,21 @@ export class RSKKeyedAuth implements AuthProvider {
     private readonly signer: ethers.Signer;
     private readonly getPeerAddresses: () => Promise<string[]>;
     private cachedPeerAddresses: string[]|undefined = undefined;
+    private peerAddressesFetchedAt = 0;
+    private peerAddressCacheTime = 10 * 60 * 1000;
+
+    private logger = new Logger('rskauth');
 
     public constructor(options: RSKKeyedAuthOptions) {
         this.signer = options.signer;
 
         // Cache this forever for now
         this.getPeerAddresses = async (): Promise<string[]> => {
-            if (!this.cachedPeerAddresses) {
+            const now = Date.now();
+            if (!this.cachedPeerAddresses || this.peerAddressesFetchedAt < now - this.peerAddressCacheTime) {
+                this.logger.info("(Re)fetching peer addresses")
                 this.cachedPeerAddresses = await options.getPeerAddresses();
+                this.peerAddressesFetchedAt = now;
             }
             return this.cachedPeerAddresses;
         }
@@ -91,9 +99,11 @@ export class RSKKeyedAuth implements AuthProvider {
             throw Error("Local public security tag not provided");
         }
 
+        const logger = this.logger;
+
         return {
             async initialMessage() {
-                console.log("preparing challenge to server");
+                logger.info("preparing challenge to server");
                 return encode({
                     version: 1,
                     challenge: hexlify(challenge)
@@ -104,7 +114,7 @@ export class RSKKeyedAuth implements AuthProvider {
                 try {
                     const payload = decode(Buffer.from(data));
                     if (payload.version !== 1) {
-                        console.error(`Invalid payload version ${payload.version} received from server`)
+                        logger.error(`Invalid payload version ${payload.version} received from server`)
                         return {
                             type: AuthClientReplyType.Reject
                         };
@@ -118,7 +128,7 @@ export class RSKKeyedAuth implements AuthProvider {
 
                     const peerAddresses = await that.getPeerAddresses();
                     if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
-                        console.error(`Invalid signature from server, recovered address ` +
+                        logger.error(`Invalid signature from server, recovered address ` +
                             `${recoveredAddress} does not match any configured peer address`);
 
                         return {
@@ -128,7 +138,7 @@ export class RSKKeyedAuth implements AuthProvider {
 
                     const clientMessage = createMessage(Buffer.concat([prefix, serverChallenge]), localPublicSecurity);
 
-                    console.log(`successful server challenge from ${recoveredAddress}`);
+                    logger.log(`successful server challenge from ${recoveredAddress}`);
                     return {
                         type: AuthClientReplyType.Data,
                         data: encode({
@@ -137,7 +147,7 @@ export class RSKKeyedAuth implements AuthProvider {
                     };
                 }
                 catch (e) {
-                    console.log(e);
+                    logger.log(e);
                     return {
                         type: AuthClientReplyType.Reject
                     };
@@ -162,14 +172,15 @@ export class RSKKeyedAuth implements AuthProvider {
             throw Error("Local public security tag not provided");
         }
 
+        const logger = this.logger;
         return {
             async receiveInitial(data: ArrayBuffer) {
-                console.log("received client authentication handshake");
+                logger.log("received client authentication handshake");
                 let payload;
                 try {
                     payload = decode(Buffer.from(data));
                     if (payload.version !== 1) {
-                        console.error(`Invalid payload version ${payload.version} received from client`);
+                        logger.error(`Invalid payload version ${payload.version} received from client`);
 
                         return {
                             type: AuthServerReplyType.Reject
@@ -191,7 +202,7 @@ export class RSKKeyedAuth implements AuthProvider {
                     };
                 }
                 catch (e) {
-                    console.error(e);
+                    logger.error(e);
                     return {
                         type: AuthServerReplyType.Reject
                     };
@@ -212,7 +223,7 @@ export class RSKKeyedAuth implements AuthProvider {
                     const peerAddresses = await that.getPeerAddresses();
 
                     if (peerAddresses.indexOf(recoveredAddress as any) === -1) {
-                        console.error(`Invalid signature from client, recovered address ` +
+                        logger.error(`Invalid signature from client, recovered address ` +
                             `${recoveredAddress} does not match any configured peer address`);
 
                         return {
@@ -220,13 +231,13 @@ export class RSKKeyedAuth implements AuthProvider {
                         };
                     }
 
-                    console.log(`authentication successfully completed with ${recoveredAddress}`);
+                    logger.log(`authentication successfully completed with ${recoveredAddress}`);
                     return {
                         type: AuthServerReplyType.Ok
                     };
                 }
                 catch (e) {
-                    console.error(e);
+                    logger.error(e);
                     return {
                         type: AuthServerReplyType.Reject
                     }
