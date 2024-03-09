@@ -819,7 +819,7 @@ contract FastBTCBridge is ReentrancyGuard, FastBTCAccessControllable, Pausable, 
     {
         require(
             amount <= totalAdminWithdrawableRbtc,
-            "Can only withdraw unsent transfers"
+            "Can only withdraw sent transfers"
         );
         totalAdminWithdrawableRbtc -= amount;
         receiver.sendValue(amount);

@@ -160,6 +160,16 @@ $ make run-demo-regtest-slow-replenisher
 ```
 
 
+#### Withdrawer (FastBTC-in ManagedWallet replenishment)
+
+```
+# In one tab:
+$ make run-demo-regtest
+# In another tab:
+$ make test-withdrawer
+```
+
+
 ### Advanced details
 
 The test setup (launched with `make run-demo-regtest`) will expose the Hardhat RPC server at `http://localhost:18545`

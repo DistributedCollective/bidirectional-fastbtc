@@ -2,10 +2,12 @@ import * as fs from "fs";
 import {readFileSync} from "fs";
 import * as process from "process";
 import * as express from "express";
+import {parseEther} from "ethers/lib/utils";
 import {decryptSecrets} from "./utils/secrets";
 import {ReplenisherConfig, ReplenisherSecrets} from './replenisher/config';
 import {interfaces} from "inversify";
 import Context = interfaces.Context;
+import {BigNumber} from 'ethers';
 
 export interface ConfigSecrets {
     dbUrl: string;
@@ -33,6 +35,9 @@ export interface Config {
     btcKeyDerivationPath: string;
     statsdUrl?: string;
     secrets: () => ConfigSecrets;
+    withdrawerContractAddress?: string;
+    withdrawerThresholdWei: BigNumber;
+    withdrawerMaxAmountWei: BigNumber;
     replenisherConfig: ReplenisherConfig|undefined;
 }
 
@@ -157,6 +162,9 @@ export const envConfigProviderFactory = async (
             btcRpcUsername: env.FASTBTC_BTC_RPC_USERNAME ?? '',
             btcKeyDerivationPath: env.FASTBTC_BTC_KEY_DERIVATION_PATH ?? 'm/0/0/0',
             statsdUrl: env.FASTBTC_STATSD_URL,
+            withdrawerContractAddress: env.FASTBTC_WITHDRAWER_CONTRACT_ADDRESS,
+            withdrawerThresholdWei: parseEther(env.FASTBTC_WITHDRAWER_THRESHOLD || '10.0'),
+            withdrawerMaxAmountWei: parseEther(env.FASTBTC_WITHDRAWER_MAX_AMOUNT || '10.0'),
             secrets: () => (
                 {
                     btcRpcPassword: env.FASTBTC_BTC_RPC_PASSWORD ?? '',

@@ -15,6 +15,7 @@ import {StatsD} from "hot-shots";
 import {TYPES} from "../stats";
 import StatusChecker from './statuschecker';
 import {BitcoinReplenisher} from '../replenisher/replenisher';
+import {RBTCWithdrawer} from '../withdrawer/withdrawer';
 
 type FastBTCNodeConfig = Pick<
     Config,
@@ -115,6 +116,7 @@ export class FastBTCNode {
         @inject(TYPES.StatsD) private statsd: StatsD,
         @inject(StatusChecker) private statusChecker: StatusChecker,
         @inject(BitcoinReplenisher) private replenisher: BitcoinReplenisher,
+        @inject(RBTCWithdrawer) private withdrawer: RBTCWithdrawer,
     ) {
         this.networkUtil = new NetworkUtil(network, this.logger, statsd);
         network.onNodeAvailable(this.onNodeAvailable);
@@ -183,6 +185,12 @@ export class FastBTCNode {
             await this.replenisher.handleReplenisherIteration();
         } catch (e) {
             this.logger.exception(e, 'Replenisher error');
+        }
+
+        try {
+            await this.withdrawer.handleWithdrawerIteration();
+        } catch (e) {
+            this.logger.exception(e, 'Withdrawer error');
         }
 
         let transferBatch = await this.bitcoinTransferService.getCurrentTransferBatch();
